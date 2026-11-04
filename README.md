@@ -3,7 +3,8 @@
 Weekly schedules for Home Assistant built on **profiles** – like a thermostat
 week program, but for any entity.
 
-> **Status:** pre-release (0.x). Backend and the week view of the card work.
+> **Status:** pre-release (0.x). Backend, week view, rules page and manual
+> override work.
 > Plans are still created via the websocket API (see below) until the plan
 > wizard in the card exists (0.5).
 
@@ -74,7 +75,35 @@ What the week view does:
   A new or moved block trims or splits the blocks it overlaps; a block of the
   default profile just clears that range. Editing the plan needs an admin user.
 
-Bundle size (0.2.0, minified): 65.6 KB, 19.7 KB gzip.
+- **Rules** (below the grid → *Overrides* / *Activation*): overrides in
+  priority order with a live *active* badge – drag the handle (or focus it and
+  press ↑/↓) to reorder, tap to edit name, profile, all/any and conditions
+  (Home Assistant's own condition editor; JSON fallback if it cannot be
+  loaded). Activation: all/any, live ✓ per condition, "otherwise" behaviour
+  (`when_inactive`) and immediate re-evaluation (`reevaluate`). A paused plan
+  shows the reason in the header, e.g. „pausiert – Heizperiode: Aus“.
+- A **manual override** shows as a chip („manuell bis 22:00“) and as a hatched
+  range in today's row.
+
+Bundle size (0.3.0, minified): 99.0 KB, 27.3 KB gzip.
+
+## Manual changes
+
+`options.manual_override` decides what happens when someone changes a target
+value by hand (any change whose context does not come from Zeitwerk):
+
+| Value | Behaviour |
+|---|---|
+| `until_next` (default) | keep the manual value until the effective profile changes (next block, override, activation); no re-apply on restart or profile edit meanwhile |
+| `ignore` | no detection; re-applies (restart, profile edit) overwrite the manual value |
+| `minutes:<n>` | keep the manual value for *n* minutes (also across profile changes), then apply the current profile again |
+
+Only the value a profile actually sets is watched (e.g. the climate
+`temperature` attribute, not `current_temperature`), and a change to exactly
+the value of the active profile counts as an echo, not as a manual change.
+`zeitwerk.apply` and `zeitwerk.force_profile` end a manual override. The
+profile sensor then carries `manual_override`, `manual_since`, `manual_until`,
+`manual_entity`.
 
 ## Plan format
 
@@ -119,7 +148,7 @@ Full model: [docs/SPEC.md](docs/SPEC.md) §3.
 | Entity | State | Attributes |
 |---|---|---|
 | `switch.zeitwerk_<plan>` | plan enabled | – |
-| `sensor.zeitwerk_<plan>_profile` | current profile name | `profile_id`, `source` (`schedule`, `default`, `override:<id>`, `forced`, `inactive`, `disabled`), `day_type`, `is_holiday`, `forced_until`, `error` |
+| `sensor.zeitwerk_<plan>_profile` | current profile name | `profile_id`, `source` (`schedule`, `default`, `override:<id>`, `forced`, `inactive`, `disabled`), `day_type`, `is_holiday`, `forced_until`, `manual_override`, `manual_since`, `manual_until`, `manual_entity`, `error` |
 | `sensor.zeitwerk_<plan>_next_change` | timestamp of next scheduled change (empty while an override is active) | `next_profile`, `next_profile_name` |
 | `binary_sensor.zeitwerk_<plan>_active` | activation conditions met | `match`, `conditions` (each with `result`) |
 
@@ -191,7 +220,13 @@ werden bis zum Plan-Assistenten (0.5) über die WebSocket-API angelegt.
 Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
 `type: custom:zeitwerk-card` mit `plan: <id>`. Block antippen = bearbeiten,
 lange auf eine freie Stelle drücken = neuer Block, Profil-Regler ändern den
-Wert im Profil (z. B. Komfort 22 → 21,5 °C).
+Wert im Profil (z. B. Komfort 22 → 21,5 °C). Unter „Regeln“: Vorrang-Regeln
+(ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
+Aktivierung (alle/eine, „Sonst“, sofort neu bewerten).
+
+Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis
+zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt
+nichts.
 
 Installation über HACS → Benutzerdefinierte Repositories → Typ *Integration*,
 danach unter *Einstellungen → Geräte & Dienste* „Zeitwerk“ hinzufügen.

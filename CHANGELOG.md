@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-04
+
+### Added
+- Manual override detection: `until_next`, `ignore`, `minutes:<n>`. Watches
+  only the value a profile sets per target; echoes of the active profile's
+  value are ignored. Persisted across restarts; `apply` / `force_profile`
+  end it. New profile sensor attributes `manual_override`, `manual_since`,
+  `manual_until`, `manual_entity`; websocket status fields to match.
+- Card rules page: overrides list with live active badge, drag (and ↑/↓) to
+  reorder, add/edit/delete with Home Assistant's condition editor (JSON
+  fallback), all/any; activation with all/any, live result per condition,
+  `when_inactive` and `reevaluate`.
+- Card: pause reason in header and chip („pausiert – Heizperiode: Aus“),
+  manual override chip and hatched range in the week grid, rules links below
+  the grid.
+
+### Changed
+- `zeitwerk.force_profile` now always applies the forced profile, even if it
+  equals the last applied one.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added

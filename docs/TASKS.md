@@ -68,11 +68,16 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 ## 0.3 – Overrides, activation, manual override
 
-- [ ] Rules page: overrides list (drag to sort), add/edit with HA condition editor, all/any toggle, live "aktiv" badge
-- [ ] Activation: conditions, all/any, `when_inactive`, `reevaluate`; status in header („pausiert – …“)
-- [ ] Manual override `until_next` (context-based detection), `ignore`, `minutes:<n>`; shown as hatch in grid/timeline
-- [ ] Tests for all of the above
-- [ ] Release v0.3.0 → Steven can start the parallel run of the heating plans (SPEC §9)
+- [x] Rules page: overrides list (drag to sort), add/edit with HA condition editor, all/any toggle, live "aktiv" badge
+  - Rules page and editors are in-card sub-pages, not modal dialogs: HA's condition editor opens its own dialogs at the document root, which a modal `<dialog>` would make inert. `ha-selector` is lazy → loaded via `loadCardHelpers` + tile card editor; JSON textarea fallback. Drag via pointer capture on the handle, ↑/↓ on the focused handle as keyboard alternative. Delete needs a second tap („Wirklich löschen?“).
+- [x] Activation: conditions, all/any, `when_inactive`, `reevaluate`; status in header („pausiert – …“)
+  - Pause reason = current state of the first failing condition's entity („Heizperiode: Aus“).
+- [x] Manual override `until_next` (context-based detection), `ignore`, `minutes:<n>`; shown as hatch in grid/timeline
+  - `manual.py`: per target only the value a profile sets is watched (climate `temperature`, light `brightness`, cover `current_position`, state otherwise); a change to exactly the active profile's value is an echo (devices reporting back with a fresh context). `until_next` holds while the effective profile is unchanged and blocks re-applies (restart, profile edit). `minutes:<n>` holds across profile changes and re-applies at the end. `apply` / `force_profile` end it. Timeline hatch follows with the timeline view (0.4).
+- [x] Tests for all of the above
+  - Backend 79 (10 new: until_next incl. restart and profile edit, echo, override ends manual, ignore, minutes both cases, apply/force, watch keys, attribute filter). Frontend 43 (condition summaries, pause reason, ids, reorder, zoned day maths). Rules page clicked through headless with the mocked preview (drag, keyboard reorder, all/any, when_inactive, reevaluate, add with validation, delete, activation editor, pause, manual chip) – no runtime errors. Not yet checked: HA's real condition editor inside the card (needs a logged-in dev instance).
+- [x] Release v0.3.0 → Steven can start the parallel run of the heating plans (SPEC §9)
+  - Bundle 99.0 KB / 27.3 KB gzip.
 
 ## 0.4 – Holidays, timeline, drag, copy day
 
