@@ -106,7 +106,7 @@
       "message": "Zeitwerk is not set up."
     },
     "unknown_plan": {
-      "message": "Unknown plan '{plan}'."
+      "message": "Unknown plan: {plan}"
     }
   }
 }
