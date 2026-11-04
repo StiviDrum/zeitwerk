@@ -4,7 +4,7 @@
 set -e
 source "$(dirname "$0")/_venv"
 
-python -m pip install -q -r requirements_test.txt colorlog
+python -m pip install -q -r requirements_test.txt colorlog gtts
 (cd frontend && npm run build)
 
 # Copy instead of symlink (works on Windows) - rerun after backend changes.
