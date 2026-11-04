@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from .compat import vol
 from .const import DOMAIN
 from .engine import PlanRunner
+from .holidays import HolidaySource
 from .manager import EVENT_REMOVED, PlanNotFoundError, ZeitwerkManager
 from .model import Plan
 from .schedule import preview
@@ -264,6 +265,49 @@ async def ws_preview(
     connection.send_result(msg["id"], {"plans": result})
 
 
+def _holiday_source_id(value: Any) -> str:
+    entity_id = cv.entity_id(value)
+    if not entity_id.startswith(("calendar.", "binary_sensor.")):
+        raise vol.Invalid(
+            "source must be a calendar (Holiday) or binary_sensor (Workday) entity"
+        )
+    return entity_id
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "zeitwerk/holidays/upcoming",
+        vol.Required("source"): _holiday_source_id,
+        vol.Optional("count", default=3): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=20)
+        ),
+    }
+)
+@websocket_api.async_response
+@_with_manager
+async def ws_holidays_upcoming(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: ZeitwerkManager,
+) -> None:
+    """Next holidays of a source (also for sources no plan uses yet)."""
+    source = manager.holidays.get(msg["source"])
+    if source is None:
+        source = HolidaySource(hass, msg["source"])
+        await source.async_refresh()
+    connection.send_result(
+        msg["id"],
+        {
+            "kind": "calendar" if msg["source"].startswith("calendar.") else "workday",
+            "holidays": [
+                {"date": day.isoformat(), "name": name}
+                for day, name in source.upcoming(msg["count"])
+            ],
+        },
+    )
+
+
 @callback
 def async_register_websocket(hass: HomeAssistant) -> None:
     """Register all websocket commands."""
@@ -275,5 +319,6 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_delete,
         ws_subscribe,
         ws_preview,
+        ws_holidays_upcoming,
     ):
         websocket_api.async_register_command(hass, command)

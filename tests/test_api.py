@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
+from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
@@ -148,3 +149,45 @@ async def test_ws_admin_only(
     # reading is allowed
     await client.send_json_auto_id({"type": "zeitwerk/plans/list"})
     assert (await client.receive_json())["success"]
+
+
+async def test_ws_holidays_upcoming(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    client = await hass_ws_client(hass)  # authenticate before freezing time
+    freezer.move_to(at(WED, 10))
+    await setup_helpers(hass)
+    await setup_zeitwerk(hass)
+    hass.states.async_set("calendar.feiertage", "off")
+    dates = {
+        date(2026, 12, 25): "1. Weihnachtstag",
+        date(2026, 12, 26): "2. Weihnachtstag",
+        date(2027, 1, 1): "Neujahr",
+        date(2026, 10, 3): "Tag der Deutschen Einheit",
+    }
+    with patch(
+        "custom_components.zeitwerk.holidays.HolidaySource._async_read_calendar",
+        return_value=dates,
+    ):
+        await client.send_json_auto_id(
+            {"type": "zeitwerk/holidays/upcoming", "source": "calendar.feiertage"}
+        )
+        msg = await client.receive_json()
+    assert msg["success"], msg
+    assert msg["result"] == {
+        "kind": "calendar",
+        "holidays": [
+            {"date": "2026-12-25", "name": "1. Weihnachtstag"},
+            {"date": "2026-12-26", "name": "2. Weihnachtstag"},
+            {"date": "2027-01-01", "name": "Neujahr"},
+        ],
+    }
+
+    await client.send_json_auto_id(
+        {"type": "zeitwerk/holidays/upcoming", "source": "sensor.nope"}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "invalid_format"
