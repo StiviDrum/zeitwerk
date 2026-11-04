@@ -205,3 +205,49 @@ describe("dragBlock / copyDayType", () => {
     expect(plan.week.day_types[0].blocks[0].start).toBe("06:00");
   });
 });
+
+describe("detachDay", () => {
+  const plan = () =>
+    ({
+      week: {
+        day_types: [
+          {
+            id: "workday",
+            name: "Werktag",
+            days: ["mon", "tue", "wed", "thu", "fri"],
+            blocks: [b("16:00", "22:00")],
+          },
+          { id: "weekend", name: "WE", days: ["sat", "sun"], blocks: [] },
+        ],
+      },
+    }) as unknown as import("../src/types").Plan;
+  it("creates a single-day type with a copy of the blocks", async () => {
+    const { detachDay } = await import("../src/blocks");
+    const p = plan();
+    expect(detachDay(p, "wed", "Mittwoch")).toBe("wed");
+    expect(p.week.day_types[0].days).toEqual(["mon", "tue", "thu", "fri"]);
+    expect(p.week.day_types[2]).toEqual({
+      id: "wed",
+      name: "Mittwoch",
+      days: ["wed"],
+      blocks: [b("16:00", "22:00")],
+    });
+    p.week.day_types[2].blocks[0].end = "23:00";
+    expect(p.week.day_types[0].blocks[0].end).toBe("22:00");
+  });
+  it("reuses a day type that already holds only this day", async () => {
+    const { detachDay } = await import("../src/blocks");
+    const p = plan();
+    detachDay(p, "wed", "Mittwoch");
+    expect(detachDay(p, "wed", "Mittwoch")).toBe("wed");
+    expect(p.week.day_types).toHaveLength(3);
+  });
+  it("creates a day for an unassigned weekday and avoids id clashes", async () => {
+    const { detachDay } = await import("../src/blocks");
+    const p = plan();
+    p.week.day_types[1].days = ["sat"];
+    p.week.day_types.push({ id: "sun", name: "x", days: [], blocks: [] });
+    expect(detachDay(p, "sun", "Sonntag")).toBe("sun_2");
+    expect(p.week.day_types[p.week.day_types.length - 1].days).toEqual(["sun"]);
+  });
+});

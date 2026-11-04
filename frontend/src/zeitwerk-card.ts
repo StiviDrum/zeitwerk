@@ -12,6 +12,7 @@ import type { BlockEditTarget, BlockSaveDetail } from "./block-editor";
 import {
   blockAt,
   copyDayType,
+  detachDay,
   dayTypeFor,
   dragBlock,
   toInterval,
@@ -54,6 +55,7 @@ import {
   type Plan,
   type PlanEvent,
   type Profile,
+  type Weekday,
   type ZeitwerkCardConfig,
 } from "./types";
 import { CARD_VERSION } from "./version";
@@ -492,19 +494,22 @@ export class ZeitwerkCard extends LitElement {
     this._editing = target;
   }
 
-  private _onBlockClick(seg: Segment): void {
+  private _onBlockClick(seg: Segment, rowKey?: string): void {
     if (this._suppressClick) return;
     const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
     const block = dt?.blocks[seg.index];
     if (!dt || !block) return;
-    this._openEditor({ dayTypeId: dt.id, index: seg.index, block: { ...block } });
+    // A spill segment belongs to the block of the previous day.
+    const row = WEEKDAYS.includes(rowKey as Weekday) ? (rowKey as Weekday) : undefined;
+    const weekday = row && seg.spill ? previousWeekday(row) : row;
+    this._openEditor({ dayTypeId: dt.id, index: seg.index, block: { ...block }, weekday });
   }
 
-  private _onBlockKey(seg: Segment, ev: KeyboardEvent): void {
+  private _onBlockKey(seg: Segment, ev: KeyboardEvent, rowKey?: string): void {
     if (ev.key === "Enter" || ev.key === " " || ev.key === "Delete" || ev.key === "Backspace") {
       // Delete opens the editor, where deleting is confirmed with the button.
       ev.preventDefault();
-      this._onBlockClick(seg);
+      this._onBlockClick(seg, rowKey);
       return;
     }
     if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
@@ -658,7 +663,11 @@ export class ZeitwerkCard extends LitElement {
       this._press = undefined;
       const rect = track.getBoundingClientRect();
       const minute = ((clientX - rect.left) / rect.width) * MINUTES_PER_DAY;
-      this._newBlockAt(row.dayType!, minute);
+      this._newBlockAt(
+        row.dayType!,
+        minute,
+        WEEKDAYS.includes(row.key as Weekday) ? (row.key as Weekday) : undefined,
+      );
     }, LONG_PRESS_MS);
     this._press = { timer, x: clientX, y: clientY };
   }
@@ -673,7 +682,7 @@ export class ZeitwerkCard extends LitElement {
     this._press = undefined;
   }
 
-  private _newBlockAt(dayType: DayType, minute: number): void {
+  private _newBlockAt(dayType: DayType, minute: number, weekday?: Weekday): void {
     if (!this._plan) return;
     const step = this._step;
     const start = clamp(snap(minute, step), 0, MINUTES_PER_DAY - step);
@@ -688,14 +697,35 @@ export class ZeitwerkCard extends LitElement {
       dayTypeId: dayType.id,
       index: -1,
       block: { start: formatTime(start), end: formatTime(end), profile: profile.id },
+      weekday,
     });
   }
 
-  private async _saveBlocks(changes: Record<string, (blocks: Block[]) => Block[]>): Promise<void> {
+  /**
+   * Apply block changes per day type id. With `onlyDay`, the target weekday is
+   * detached from its day type first and the change applies to it alone.
+   */
+  private async _saveBlocks(
+    target: BlockEditTarget,
+    onlyDay: boolean | undefined,
+    changes: Record<string, (blocks: Block[]) => Block[]>,
+  ): Promise<void> {
     this._busy = true;
     this._saveError = null;
+    const l = this._l;
     try {
       await this._updatePlan((plan) => {
+        if (onlyDay && target.weekday) {
+          const id = detachDay(
+            plan,
+            target.weekday,
+            l.weekdayLong(WEEKDAYS.indexOf(target.weekday)),
+          );
+          const change = changes[target.dayTypeId];
+          delete changes[target.dayTypeId];
+          changes[id] = change;
+          this._tab = id;
+        }
         for (const dt of plan.week.day_types) {
           const change = changes[dt.id];
           if (change) dt.blocks = change(dt.blocks);
@@ -710,7 +740,7 @@ export class ZeitwerkCard extends LitElement {
   }
 
   private _onSave(ev: CustomEvent<BlockSaveDetail>): void {
-    const { target, block, also } = ev.detail;
+    const { target, block, also, onlyDay } = ev.detail;
     const def = this._plan!.default_profile;
     const changes: Record<string, (blocks: Block[]) => Block[]> = {
       [target.dayTypeId]: (blocks) =>
@@ -721,12 +751,14 @@ export class ZeitwerkCard extends LitElement {
     for (const id of also ?? []) {
       if (id !== target.dayTypeId) changes[id] = (blocks) => insertBlock(blocks, block, def);
     }
-    this._saveBlocks(changes);
+    this._saveBlocks(target, onlyDay, changes);
   }
 
-  private _onDelete(ev: CustomEvent<{ target: BlockEditTarget }>): void {
-    const { target } = ev.detail;
-    this._saveBlocks({ [target.dayTypeId]: (blocks) => removeBlock(blocks, target.index) });
+  private _onDelete(ev: CustomEvent<{ target: BlockEditTarget; onlyDay?: boolean }>): void {
+    const { target, onlyDay } = ev.detail;
+    this._saveBlocks(target, onlyDay, {
+      [target.dayTypeId]: (blocks) => removeBlock(blocks, target.index),
+    });
   }
 
   // --- Rendering ------------------------------------------------------------
@@ -937,6 +969,9 @@ export class ZeitwerkCard extends LitElement {
         ? plan.profiles.map((p) => this._quick(p)).filter((q): q is QuickRow => !!q)
         : [];
     const l = this._l;
+    if (this._editing) {
+      return html`<ha-card>${this._renderEditor(plan, this._editing)}</ha-card>`;
+    }
     if (this._page === "rules") {
       return html`<ha-card>
         <zeitwerk-rules
@@ -960,7 +995,6 @@ export class ZeitwerkCard extends LitElement {
       ${this._separator(l.t("section_week"))} ${this._renderTabs(plan)} ${this._renderGrid(plan)}
       ${this._config!.compact ? nothing : this._renderRulesLinks(plan)}
       ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
-      ${this._editing ? this._renderEditor(plan, this._editing) : nothing}
     </ha-card>`;
   }
 
@@ -1096,32 +1130,32 @@ export class ZeitwerkCard extends LitElement {
           plan.status?.active ? l.t("fulfilled") : l.t("not_fulfilled")
         }`
       : l.t("always_runs");
-    const row = (icon: string, title: string, sub: string) =>
-      html`<button class="link" @click=${() => (this._page = "rules")}>
-        <span class="licon"><ha-icon .icon=${icon}></ha-icon></span>
-        <span class="ltext"
-          ><span class="ltitle">${title}</span><span class="lsub">${sub}</span></span
-        >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-      </button>`;
-    return html`${this._separator(l.t("section_rules"))}
-      <div class="links">
-        ${row("mdi:layers-outline", l.t("rules_overrides"), overrides)}
-        ${row("mdi:flash-outline", l.t("rules_activation"), activation)}
-        ${row("mdi:flag-outline", l.t("rules_holidays"), this._holidaySummary(plan))}
-      </div>`;
+    const holidays = this._holidaySummary(plan);
+    const summary = [
+      `${l.t("rules_overrides")}: ${overrides}`,
+      `${l.t("rules_activation")}: ${activation}`,
+      `${l.t("rules_holidays")}: ${holidays}`,
+    ];
+    return html`<button class="link settings" @click=${() => (this._page = "rules")}>
+      <span class="licon"><ha-icon .icon=${"mdi:tune-variant"}></ha-icon></span>
+      <span class="ltext">
+        <span class="ltitle">${l.t("plan_settings")}</span>
+        ${summary.map((line) => html`<span class="lsub">${line}</span>`)}
+      </span>
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>`;
   }
 
   private _holidaySummary(plan: Plan): string {
@@ -1481,8 +1515,8 @@ export class ZeitwerkCard extends LitElement {
       class="block ${seg.spill ? "spill" : ""} ${dragging ? "dragging" : ""}"
       style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
       aria-label=${this._l.t("edit_block", { profile: profile?.name ?? seg.profile, time: seg.label })}
-      @click=${() => this._onBlockClick(seg)}
-      @keydown=${(ev: KeyboardEvent) => this._onBlockKey(seg, ev)}
+      @click=${() => this._onBlockClick(seg, rowKey)}
+      @keydown=${(ev: KeyboardEvent) => this._onBlockKey(seg, ev, rowKey)}
     >
       <span class="blabel">${seg.width >= seg.label.length * 2.1 ? seg.label : ""}</span>
       ${
@@ -1510,8 +1544,11 @@ export class ZeitwerkCard extends LitElement {
     const dt = plan.week.day_types.find((d) => d.id === target.dayTypeId);
     const labels: Record<string, string> = {};
     for (const p of plan.profiles) labels[p.id] = this._valueLabel(p);
+    const weekday = target.weekday;
     return html`<zeitwerk-block-editor
       ?dark=${!!this.hass?.themes?.darkMode}
+      .weekdayLabel=${weekday ? this._l.weekdayLong(WEEKDAYS.indexOf(weekday)) : ""}
+      .sharedDayType=${!!weekday && !!dt && dt.days.length > 1 && dt.days.includes(weekday)}
       .plan=${plan}
       .target=${target}
       .localize=${this._l}
@@ -2205,6 +2242,12 @@ export class ZeitwerkCard extends LitElement {
         text-align: left;
         box-sizing: border-box;
         color: var(--zw-text);
+      }
+      .link.settings {
+        border-radius: 22px;
+        background: var(--zw-surface);
+        border: 1px solid var(--zw-border);
+        padding-block: 12px;
       }
       .link + .link {
         border-top: 1px solid var(--zw-border);

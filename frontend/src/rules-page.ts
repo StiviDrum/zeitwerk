@@ -23,9 +23,12 @@ import { WEEKDAYS, type HomeAssistant, type Override, type Plan, type Weekday } 
 export type PlanMutator = (plan: Plan) => void;
 
 type SubPage =
-  | { kind: "list" }
+  | { kind: "menu" }
+  | { kind: "overrides" }
+  | { kind: "activation" }
+  | { kind: "holidays" }
   | { kind: "override"; index: number; draft: Override }
-  | { kind: "activation"; match: "all" | "any"; conditions: Condition[] };
+  | { kind: "activation-edit"; match: "all" | "any"; conditions: Condition[] };
 
 const ROW_PITCH = 72; // 64 px row + 8 px gap
 
@@ -40,7 +43,7 @@ export class ZeitwerkRules extends LitElement {
   @property({ attribute: false }) public localize!: Localizer;
   @property({ attribute: false }) public save!: (mutate: PlanMutator) => Promise<void>;
 
-  @state() private _page: SubPage = { kind: "list" };
+  @state() private _page: SubPage = { kind: "menu" };
   @state() private _error?: string;
   @state() private _busy = false;
   @state() private _confirmDelete = false;
@@ -51,7 +54,7 @@ export class ZeitwerkRules extends LitElement {
 
   protected updated(): void {
     const source = this.plan?.holidays.source ?? null;
-    if (this._page.kind === "list" && source !== this._upcomingFor) {
+    if (this._page.kind === "holidays" && source !== this._upcomingFor) {
       this._upcomingFor = source;
       this._upcoming = undefined;
       if (source && this.hass) {
@@ -126,84 +129,83 @@ export class ZeitwerkRules extends LitElement {
       const wd = l.weekdayShort((d.getDay() + 6) % 7);
       return `${wd} ${d.toLocaleDateString(l.lang, { day: "2-digit", month: "2-digit" })}`;
     };
-    return html`${this._separator(t("rules_holidays"))}
-      <div class="panel">
-        <label class="between">
-          <span class="label">${t("holiday_source")}</span>
-          <select
-            ?disabled=${this._busy}
-            @change=${(ev: Event) =>
-              this._setHolidays({ source: (ev.target as HTMLSelectElement).value || null })}
-          >
-            <option value="" ?selected=${!h.source}>${t("holiday_source_none")}</option>
-            ${sources.map(
-              (id) =>
-                html`<option value=${id} ?selected=${id === h.source}>
-                  ${String(this.hass?.states[id]?.attributes.friendly_name ?? id)}
-                </option>`,
-            )}
-          </select>
-        </label>
-        <div class="segmented wide" role="radiogroup" aria-label=${t("holiday_mode")}>
-          ${modes.map(
-            ([mode, label]) =>
-              html`<button
-                role="radio"
-                aria-checked=${h.mode === mode ? "true" : "false"}
-                ?disabled=${this._busy || (!h.source && mode !== "off")}
-                @click=${() => h.mode !== mode && this._setHolidays({ mode })}
-              >
-                ${label}
-              </button>`,
+    return html`<div class="panel">
+      <label class="between">
+        <span class="label">${t("holiday_source")}</span>
+        <select
+          ?disabled=${this._busy}
+          @change=${(ev: Event) =>
+            this._setHolidays({ source: (ev.target as HTMLSelectElement).value || null })}
+        >
+          <option value="" ?selected=${!h.source}>${t("holiday_source_none")}</option>
+          ${sources.map(
+            (id) =>
+              html`<option value=${id} ?selected=${id === h.source}>
+                ${String(this.hass?.states[id]?.attributes.friendly_name ?? id)}
+              </option>`,
           )}
-        </div>
-        ${
-          h.mode === "like_day"
-            ? html`<label class="between">
-                <span class="label">${t("holiday_like_day")}</span>
-                <select
-                  ?disabled=${this._busy}
-                  @change=${(ev: Event) =>
-                    this._setHolidays({
-                      like_day: (ev.target as HTMLSelectElement).value as Weekday,
-                    })}
-                >
-                  ${WEEKDAYS.map(
-                    (wd, i) =>
-                      html`<option value=${wd} ?selected=${wd === h.like_day}>
-                        ${l.weekdayLong(i)}
-                      </option>`,
-                  )}
-                </select>
-              </label>`
-            : nothing
-        }
-        ${
-          h.source
-            ? html`<div class="field">
-                <span class="label">${t("holiday_next")}</span>
-                ${
-                  this._upcoming === undefined
-                    ? html`<span class="muted">…</span>`
-                    : this._upcoming?.length
-                      ? this._upcoming.map(
-                          (u) =>
-                            html`<div class="between hday">
-                              <span>${u.name || t("holiday")}</span
-                              ><span class="muted">${fmtDate(u.date)}</span>
-                            </div>`,
-                        )
-                      : html`<span class="muted">${t("holiday_none_upcoming")}</span>`
-                }
-                ${
-                  h.source.startsWith("binary_sensor.")
-                    ? html`<span class="muted small">${t("holiday_workday_hint")}</span>`
-                    : nothing
-                }
-              </div>`
-            : nothing
-        }
-      </div>`;
+        </select>
+      </label>
+      <div class="segmented wide" role="radiogroup" aria-label=${t("holiday_mode")}>
+        ${modes.map(
+          ([mode, label]) =>
+            html`<button
+              role="radio"
+              aria-checked=${h.mode === mode ? "true" : "false"}
+              ?disabled=${this._busy || (!h.source && mode !== "off")}
+              @click=${() => h.mode !== mode && this._setHolidays({ mode })}
+            >
+              ${label}
+            </button>`,
+        )}
+      </div>
+      ${
+        h.mode === "like_day"
+          ? html`<label class="between">
+              <span class="label">${t("holiday_like_day")}</span>
+              <select
+                ?disabled=${this._busy}
+                @change=${(ev: Event) =>
+                  this._setHolidays({
+                    like_day: (ev.target as HTMLSelectElement).value as Weekday,
+                  })}
+              >
+                ${WEEKDAYS.map(
+                  (wd, i) =>
+                    html`<option value=${wd} ?selected=${wd === h.like_day}>
+                      ${l.weekdayLong(i)}
+                    </option>`,
+                )}
+              </select>
+            </label>`
+          : nothing
+      }
+      ${
+        h.source
+          ? html`<div class="field">
+              <span class="label">${t("holiday_next")}</span>
+              ${
+                this._upcoming === undefined
+                  ? html`<span class="muted">…</span>`
+                  : this._upcoming?.length
+                    ? this._upcoming.map(
+                        (u) =>
+                          html`<div class="between hday">
+                            <span>${u.name || t("holiday")}</span
+                            ><span class="muted">${fmtDate(u.date)}</span>
+                          </div>`,
+                      )
+                    : html`<span class="muted">${t("holiday_none_upcoming")}</span>`
+              }
+              ${
+                h.source.startsWith("binary_sensor.")
+                  ? html`<span class="muted small">${t("holiday_workday_hint")}</span>`
+                  : nothing
+              }
+            </div>`
+          : nothing
+      }
+    </div>`;
   }
 
   private get _admin(): boolean {
@@ -287,10 +289,16 @@ export class ZeitwerkRules extends LitElement {
     switch (this._page.kind) {
       case "override":
         return this._renderOverrideEditor(this._page);
-      case "activation":
+      case "activation-edit":
         return this._renderActivationEditor(this._page);
+      case "overrides":
+        return this._renderOverrides();
+      case "activation":
+        return this._renderActivation();
+      case "holidays":
+        return this._renderHolidayPage();
       default:
-        return this._renderList();
+        return this._renderMenu();
     }
   }
 
@@ -348,14 +356,76 @@ export class ZeitwerkRules extends LitElement {
     </div>`;
   }
 
-  private _renderList() {
+  private _renderMenu() {
     const t = this.localize.t.bind(this.localize);
     const plan = this.plan;
     const results = plan.status?.override_results ?? {};
-    const activation = plan.activation;
-    const actResults = plan.status?.activation_results ?? [];
+    const active = plan.overrides.filter((o) => results[o.id]);
+    const overrides = plan.overrides.length
+      ? `${plan.overrides.map((o) => o.name).join(", ")} · ${
+          active.length
+            ? active.map((o) => t("override_active", { name: o.name })).join(", ")
+            : t("none_active")
+        }`
+      : t("no_conditions");
+    const act = plan.activation;
+    const activation = act.conditions.length
+      ? `${conditionsSummary(act.conditions, act.match, this.hass, this.localize)} · ${
+          plan.status?.active ? t("fulfilled") : t("not_fulfilled")
+        }`
+      : t("always_runs");
+    const h = plan.holidays;
+    const holidays =
+      h.mode === "off" || !h.source
+        ? t("holiday_mode_off")
+        : `${String(this.hass?.states[h.source]?.attributes.friendly_name ?? h.source)} · ${
+            h.mode === "like_day"
+              ? t("holiday_like", {
+                  day: this.localize.weekdayLong(WEEKDAYS.indexOf(h.like_day ?? "sun")),
+                })
+              : t("holiday_mode_own")
+          }`;
+    const row = (
+      icon: string,
+      title: string,
+      sub: string,
+      kind: "overrides" | "activation" | "holidays",
+    ) =>
+      html`<button class="menu-row" @click=${() => this._open({ kind })}>
+        <span class="ricon neutral"><ha-icon .icon=${icon}></ha-icon></span>
+        <span class="rtext"
+          ><span class="rtitle">${title}</span><span class="rsub">${sub}</span></span
+        >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>`;
     return html`
-      ${this._head(t("section_rules"), plan.name, () => this._fire("zw-back"))}
+      ${this._head(t("plan_settings"), plan.name, () => this._fire("zw-back"))}
+      <div class="menu">
+        ${row("mdi:layers-outline", t("rules_overrides"), overrides, "overrides")}
+        ${row("mdi:flash-outline", t("rules_activation"), activation, "activation")}
+        ${row("mdi:flag-outline", t("rules_holidays"), holidays, "holidays")}
+      </div>
+    `;
+  }
+
+  private _renderOverrides() {
+    const t = this.localize.t.bind(this.localize);
+    const plan = this.plan;
+    const results = plan.status?.override_results ?? {};
+    return html`
+      ${this._head(t("rules_overrides"), plan.name, () => this._open({ kind: "menu" }))}
       ${this._separator(t("rules_overrides"), t("rules_overrides_hint"))}
       <div class="list">
         ${plan.overrides.map((ov, index) => {
@@ -434,6 +504,17 @@ export class ZeitwerkRules extends LitElement {
         </button>
       </div>
 
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+    `;
+  }
+
+  private _renderActivation() {
+    const t = this.localize.t.bind(this.localize);
+    const plan = this.plan;
+    const activation = plan.activation;
+    const actResults = plan.status?.activation_results ?? [];
+    return html`
+      ${this._head(t("rules_activation"), plan.name, () => this._open({ kind: "menu" }))}
       ${this._separator(t("rules_activation"))}
       <div class="panel">
         <div class="between">
@@ -467,7 +548,7 @@ export class ZeitwerkRules extends LitElement {
           class="secondary"
           @click=${() =>
             this._open({
-              kind: "activation",
+              kind: "activation-edit",
               match: activation.match,
               conditions: structuredClone(activation.conditions),
             })}
@@ -519,6 +600,13 @@ export class ZeitwerkRules extends LitElement {
           </button>
         </label>
       </div>
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+    `;
+  }
+
+  private _renderHolidayPage() {
+    return html`
+      ${this._head(this.localize.t("rules_holidays"), this.plan.name, () => this._open({ kind: "menu" }))}
       ${this._renderHolidays()}
       ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
     `;
@@ -531,7 +619,7 @@ export class ZeitwerkRules extends LitElement {
     const isNew = page.index < 0;
     const update = (changes: Partial<Override>) =>
       (this._page = { ...page, draft: { ...draft, ...changes } });
-    const back = () => this._open({ kind: "list" });
+    const back = () => this._open({ kind: "overrides" });
     const save = () => {
       const name = draft.name.trim();
       if (!name) {
@@ -624,9 +712,9 @@ export class ZeitwerkRules extends LitElement {
     `;
   }
 
-  private _renderActivationEditor(page: Extract<SubPage, { kind: "activation" }>) {
+  private _renderActivationEditor(page: Extract<SubPage, { kind: "activation-edit" }>) {
     const t = this.localize.t.bind(this.localize);
-    const back = () => this._open({ kind: "list" });
+    const back = () => this._open({ kind: "activation" });
     return html`
       ${this._head(t("rules_activation"), this.plan.name, back)}
       <div class="panel">
@@ -963,6 +1051,32 @@ export class ZeitwerkRules extends LitElement {
       }
       .switch[aria-checked="true"] span {
         background: var(--zw-on-accent);
+      }
+      .menu {
+        display: flex;
+        flex-direction: column;
+        border-radius: 22px;
+        background: var(--zw-surface);
+        border: 1px solid var(--zw-border);
+        overflow: hidden;
+      }
+      .menu-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 64px;
+        padding: 10px 14px 10px 10px;
+        text-align: left;
+      }
+      .menu-row + .menu-row {
+        border-top: 1px solid var(--zw-border);
+      }
+      .menu-row svg {
+        color: var(--zw-text-2);
+        flex-shrink: 0;
+      }
+      .ricon.neutral {
+        background: var(--zw-surface-2);
       }
       .hday {
         font-size: 13px;

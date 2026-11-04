@@ -154,6 +154,10 @@ const en = {
   ed_sliders: "Show profile sliders",
   ed_compact: "Compact",
   ed_step: "Time step (minutes)",
+  applies_to: "Applies to",
+  only_day: "only {day}",
+  drag_bar_hint: "Drag the handles or the block in the bar.",
+  plan_settings: "Plan settings",
   no_days: "no days",
 };
 
@@ -316,6 +320,10 @@ const de: Strings = {
   ed_sliders: "Profil-Regler anzeigen",
   ed_compact: "Kompakt",
   ed_step: "Zeitraster (Minuten)",
+  applies_to: "Gilt für",
+  only_day: "nur {day}",
+  drag_bar_hint: "Griffe oder den Block in der Leiste ziehen.",
+  plan_settings: "Plan-Einstellungen",
   no_days: "keine Tage",
 };
 

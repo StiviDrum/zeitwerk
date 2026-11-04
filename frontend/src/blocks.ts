@@ -267,3 +267,24 @@ export function copyDayType(plan: Plan, fromId: string, toIds: string[]): void {
     }
   }
 }
+
+/**
+ * Detach one weekday from its day type so it can be edited on its own.
+ * Reuses an existing day type that holds only this weekday; otherwise creates
+ * one (copy of the blocks) named `name`. Mutates `plan`, returns the id.
+ */
+export function detachDay(plan: Plan, weekday: Weekday, name: string): string {
+  const current = dayTypeFor(plan, weekday);
+  if (current && current.days.length === 1) return current.id;
+  const ids = plan.week.day_types.map((d) => d.id);
+  let id: string = weekday;
+  for (let i = 2; ids.includes(id); i++) id = `${weekday}_${i}`;
+  plan.week.day_types.push({
+    id,
+    name,
+    days: [weekday],
+    blocks: current ? current.blocks.map((b) => ({ ...b })) : [],
+  });
+  if (current) current.days = current.days.filter((d) => d !== weekday);
+  return id;
+}
