@@ -2,5 +2,15 @@
 # Run backend (pytest) and frontend (vitest) tests.
 set -e
 source "$(dirname "$0")/_venv"
-python -m pytest "$@"
+
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*)
+    # Native Windows: HA needs Unix-only modules -> load minimal shims (scripts/win_shims).
+    export PYTHONPATH="scripts/win_shims"
+    python -m pytest -p zeitwerk_win_pytest "$@"
+    ;;
+  *)
+    python -m pytest "$@"
+    ;;
+esac
 (cd frontend && npm test)
