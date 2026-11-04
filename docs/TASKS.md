@@ -6,7 +6,7 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 - [x] Ask Steven for the repo URL, clone, check tooling (see AGENTS.md §0)
   - Repo: https://github.com/StiviDrum/zeitwerk, cloned into `Zeitwerk/zeitwerk/` (kit folder stays outside).
-  - Steven works on native Windows (no WSL2, no Docker). Installed Python 3.14.0 < HA requirement 3.14.2 → local pytest/dev instance blocked until Python is upgraded; CI runs the tests.
+  - Steven works on native Windows (no WSL2, no Docker). Python upgraded to 3.14.10; `gh` installed. HA needs `fcntl`/`resource` → `scripts/win_shims/` + Windows-only pytest plugin let `scripts/test` run natively; CI stays on Linux.
   - HA 2026.10 replaced `voluptuous` with `probatio` (drop-in API). Code must import via a compat shim so HA 2026.6 (min version) still works.
 - [x] Copy `docs/`, `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/` from the kit into the repo
 - [x] Repo layout per SPEC §6 (`custom_components/zeitwerk`, `frontend/`, `tests/`, `scripts/`, `config/`)
@@ -18,7 +18,8 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - Holiday/Workday integrations are UI-only → add once via UI in the dev instance.
 - [x] `.github/workflows/validate.yml` (hassfest, HACS action, ruff, pytest, eslint, vitest, build) and `release.yml` (on tag: build frontend, zip `custom_components/zeitwerk` as `zeitwerk.zip`, attach to GitHub release)
 - [x] `.gitignore`, `LICENSE` (MIT, Steven Glab), `README.md` skeleton (en + de), `CHANGELOG.md`
-- [ ] First push, CI green
+- [x] First push, CI green
+  - HACS validation only works on public repos → job skipped while the repo is private.
 
 ## 0.1 – Backend core
 
