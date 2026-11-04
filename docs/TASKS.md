@@ -28,6 +28,7 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [ ] `store.py`: load/save, schema version 1, migration hook, debounced save
 - [ ] Config flow: single instance, no options yet
 - [ ] `engine.py`: day type resolution (incl. holidays both modes), active profile (activation → overrides → block → default), next change computation, blocks across midnight, one timer per plan, state listeners for condition entities, DST-safe via `dt_util`
+  - Progress: pure maths done in `schedule.py` (day type, holidays both modes, midnight spill – today's block wins, 24:00, next change, preview, DST). All instants UTC internally (same-tz aware datetimes compare by wall time!). DST rule: gap times start at first valid instant; repeated hour holds the state of the end of the first pass. Runtime part (timer, listeners) still open.
 - [ ] `executor.py`: run profile actions with `Script`, own `Context` so manual changes can be detected later
 - [ ] Apply only on change; `reapply_on_start`; `reapply_on_profile_change`
 - [ ] Entities per plan: `switch`, `sensor …_profile` (attributes per SPEC), `sensor …_next_change` (timestamp), `binary_sensor …_active`; one device per plan
