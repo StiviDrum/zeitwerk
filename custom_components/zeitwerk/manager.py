@@ -7,9 +7,9 @@ import copy
 import logging
 from typing import Any
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
 
@@ -17,6 +17,7 @@ from .compat import vol
 from .const import DOMAIN, SIGNAL_PLAN_STATUS
 from .engine import PlanRunner
 from .holidays import HolidayRegistry
+from .issues import async_check_plan, async_clear_plan
 from .model import Plan
 from .schema import async_validate_plan, make_plan_id, validate_plan
 from .store import StoredData, ZeitwerkStore
@@ -50,6 +51,7 @@ class ZeitwerkManager:
         self._listeners: list[PlanListener] = []
         self._started = False
         self._unsub_started: CALLBACK_TYPE | None = None
+        self._unsub_registry: CALLBACK_TYPE | None = None
 
     # ---------------------------------------------------------------- setup
 
@@ -72,12 +74,24 @@ class ZeitwerkManager:
         self._started = True
         for plan in list(self.plans.values()):
             await self._async_start_runner(plan, reapply=plan.options.reapply_on_start)
+        self._unsub_registry = self.hass.bus.async_listen(
+            er.EVENT_ENTITY_REGISTRY_UPDATED, self._async_registry_updated
+        )
+
+    @callback
+    def _async_registry_updated(self, _event: Event[Any]) -> None:
+        """Entities were added, removed or renamed: re-check plan references."""
+        for plan in self.plans.values():
+            async_check_plan(self.hass, plan)
 
     async def async_unload(self) -> None:
         """Stop everything and flush storage."""
         if self._unsub_started:
             self._unsub_started()
             self._unsub_started = None
+        if self._unsub_registry:
+            self._unsub_registry()
+            self._unsub_registry = None
         for runner in list(self.runners.values()):
             await runner.async_stop()
         self.runners.clear()
@@ -130,6 +144,7 @@ class ZeitwerkManager:
         )
         self.runners[plan.id] = runner
         await runner.async_start(reapply=reapply)
+        async_check_plan(self.hass, plan)
 
     def get_plan(self, plan_id: str) -> Plan:
         """Return a plan or raise."""
@@ -225,6 +240,7 @@ class ZeitwerkManager:
             await runner.async_stop()
         del self.plans[plan_id]
         self.runtime.pop(plan_id, None)
+        async_clear_plan(self.hass, plan_id)
         self.async_schedule_save()
         self._notify(EVENT_REMOVED, plan_id)
         registry = dr.async_get(self.hass)

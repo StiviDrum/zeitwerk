@@ -108,5 +108,11 @@
     "unknown_plan": {
       "message": "Unknown plan: {plan}"
     }
+  },
+  "issues": {
+    "missing_entities": {
+      "title": "Zeitwerk plan \"{plan}\" refers to missing entities",
+      "description": "The plan \"{plan}\" uses entities that do not exist (any more): {entities}.\n\nActions or conditions with these entities fail. Restore the entities or edit the plan in the Zeitwerk card. This message disappears once all entities exist again."
+    }
   }
 }

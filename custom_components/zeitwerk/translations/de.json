@@ -108,5 +108,11 @@
     "unknown_plan": {
       "message": "Unbekannter Plan: {plan}"
     }
+  },
+  "issues": {
+    "missing_entities": {
+      "title": "Zeitwerk-Plan „{plan}“ verweist auf fehlende Entitäten",
+      "description": "Der Plan „{plan}“ verwendet Entitäten, die es (nicht mehr) gibt: {entities}.\n\nAktionen oder Bedingungen mit diesen Entitäten schlagen fehl. Stelle die Entitäten wieder her oder bearbeite den Plan in der Zeitwerk-Karte. Diese Meldung verschwindet, sobald alle Entitäten wieder vorhanden sind."
+    }
   }
 }
