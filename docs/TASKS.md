@@ -135,6 +135,15 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Profile slider: custom `role="slider"`; touch needs a 350 ms hold (movement before = scroll, ignored), mouse immediate, keyboard arrows/Home/End.
   - Verified in real HA (touch emulation): quick swipe leaves 22 °C, hold + drag changes the value; help shows 3 paragraphs.
 
+## 0.7.0 – Full control via services (assistants / MCP)
+
+- [x] `days.py`: backend port of the card's day logic (per-weekday blocks, midnight split, regroup into day types).
+- [x] Services `get_plan` (SupportsResponse.ONLY), `set_day_plan`, `set_override`, `remove_override`, `update_plan` (merges activation/holidays/options), `create_plan` (optional response), `delete_plan`; admin check via `call.context.user_id` (no user = automation = allowed).
+- [x] Profile sensor attributes `plan_id`, `profiles`, `overrides` (unrecorded).
+- [x] Detailed de/en service descriptions (concepts, formats, the `for:` caveat) – what an assistant sees via MCP.
+  - Tests: 9 new (day logic, get_plan, set_day_plan incl. validation, geofencing override end-to-end, update/create/delete, admin check). Backend 92.
+  - SPEC §4 lists only the original four services; the editing services are an addition requested by Steven (2026-11-04).
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API

@@ -203,6 +203,18 @@ Full model: [docs/SPEC.md](docs/SPEC.md) §3.
 | `zeitwerk.skip_next` | `plan` | keep the current profile through the next change |
 | `zeitwerk.force_profile` | `plan`, `profile`, optional `duration` | force a profile (default: until the next change) |
 | `zeitwerk.clear_force` | `plan` | end a forced/skipped profile |
+| `zeitwerk.get_plan` | optional `plan` | **response data**: whole plan(s) incl. `days` (blocks per weekday), overrides, activation, holidays, status |
+| `zeitwerk.set_day_plan` | `plan`, `days`, `blocks` | set exactly these blocks on the given days (like the day editor) |
+| `zeitwerk.set_override` | `plan`, optional `override_id`, `name`, `profile`, `match`, `conditions`, `position` | create or change an override (position 0 = top) |
+| `zeitwerk.remove_override` | `plan`, `override_id` | delete an override |
+| `zeitwerk.update_plan` | `plan` + any of `name`, `icon`, `tags`, `enabled`, `profiles`, `default_profile`, `activation`, `holidays`, `options` | change parts of a plan (`activation`/`holidays`/`options` are merged) |
+| `zeitwerk.create_plan` | `plan` (object) | create a plan, returns `plan_id` |
+| `zeitwerk.delete_plan` | `plan` | delete a plan |
+
+Editing services (`set_*`, `remove_override`, `update_plan`, `create_plan`,
+`delete_plan`) need an admin user; calls from automations (no user) are
+allowed. The profile sensor additionally exposes `plan_id`, `profiles`
+(id → name) and `overrides` (with `active`).
 
 ```yaml
 action: zeitwerk.force_profile
@@ -211,6 +223,37 @@ data:
   profile: comfort
   duration: "02:00:00"
 ```
+
+```yaml
+# Geofencing sets input_boolean.claude_heizung_abgesenkt; Zeitwerk lowers the heating
+action: zeitwerk.set_override
+data:
+  plan: wohnzimmer_heizung
+  name: Niemand zu Hause
+  profile: away
+  conditions:
+    - condition: state
+      entity_id: input_boolean.claude_heizung_abgesenkt
+      state: "on"
+---
+action: zeitwerk.set_day_plan
+data:
+  plan: wohnzimmer_heizung
+  days: [mon, tue, wed, thu, fri]
+  blocks:
+    - { start: "06:00", end: "08:00", profile: comfort }
+    - { start: "16:00", end: "22:00", profile: comfort }
+```
+
+### Using Zeitwerk with an assistant (e.g. Claude via MCP)
+
+Everything the card can do is available as a service, and the service
+descriptions explain the concepts, so an assistant connected to Home
+Assistant can operate Zeitwerk on its own: read a plan with `get_plan`
+(response data), then change days, overrides, activation or holidays with
+the editing services. Keep delays (e.g. "away for 15 min") in the helper or
+geofencing automation – a `for:` in an override condition is not re-checked
+after the delay.
 
 ## Websocket API
 
@@ -272,6 +315,12 @@ einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Regeln“:
 Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
 aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste aller Pläne: `view: timeline`
 (optional `tags: [heizung]`).
+
+Alles, was die Karte kann, gibt es auch als Dienst (`zeitwerk.get_plan`,
+`set_day_plan`, `set_override`, `remove_override`, `update_plan`,
+`create_plan`, `delete_plan`) – damit können Automationen oder ein Assistent
+wie Claude (über MCP) Zeitwerk vollständig bedienen, z. B. eine Vorrang-Regel
+„Geofencing-Helfer an → Abwesend“ anlegen.
 
 Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis
 zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt

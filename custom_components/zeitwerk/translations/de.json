@@ -46,7 +46,7 @@
         },
         "profile": {
           "name": "Profil",
-          "description": "Profil-ID, z. B. comfort."
+          "description": "Profil-ID, z. B. comfort (alle Profile: Attribut profiles am Sensor sensor.zeitwerk_<plan>_profile oder Dienst get_plan)."
         },
         "value": {
           "name": "Wert",
@@ -82,7 +82,7 @@
         },
         "profile": {
           "name": "Profil",
-          "description": "Profil-ID, z. B. comfort."
+          "description": "Profil-ID, z. B. comfort (alle Profile: Attribut profiles am Sensor sensor.zeitwerk_<plan>_profile oder Dienst get_plan)."
         },
         "duration": {
           "name": "Dauer",
@@ -97,6 +97,148 @@
         "plan": {
           "name": "Plan",
           "description": "Plan-ID, z. B. wohnzimmer_heizung."
+        }
+      }
+    },
+    "get_plan": {
+      "name": "Plan abrufen",
+      "description": "Liefert einen oder alle Pläne als Antwortdaten: Profile (ID, Name, Aktionen), Standardprofil, Tagesplan je Wochentag unter 'days' (mon…sun, ggf. holiday; Blöcke start/end/profile, nie über Mitternacht), Vorrang-Regeln (overrides, oben = höchste Priorität), Aktivierung, Feiertage, Optionen und aktuellen Status (aktives Profil, Quelle, nächster Wechsel). Grundprinzip: Ein Plan setzt Profile nach Wochenplan; außerhalb aller Blöcke gilt das Standardprofil; eine zutreffende Vorrang-Regel ersetzt den Wochenplan; ist die Aktivierung nicht erfüllt, ist der Plan pausiert.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID; leer = alle Pläne."
+        }
+      }
+    },
+    "set_day_plan": {
+      "name": "Tagesplan setzen",
+      "description": "Setzt für die angegebenen Tage genau diese Blöcke (die bisherigen Blöcke dieser Tage werden ersetzt; andere Tage bleiben unverändert). Blöcke liegen innerhalb eines Tages: start < end, Format HH:MM, Ende höchstens 24:00, keine Überschneidungen. Außerhalb der Blöcke gilt das Standardprofil; eine leere Liste macht den Tag komplett zum Standardprofil. 'holiday' gibt es nur bei Feiertagsmodus 'own_day_type'. Erfordert Admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+        },
+        "days": {
+          "name": "Tage",
+          "description": "Liste aus mon, tue, wed, thu, fri, sat, sun, holiday."
+        },
+        "blocks": {
+          "name": "Blöcke",
+          "description": "Liste von {start: 'HH:MM', end: 'HH:MM', profile: '<Profil-ID>'}, z. B. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
+        }
+      }
+    },
+    "set_override": {
+      "name": "Vorrang-Regel setzen",
+      "description": "Legt eine Vorrang-Regel an oder ändert sie. Eine Vorrang-Regel ersetzt den Wochenplan durch ihr Profil, solange ihre Bedingungen zutreffen (z. B. Geofencing-Helfer 'niemand zu Hause' an → Profil away). Reihenfolge = Priorität, Position 0 = oberste Regel. Ohne bekannte override_id wird eine neue Regel angelegt (dann sind name, profile und conditions Pflicht); mit vorhandener ID werden nur die angegebenen Felder geändert. Bedingungen im Home-Assistant-Format (condition: state/numeric_state/time/…). Hinweis: 'for:' in Bedingungen wird nicht zeitverzögert nachgeprüft – Verzögerungen besser im Helfer bzw. in der Geofencing-Automation umsetzen. Erfordert Admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+        },
+        "override_id": {
+          "name": "Regel-ID",
+          "description": "ID einer bestehenden Regel (siehe get_plan bzw. Attribut overrides) oder neue ID."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Anzeigename, z. B. Niemand zu Hause."
+        },
+        "profile": {
+          "name": "Profil",
+          "description": "Profil-ID, das gilt, solange die Regel zutrifft."
+        },
+        "match": {
+          "name": "Verknüpfung",
+          "description": "all = alle Bedingungen müssen zutreffen, any = mindestens eine."
+        },
+        "conditions": {
+          "name": "Bedingungen",
+          "description": "Liste von Home-Assistant-Bedingungen."
+        },
+        "position": {
+          "name": "Position",
+          "description": "0 = höchste Priorität. Ohne Angabe bleibt die Position (neue Regeln kommen ans Ende)."
+        }
+      }
+    },
+    "remove_override": {
+      "name": "Vorrang-Regel löschen",
+      "description": "Entfernt eine Vorrang-Regel. Erfordert Admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+        },
+        "override_id": {
+          "name": "Regel-ID",
+          "description": "ID der zu löschenden Regel."
+        }
+      }
+    },
+    "update_plan": {
+      "name": "Plan ändern",
+      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. Aktivierung: {match: all|any, conditions: [...], when_inactive: none | profile:<id>, reevaluate: true|false} – ist sie nicht erfüllt, ist der Plan pausiert. Feiertage: {source: calendar.* oder binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: <id>}. Optionen: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:<n>}. Profil: {id, name, color, icon, actions: [Home-Assistant-Aktionen]}. Erfordert Admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Anzeigename des Plans."
+        },
+        "icon": {
+          "name": "Symbol",
+          "description": "z. B. mdi:radiator."
+        },
+        "tags": {
+          "name": "Tags",
+          "description": "Liste von Tags (für die Zeitleisten-Karte)."
+        },
+        "enabled": {
+          "name": "Aktiviert",
+          "description": "Plan an/aus (wie der Schalter switch.zeitwerk_<plan>)."
+        },
+        "profiles": {
+          "name": "Profile",
+          "description": "Vollständige Profilliste."
+        },
+        "default_profile": {
+          "name": "Standardprofil",
+          "description": "Profil-ID, die außerhalb aller Blöcke gilt."
+        },
+        "activation": {
+          "name": "Aktivierung",
+          "description": "Bedingungen, ob der Plan überhaupt läuft."
+        },
+        "holidays": {
+          "name": "Feiertage",
+          "description": "Feiertagsquelle und -modus."
+        },
+        "options": {
+          "name": "Optionen",
+          "description": "Verhaltensoptionen."
+        }
+      }
+    },
+    "create_plan": {
+      "name": "Plan anlegen",
+      "description": "Legt einen neuen Plan an (vollständiges Planobjekt wie in get_plan, ohne 'days' und 'status'; 'week' mit day_types) und liefert die neue plan_id zurück. Mindestens name, profiles und default_profile. Erfordert Admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Planobjekt."
+        }
+      }
+    },
+    "delete_plan": {
+      "name": "Plan löschen",
+      "description": "Löscht einen Plan dauerhaft samt seiner Entitäten. Erfordert Admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
         }
       }
     }

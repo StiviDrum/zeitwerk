@@ -34,6 +34,8 @@ class ProfileSensor(ZeitwerkEntity, SensorEntity):
     """Current profile (name) of a plan."""
 
     _attr_translation_key = "profile"
+    # Static plan description: useful for assistants, not worth recording.
+    _unrecorded_attributes = frozenset({"profiles", "overrides"})
 
     def __init__(self, manager: ZeitwerkManager, plan_id: str) -> None:
         """Initialise the sensor."""
@@ -65,12 +67,25 @@ class ProfileSensor(ZeitwerkEntity, SensorEntity):
         if (runner := self.runner) is None:
             return None
         status = runner.status
+        plan = self.plan
         attributes: dict[str, Any] = {
+            "plan_id": runner.plan.id,
             "profile_id": status.profile,
             "source": status.source,
             "day_type": status.day_type,
             "is_holiday": status.is_holiday,
         }
+        if plan is not None:
+            attributes["profiles"] = {p.id: p.name for p in plan.profiles}
+            attributes["overrides"] = [
+                {
+                    "id": o.id,
+                    "name": o.name,
+                    "profile": o.profile,
+                    "active": bool(status.override_results.get(o.id)),
+                }
+                for o in plan.overrides
+            ]
         if status.forced_until:
             attributes["forced_until"] = status.forced_until.isoformat()
         if status.manual_since:

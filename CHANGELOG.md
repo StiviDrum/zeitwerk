@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
+### Added
+- Full control via services, e.g. for automations or an assistant (Claude via
+  MCP): `get_plan` (response data incl. blocks per weekday and status),
+  `set_day_plan`, `set_override`, `remove_override`, `update_plan`,
+  `create_plan`, `delete_plan`. Editing requires an admin (automations
+  without a user are allowed). Detailed de/en service descriptions explain the
+  concepts and formats.
+- Profile sensor attributes `plan_id`, `profiles` (id → name) and `overrides`
+  (with `active`); the larger ones are excluded from the recorder.
+
 ## [0.6.2] - 2026-11-04
 
 ### Added

@@ -46,7 +46,7 @@
         },
         "profile": {
           "name": "Profile",
-          "description": "Profile id, e.g. comfort."
+          "description": "Profile id, e.g. comfort (all profiles: attribute profiles of sensor.zeitwerk_<plan>_profile or service get_plan)."
         },
         "value": {
           "name": "Value",
@@ -82,7 +82,7 @@
         },
         "profile": {
           "name": "Profile",
-          "description": "Profile id, e.g. comfort."
+          "description": "Profile id, e.g. comfort (all profiles: attribute profiles of sensor.zeitwerk_<plan>_profile or service get_plan)."
         },
         "duration": {
           "name": "Duration",
@@ -97,6 +97,148 @@
         "plan": {
           "name": "Plan",
           "description": "Plan id, e.g. wohnzimmer_heizung."
+        }
+      }
+    },
+    "get_plan": {
+      "name": "Get plan",
+      "description": "Returns one or all plans as response data: profiles (id, name, actions), default profile, day plan per weekday under 'days' (mon…sun, plus holiday if used; blocks start/end/profile, never across midnight), overrides (top = highest priority), activation, holidays, options and the current status (active profile, source, next change). Basics: a plan sets profiles by a week plan; outside all blocks the default profile applies; a matching override replaces the week plan; if the activation is not met the plan is paused.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id; empty = all plans."
+        }
+      }
+    },
+    "set_day_plan": {
+      "name": "Set day plan",
+      "description": "Sets exactly these blocks on the given days (their previous blocks are replaced; other days stay unchanged). Blocks stay within one day: start < end, format HH:MM, end at most 24:00, no overlaps. Outside the blocks the default profile applies; an empty list makes the whole day default. 'holiday' only exists with holiday mode 'own_day_type'. Requires admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+        },
+        "days": {
+          "name": "Days",
+          "description": "List of mon, tue, wed, thu, fri, sat, sun, holiday."
+        },
+        "blocks": {
+          "name": "Blocks",
+          "description": "List of {start: 'HH:MM', end: 'HH:MM', profile: '<profile id>'}, e.g. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
+        }
+      }
+    },
+    "set_override": {
+      "name": "Set override",
+      "description": "Creates or changes an override. An override replaces the week plan with its profile while its conditions apply (e.g. geofencing helper 'nobody home' on → profile away). Order is priority, position 0 = top. Without a known override_id a new override is created (name, profile and conditions required); with an existing id only the given fields change. Conditions use the Home Assistant format (condition: state/numeric_state/time/…). Note: 'for:' in conditions is not re-checked after the delay – implement delays in the helper or the geofencing automation. Requires admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+        },
+        "override_id": {
+          "name": "Override id",
+          "description": "Id of an existing override (see get_plan or the overrides attribute) or a new id."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Display name, e.g. Nobody home."
+        },
+        "profile": {
+          "name": "Profile",
+          "description": "Profile id that applies while the override matches."
+        },
+        "match": {
+          "name": "Match",
+          "description": "all = all conditions must apply, any = at least one."
+        },
+        "conditions": {
+          "name": "Conditions",
+          "description": "List of Home Assistant conditions."
+        },
+        "position": {
+          "name": "Position",
+          "description": "0 = highest priority. If omitted the position is kept (new overrides go last)."
+        }
+      }
+    },
+    "remove_override": {
+      "name": "Remove override",
+      "description": "Removes an override. Requires admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+        },
+        "override_id": {
+          "name": "Override id",
+          "description": "Id of the override to remove."
+        }
+      }
+    },
+    "update_plan": {
+      "name": "Update plan",
+      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. Activation: {match: all|any, conditions: [...], when_inactive: none | profile:<id>, reevaluate: true|false} – if not met the plan is paused. Holidays: {source: calendar.* or binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: <id>}. Options: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:<n>}. Profile: {id, name, color, icon, actions: [Home Assistant actions]}. Requires admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Display name of the plan."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "e.g. mdi:radiator."
+        },
+        "tags": {
+          "name": "Tags",
+          "description": "List of tags (for the timeline card)."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Plan on/off (like switch.zeitwerk_<plan>)."
+        },
+        "profiles": {
+          "name": "Profiles",
+          "description": "Complete profile list."
+        },
+        "default_profile": {
+          "name": "Default profile",
+          "description": "Profile id that applies outside all blocks."
+        },
+        "activation": {
+          "name": "Activation",
+          "description": "Conditions whether the plan runs at all."
+        },
+        "holidays": {
+          "name": "Holidays",
+          "description": "Holiday source and mode."
+        },
+        "options": {
+          "name": "Options",
+          "description": "Behaviour options."
+        }
+      }
+    },
+    "create_plan": {
+      "name": "Create plan",
+      "description": "Creates a new plan (full plan object as in get_plan without 'days' and 'status'; 'week' with day_types) and returns the new plan_id. At least name, profiles and default_profile. Requires admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan object."
+        }
+      }
+    },
+    "delete_plan": {
+      "name": "Delete plan",
+      "description": "Deletes a plan and its entities permanently. Requires admin.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
         }
       }
     }

@@ -66,3 +66,159 @@ clear_force:
       example: wohnzimmer_heizung
       selector:
         text:
+
+get_plan:
+  fields:
+    plan:
+      required: false
+      example: wohnzimmer_heizung
+      selector:
+        text:
+
+set_day_plan:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    days:
+      required: true
+      example: '["mon", "tue", "wed", "thu", "fri"]'
+      selector:
+        select:
+          multiple: true
+          options:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+            - holiday
+    blocks:
+      required: true
+      example: '[{"start": "06:00", "end": "08:00", "profile": "comfort"}, {"start": "16:00", "end": "22:00", "profile": "comfort"}]'
+      selector:
+        object:
+
+set_override:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    override_id:
+      required: false
+      example: nobody_home
+      selector:
+        text:
+    name:
+      required: false
+      example: Niemand zu Hause
+      selector:
+        text:
+    profile:
+      required: false
+      example: away
+      selector:
+        text:
+    match:
+      required: false
+      example: all
+      selector:
+        select:
+          options:
+            - all
+            - any
+    conditions:
+      required: false
+      example: '[{"condition": "state", "entity_id": "input_boolean.claude_heizung_abgesenkt", "state": "on"}]'
+      selector:
+        condition:
+    position:
+      required: false
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 50
+          mode: box
+
+remove_override:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    override_id:
+      required: true
+      example: nobody_home
+      selector:
+        text:
+
+update_plan:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    name:
+      required: false
+      selector:
+        text:
+    icon:
+      required: false
+      selector:
+        icon:
+    tags:
+      required: false
+      selector:
+        object:
+    enabled:
+      required: false
+      selector:
+        boolean:
+    profiles:
+      required: false
+      selector:
+        object:
+    default_profile:
+      required: false
+      example: eco
+      selector:
+        text:
+    activation:
+      required: false
+      example: '{"match": "all", "conditions": [{"condition": "state", "entity_id": "input_boolean.heizperiode", "state": "on"}], "when_inactive": "none", "reevaluate": true}'
+      selector:
+        object:
+    holidays:
+      required: false
+      example: '{"source": "calendar.deutschland_he", "mode": "like_day", "like_day": "sun"}'
+      selector:
+        object:
+    options:
+      required: false
+      example: '{"manual_override": "until_next"}'
+      selector:
+        object:
+
+create_plan:
+  fields:
+    plan:
+      required: true
+      selector:
+        object:
+
+delete_plan:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
