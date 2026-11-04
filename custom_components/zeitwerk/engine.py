@@ -29,7 +29,13 @@ from homeassistant.util import dt as dt_util
 from .compat import vol
 from .executor import ProfileExecutor
 from .holidays import HolidayRegistry, HolidaySource
-from .model import MATCH_ANY, Plan
+from .manual import TargetWatch, build_watch, is_manual_change
+from .model import (
+    MANUAL_IGNORE,
+    MANUAL_MINUTES_PREFIX,
+    MATCH_ANY,
+    Plan,
+)
 from .schedule import (
     HolidayFn,
     next_change,
@@ -62,6 +68,9 @@ class PlanStatus:
     next_change: datetime | None = None
     next_profile: str | None = None
     forced_until: datetime | None = None
+    manual_since: datetime | None = None
+    manual_until: datetime | None = None
+    manual_entity: str | None = None
     error: str | None = None
 
 
@@ -98,6 +107,7 @@ class PlanRunner:
         self._activation = _Conditions()
         self._overrides: list[_Conditions] = []
         self._activation_entities: set[str] = set()
+        self._watch = TargetWatch()
         self._unsubs: list[CALLBACK_TYPE] = []
         self._unsub_timer: CALLBACK_TYPE | None = None
         self._lock = asyncio.Lock()
@@ -153,6 +163,15 @@ class PlanRunner:
                     self.hass, sorted(tracked), self._async_condition_entity_changed
                 )
             )
+        self._watch = build_watch(self.plan)
+        if self.plan.options.manual_override != MANUAL_IGNORE and self._watch.entities:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass, self._watch.entities, self._async_target_changed
+                )
+            )
+        else:
+            self._clear_manual()
         await self.async_evaluate(refresh_activation=True, force_apply=reapply)
 
     async def _async_compile(self, conditions: list[dict[str, Any]]) -> _Conditions:
@@ -196,6 +215,80 @@ class PlanRunner:
     def _async_condition_entity_changed(self, event: Event[Any]) -> None:
         refresh = event.data["entity_id"] in self._activation_entities
         self._request(refresh_activation=refresh)
+
+    @callback
+    def _async_target_changed(self, event: Event[Any]) -> None:
+        """Detect manual changes of a target entity (SPEC §3 "Manuelle Änderungen")."""
+        new = event.data["new_state"]
+        if self._stopped or self.status.profile is None:
+            return
+        if self.executor.is_own_context(event.context) or (
+            new is not None and self.executor.is_own_context(new.context)
+        ):
+            return
+        entity_id = event.data["entity_id"]
+        expected = self._watch.expected.get(self.status.profile, {}).get(entity_id)
+        if not is_manual_change(
+            event.data["old_state"], new, self._watch.watched[entity_id], expected
+        ):
+            return
+        self.hass.async_create_task(
+            self._async_register_manual(entity_id),
+            f"zeitwerk manual {self.plan.id}",
+            eager_start=True,
+        )
+
+    async def _async_register_manual(self, entity_id: str) -> None:
+        async with self._lock:
+            if self._stopped or self.status.profile is None:
+                return
+            now = dt_util.utcnow()
+            minutes = self._manual_minutes()
+            previous = self.runtime.get("manual") or {}
+            until: datetime | None
+            if minutes is not None:
+                until = now + timedelta(minutes=minutes)
+            else:
+                until = self.status.next_change
+            self.runtime["manual"] = {
+                "profile": self.status.profile,
+                "since": previous.get("since") or now.isoformat(),
+                "until": until.isoformat() if until else None,
+                "entity_id": entity_id,
+            }
+            _LOGGER.debug(
+                "Plan %s: manual change of %s detected", self.plan.id, entity_id
+            )
+            self._on_runtime_changed()
+            self._evaluate(refresh_activation=False, force_apply=False)
+
+    def _manual_minutes(self) -> int | None:
+        mode = self.plan.options.manual_override
+        if mode.startswith(MANUAL_MINUTES_PREFIX):
+            return int(mode.removeprefix(MANUAL_MINUTES_PREFIX))
+        return None
+
+    def _clear_manual(self) -> None:
+        if self.runtime.pop("manual", None) is not None:
+            self._on_runtime_changed()
+
+    def _manual(self, now: datetime) -> tuple[dict[str, Any] | None, bool]:
+        """Return the valid manual override (or None) and whether one just expired."""
+        manual = self.runtime.get("manual")
+        if not manual:
+            return None, False
+        mode = self.plan.options.manual_override
+        if mode == MANUAL_IGNORE or self.status.profile is None:
+            valid = False
+        elif self._manual_minutes() is not None:
+            until = dt_util.parse_datetime(manual.get("until") or "")
+            valid = until is not None and until > now
+        else:  # until_next: holds while the effective profile stays the same
+            valid = manual.get("profile") == self.status.profile
+        if valid:
+            return manual, False
+        self._clear_manual()
+        return None, self._manual_minutes() is not None
 
     @callback
     def _async_holidays_changed(self) -> None:
@@ -252,12 +345,18 @@ class PlanRunner:
         return forced["profile"], until
 
     async def async_evaluate(
-        self, *, refresh_activation: bool = True, force_apply: bool = False
+        self,
+        *,
+        refresh_activation: bool = True,
+        force_apply: bool = False,
+        clear_manual: bool = False,
     ) -> None:
         """Re-evaluate the plan, apply on change, reschedule the timer."""
         async with self._lock:
             if self._stopped:
                 return
+            if clear_manual:
+                self._clear_manual()
             self._evaluate(
                 refresh_activation=refresh_activation, force_apply=force_apply
             )
@@ -320,8 +419,19 @@ class PlanRunner:
             if (change := next_change(plan, now, tz, self.is_holiday)) is not None:
                 status.next_change, status.next_profile = change
 
-        self._apply(status.profile, force=force_apply)
-        self._schedule_timer(now, forced[1] if forced else None)
+        manual, expired = self._manual(now)
+        status.manual_since = status.manual_until = status.manual_entity = None
+        if manual is not None:
+            # Keep the manual value: no apply, not even a re-apply.
+            status.manual_since = dt_util.parse_datetime(manual.get("since") or "")
+            status.manual_until = dt_util.parse_datetime(manual.get("until") or "")
+            status.manual_entity = manual.get("entity_id")
+        else:
+            self._apply(status.profile, force=force_apply or expired)
+        earlier = [forced[1]] if forced else []
+        if manual is not None and status.manual_until and self._manual_minutes():
+            earlier.append(status.manual_until)
+        self._schedule_timer(now, min(earlier, default=None))
         self._on_update(self)
 
     def _apply(self, profile: str | None, *, force: bool) -> None:
@@ -337,14 +447,14 @@ class PlanRunner:
         self.runtime["last_applied"] = profile
         self._on_runtime_changed()
 
-    def _schedule_timer(self, now: datetime, forced_until: datetime | None) -> None:
+    def _schedule_timer(self, now: datetime, earlier: datetime | None) -> None:
         if self._unsub_timer:
             self._unsub_timer()
         point = next_evaluation(
             self.plan, now, dt_util.get_default_time_zone(), self.is_holiday
         )
-        if forced_until is not None and forced_until < point:
-            point = forced_until
+        if earlier is not None and earlier < point:
+            point = earlier
         self._unsub_timer = async_track_point_in_utc_time(
             self.hass, self._async_timer_fired, point
         )
@@ -353,7 +463,9 @@ class PlanRunner:
 
     async def async_apply_current(self) -> None:
         """Apply the current profile now (service ``zeitwerk.apply``)."""
-        await self.async_evaluate(refresh_activation=True, force_apply=True)
+        await self.async_evaluate(
+            refresh_activation=True, force_apply=True, clear_manual=True
+        )
 
     async def async_force_profile(
         self, profile_id: str, duration: timedelta | None
@@ -377,7 +489,9 @@ class PlanRunner:
             until = now + duration
         self.runtime["forced"] = {"profile": profile_id, "until": until.isoformat()}
         self._on_runtime_changed()
-        await self.async_evaluate(refresh_activation=False)
+        await self.async_evaluate(
+            refresh_activation=False, force_apply=True, clear_manual=True
+        )
 
     async def async_skip_next(self) -> None:
         """Keep the current profile through the next scheduled change."""

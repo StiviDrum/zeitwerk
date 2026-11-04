@@ -44,6 +44,9 @@ def status_dict(runner: PlanRunner | None) -> dict[str, Any] | None:
         "next_change": s.next_change.isoformat() if s.next_change else None,
         "next_profile": s.next_profile,
         "forced_until": s.forced_until.isoformat() if s.forced_until else None,
+        "manual_since": s.manual_since.isoformat() if s.manual_since else None,
+        "manual_until": s.manual_until.isoformat() if s.manual_until else None,
+        "manual_entity": s.manual_entity,
         "error": s.error,
     }
 

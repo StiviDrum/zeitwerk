@@ -73,6 +73,12 @@ class ProfileSensor(ZeitwerkEntity, SensorEntity):
         }
         if status.forced_until:
             attributes["forced_until"] = status.forced_until.isoformat()
+        if status.manual_since:
+            attributes["manual_override"] = True
+            attributes["manual_since"] = status.manual_since.isoformat()
+            if status.manual_until:
+                attributes["manual_until"] = status.manual_until.isoformat()
+            attributes["manual_entity"] = status.manual_entity
         if status.error:
             attributes["error"] = status.error
         return attributes
