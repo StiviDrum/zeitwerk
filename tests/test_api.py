@@ -62,10 +62,12 @@ async def test_ws_crud_and_subscribe(
     freezer: FrozenDateTimeFactory,
     hass_ws_client: WebSocketGenerator,
 ) -> None:
-    client = await hass_ws_client(hass)  # authenticate before freezing time
-    freezer.move_to(at(WED, 17, 40))
+    # Set up everything that registers HTTP routes before the client starts the
+    # server, and authenticate before freezing time.
     await setup_helpers(hass)
     await setup_zeitwerk(hass)
+    client = await hass_ws_client(hass)
+    freezer.move_to(at(WED, 17, 40))
 
     await client.send_json_auto_id({"type": "zeitwerk/plans/subscribe"})
     assert (await client.receive_json())["success"]
@@ -136,10 +138,10 @@ async def test_ws_admin_only(
     hass_ws_client: WebSocketGenerator,
     hass_read_only_access_token: str,
 ) -> None:
-    client = await hass_ws_client(hass, hass_read_only_access_token)
-    freezer.move_to(at(WED, 17, 40))
     await setup_helpers(hass)
     await setup_zeitwerk(hass)
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    freezer.move_to(at(WED, 17, 40))
     await client.send_json_auto_id(
         {"type": "zeitwerk/plans/create", "plan": living_room_plan()}
     )
@@ -156,10 +158,10 @@ async def test_ws_holidays_upcoming(
     hass_ws_client: WebSocketGenerator,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    client = await hass_ws_client(hass)  # authenticate before freezing time
-    freezer.move_to(at(WED, 10))
     await setup_helpers(hass)
     await setup_zeitwerk(hass)
+    client = await hass_ws_client(hass)  # authenticate before freezing time
+    freezer.move_to(at(WED, 10))
     hass.states.async_set("calendar.feiertage", "off")
     dates = {
         date(2026, 12, 25): "1. Weihnachtstag",

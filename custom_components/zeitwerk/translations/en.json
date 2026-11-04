@@ -46,7 +46,7 @@
         },
         "profile": {
           "name": "Profile",
-          "description": "Profile id, e.g. comfort (all profiles: attribute profiles of sensor.zeitwerk_<plan>_profile or service get_plan)."
+          "description": "Profile id, e.g. comfort (all profiles: attribute profiles of sensor.zeitwerk_…_profile or service get_plan)."
         },
         "value": {
           "name": "Value",
@@ -82,7 +82,7 @@
         },
         "profile": {
           "name": "Profile",
-          "description": "Profile id, e.g. comfort (all profiles: attribute profiles of sensor.zeitwerk_<plan>_profile or service get_plan)."
+          "description": "Profile id, e.g. comfort (all profiles: attribute profiles of sensor.zeitwerk_…_profile or service get_plan)."
         },
         "duration": {
           "name": "Duration",
@@ -112,11 +112,11 @@
     },
     "set_day_plan": {
       "name": "Set day plan",
-      "description": "Sets exactly these blocks on the given days (their previous blocks are replaced; other days stay unchanged). Blocks stay within one day: start < end, format HH:MM, end at most 24:00, no overlaps. Outside the blocks the default profile applies; an empty list makes the whole day default. 'holiday' only exists with holiday mode 'own_day_type'. Requires admin.",
+      "description": "Sets exactly these blocks on the given days (their previous blocks are replaced; other days stay unchanged). Blocks stay within one day: start before end, format HH:MM, end at most 24:00, no overlaps. Outside the blocks the default profile applies; an empty list makes the whole day default. 'holiday' only exists with holiday mode 'own_day_type'. Requires admin.",
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_…_profile)."
         },
         "days": {
           "name": "Days",
@@ -124,7 +124,7 @@
         },
         "blocks": {
           "name": "Blocks",
-          "description": "List of {start: 'HH:MM', end: 'HH:MM', profile: '<profile id>'}, e.g. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
+          "description": "List of {start: 'HH:MM', end: 'HH:MM', profile: 'PROFILE-ID'}, e.g. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
         }
       }
     },
@@ -134,7 +134,7 @@
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_…_profile)."
         },
         "override_id": {
           "name": "Override id",
@@ -168,7 +168,7 @@
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_…_profile)."
         },
         "override_id": {
           "name": "Override id",
@@ -178,11 +178,11 @@
     },
     "update_plan": {
       "name": "Update plan",
-      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. Activation: {match: all|any, conditions: [...], when_inactive: none | profile:<id>, reevaluate: true|false} – if not met the plan is paused. Holidays: {source: calendar.* or binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: <id>}. Options: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:<n>}. Profile: {id, name, color, icon, actions: [Home Assistant actions]}. Requires admin.",
+      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. Activation: {match: all|any, conditions: [...], when_inactive: none | profile:ID, reevaluate: true|false} – if not met the plan is paused. Holidays: {source: calendar.* or binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: ID}. Options: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:N}. Profile: {id, name, color, icon, actions: [Home Assistant actions]}. Requires admin.",
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_…_profile)."
         },
         "name": {
           "name": "Name",
@@ -198,7 +198,7 @@
         },
         "enabled": {
           "name": "Enabled",
-          "description": "Plan on/off (like switch.zeitwerk_<plan>)."
+          "description": "Plan on/off (like switch.zeitwerk_…)."
         },
         "profiles": {
           "name": "Profiles",
@@ -238,7 +238,7 @@
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_…_profile)."
         }
       }
     }

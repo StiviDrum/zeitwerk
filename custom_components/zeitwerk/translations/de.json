@@ -46,7 +46,7 @@
         },
         "profile": {
           "name": "Profil",
-          "description": "Profil-ID, z. B. comfort (alle Profile: Attribut profiles am Sensor sensor.zeitwerk_<plan>_profile oder Dienst get_plan)."
+          "description": "Profil-ID, z. B. comfort (alle Profile: Attribut profiles am Sensor sensor.zeitwerk_…_profile oder Dienst get_plan)."
         },
         "value": {
           "name": "Wert",
@@ -82,7 +82,7 @@
         },
         "profile": {
           "name": "Profil",
-          "description": "Profil-ID, z. B. comfort (alle Profile: Attribut profiles am Sensor sensor.zeitwerk_<plan>_profile oder Dienst get_plan)."
+          "description": "Profil-ID, z. B. comfort (alle Profile: Attribut profiles am Sensor sensor.zeitwerk_…_profile oder Dienst get_plan)."
         },
         "duration": {
           "name": "Dauer",
@@ -112,11 +112,11 @@
     },
     "set_day_plan": {
       "name": "Tagesplan setzen",
-      "description": "Setzt für die angegebenen Tage genau diese Blöcke (die bisherigen Blöcke dieser Tage werden ersetzt; andere Tage bleiben unverändert). Blöcke liegen innerhalb eines Tages: start < end, Format HH:MM, Ende höchstens 24:00, keine Überschneidungen. Außerhalb der Blöcke gilt das Standardprofil; eine leere Liste macht den Tag komplett zum Standardprofil. 'holiday' gibt es nur bei Feiertagsmodus 'own_day_type'. Erfordert Admin.",
+      "description": "Setzt für die angegebenen Tage genau diese Blöcke (die bisherigen Blöcke dieser Tage werden ersetzt; andere Tage bleiben unverändert). Blöcke liegen innerhalb eines Tages: Beginn vor Ende, Format HH:MM, Ende höchstens 24:00, keine Überschneidungen. Außerhalb der Blöcke gilt das Standardprofil; eine leere Liste macht den Tag komplett zum Standardprofil. 'holiday' gibt es nur bei Feiertagsmodus 'own_day_type'. Erfordert Admin.",
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_…_profile)."
         },
         "days": {
           "name": "Tage",
@@ -124,7 +124,7 @@
         },
         "blocks": {
           "name": "Blöcke",
-          "description": "Liste von {start: 'HH:MM', end: 'HH:MM', profile: '<Profil-ID>'}, z. B. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
+          "description": "Liste von {start: 'HH:MM', end: 'HH:MM', profile: 'PROFIL-ID'}, z. B. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
         }
       }
     },
@@ -134,7 +134,7 @@
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_…_profile)."
         },
         "override_id": {
           "name": "Regel-ID",
@@ -168,7 +168,7 @@
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_…_profile)."
         },
         "override_id": {
           "name": "Regel-ID",
@@ -178,11 +178,11 @@
     },
     "update_plan": {
       "name": "Plan ändern",
-      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. Aktivierung: {match: all|any, conditions: [...], when_inactive: none | profile:<id>, reevaluate: true|false} – ist sie nicht erfüllt, ist der Plan pausiert. Feiertage: {source: calendar.* oder binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: <id>}. Optionen: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:<n>}. Profil: {id, name, color, icon, actions: [Home-Assistant-Aktionen]}. Erfordert Admin.",
+      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. Aktivierung: {match: all|any, conditions: [...], when_inactive: none | profile:ID, reevaluate: true|false} – ist sie nicht erfüllt, ist der Plan pausiert. Feiertage: {source: calendar.* oder binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: ID}. Optionen: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:N}. Profil: {id, name, color, icon, actions: [Home-Assistant-Aktionen]}. Erfordert Admin.",
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_…_profile)."
         },
         "name": {
           "name": "Name",
@@ -198,7 +198,7 @@
         },
         "enabled": {
           "name": "Aktiviert",
-          "description": "Plan an/aus (wie der Schalter switch.zeitwerk_<plan>)."
+          "description": "Plan an/aus (wie der Schalter switch.zeitwerk_…)."
         },
         "profiles": {
           "name": "Profile",
@@ -238,7 +238,7 @@
       "fields": {
         "plan": {
           "name": "Plan",
-          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_<plan>_profile)."
+          "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_…_profile)."
         }
       }
     }
