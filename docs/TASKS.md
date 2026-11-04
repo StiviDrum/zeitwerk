@@ -48,14 +48,23 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 ## 0.2 – Card: week grid + profile quick view
 
-- [ ] Card registers itself (static path + extra JS url), appears in the card picker with preview
-- [ ] `view: week`: header, status chips, profile sliders, day-type tabs, week grid, now-line (DESIGN.md)
-- [ ] Tap block → editor sheet (profile, start/end steppers, preview, delete, save) – writes via websocket
-- [ ] Long-press empty track → new block; overlap handling (new block splits/trims existing ones; unit-tested)
-- [ ] Profile quick view: detect "single entity, single value" actions and render a matching slider/select/switch
-- [ ] Live updates via subscribe; error/empty states; `de` + `en`
-- [ ] Vitest: time maths, snapping, overlap/merge, midnight blocks
-- [ ] Release v0.2.0
+- [x] Card registers itself (static path + extra JS url), appears in the card picker with preview
+  - API checked against HA 2026.10.4 (`hass.http.async_register_static_paths` + `StaticPathConfig`, `frontend.add_extra_js_url`). URL carries a content hash (`?v=<sha256[:12]>`) → cache busting after updates and dev rebuilds. Async `getStubConfig` picks the first plan. Verified in the dev instance: module listed in the frontend index, file served identically.
+- [x] `view: week`: header, status chips, profile sliders, day-type tabs, week grid, now-line (DESIGN.md)
+  - Editor sheet is a native `<dialog>` (`showModal`, top layer) – not clipped by transformed dashboard containers, inherits theme variables. Header subline may wrap to two lines.
+- [x] Tap block → editor sheet (profile, start/end steppers, preview, delete, save) – writes via websocket
+  - „Auch übernehmen für“ chips belong to the 0.4 copy task. Editing requires admin; non-admins get a hint.
+- [x] Long-press empty track → new block; overlap handling (new block splits/trims existing ones; unit-tested)
+  - New block: 2 h or until the next block. A block with the default profile only clears its range. Touching blocks of the same profile are merged. Evening blocks ending 24:00 are never merged into a midnight block (would change which day type the morning belongs to).
+- [x] Profile quick view: detect "single entity, single value" actions and render a matching slider/select/switch
+  - Number (input_number/number min/max/step/unit, climate min/max_temp, %), select (`options`), on/off (`turn_on`/`turn_off`, changed via plans/update → admin). Values via `zeitwerk.set_profile_value`, 400 ms debounce, optimistic until the backend confirms.
+- [x] Live updates via subscribe; error/empty states; `de` + `en`
+  - `shouldUpdate` only reacts to the plan switch, quick-view entities, language and dark mode. Now-line: CSS var + caption text updated once a minute.
+- [x] Vitest: time maths, snapping, overlap/merge, midnight blocks
+  - 37 tests (time incl. DST via `Intl`, blocks/overlaps/midnight, row segments, quick view).
+  - Manual UI check: `frontend/dev/preview.html` (mocked hass) clicked through in headless Chromium (edit, new block, slider, delete, plan switch, tabs, light/en, missing plan, non-admin) – no runtime errors. Steven still to try it in the real dev dashboard.
+- [x] Release v0.2.0
+  - Bundle 65.6 KB / 19.7 KB gzip.
 
 ## 0.3 – Overrides, activation, manual override
 

@@ -3,8 +3,9 @@
 Weekly schedules for Home Assistant built on **profiles** – like a thermostat
 week program, but for any entity.
 
-> **Status:** pre-release (0.x). The backend works; the card arrives in 0.2.
-> Plans are created via the websocket API (see below) until the card editor exists.
+> **Status:** pre-release (0.x). Backend and the week view of the card work.
+> Plans are still created via the websocket API (see below) until the plan
+> wizard in the card exists (0.5).
 
 A plan says *when* a profile applies (week grid with day types such as
 "workday" / "weekend" / "holiday"); a profile says *what* happens (any Home
@@ -40,6 +41,40 @@ end of the first pass is kept, so nothing switches twice.
 1. HACS → ⋮ → *Custom repositories* → `https://github.com/StiviDrum/zeitwerk`, type **Integration**.
 2. Install **Zeitwerk**, restart Home Assistant.
 3. *Settings → Devices & services → Add integration → Zeitwerk*.
+
+## Card
+
+The integration serves the card and registers it with the frontend itself –
+no dashboard resource needed. Add it via *Edit dashboard → Add card → Zeitwerk*
+(the picker preview shows your first plan) or in YAML:
+
+```yaml
+type: custom:zeitwerk-card
+view: week                  # only "week" in 0.2 (timeline follows in 0.4)
+plan: wohnzimmer_heizung    # plan id
+show_profile_sliders: true  # quick view of the profile values
+time_step: 15               # minutes, used for new blocks and the editor steppers
+compact: false              # hides sliders/legend, smaller grid
+```
+
+What the week view does:
+
+- Header with the current profile and value, the next change and the plan
+  on/off switch; chips for day type, plan state and active override.
+- **Profile sliders** for profiles that set exactly one value on one entity
+  (`input_number`/`number` value, climate temperature, select option,
+  brightness, position, percentage, on/off). Dragging calls
+  `zeitwerk.set_profile_value` (debounced 400 ms); on/off profiles are switched
+  via the websocket API (admin).
+- **Day-type tabs** and a **week grid** with a now-line. Blocks across midnight
+  are drawn on both days. Holidays appear as a tab (`own_day_type`: own row;
+  `like_day`: highlights that weekday).
+- **Tap a block** → editor sheet (profile, start/end in `time_step` steps,
+  preview, delete, save). **Long-press an empty spot** → new block there.
+  A new or moved block trims or splits the blocks it overlaps; a block of the
+  default profile just clears that range. Editing the plan needs an admin user.
+
+Bundle size (0.2.0, minified): 65.6 KB, 19.7 KB gzip.
 
 ## Plan format
 
@@ -132,6 +167,11 @@ python scripts/seed_reference_plans.py --token <token>   # creates the 5 heating
 cd frontend && npm run watch   # rebuilds the card into custom_components/zeitwerk/frontend/
 ```
 
+Card preview without Home Assistant (mocked `hass`): build the card, run
+`python3 -m http.server 8000` in the repo root and open
+`http://localhost:8000/frontend/dev/preview.html` (`?theme=light`, `?lang=en`,
+`?admin=0`, `?plan=missing`).
+
 ## License
 
 MIT © Steven Glab
@@ -142,10 +182,16 @@ MIT © Steven Glab
 
 Zeitwerk ist eine Home-Assistant-Integration für Wochenpläne mit **Profilen**
 (z. B. „Komfort“, „Absenkung“) und eingebauten Vorrang-Regeln (Urlaub,
-niemand zu Hause). Die Karte bringt sie selbst mit (ab 0.2).
+niemand zu Hause). Die Karte bringt sie selbst mit und registriert sie
+automatisch.
 
-**Status:** Vorabversion. Das Backend läuft; Pläne werden bis zur Karte über
-die WebSocket-API angelegt.
+**Status:** Vorabversion. Backend und Wochenansicht der Karte laufen; Pläne
+werden bis zum Plan-Assistenten (0.5) über die WebSocket-API angelegt.
+
+Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
+`type: custom:zeitwerk-card` mit `plan: <id>`. Block antippen = bearbeiten,
+lange auf eine freie Stelle drücken = neuer Block, Profil-Regler ändern den
+Wert im Profil (z. B. Komfort 22 → 21,5 °C).
 
 Installation über HACS → Benutzerdefinierte Repositories → Typ *Integration*,
 danach unter *Einstellungen → Geräte & Dienste* „Zeitwerk“ hinzufügen.

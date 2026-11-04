@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-04
+
+### Added
+- Card `custom:zeitwerk-card`, `view: week`: header with current/next profile
+  and plan switch, status chips, profile quick-view sliders (number, select,
+  on/off), day-type tabs incl. holiday tab, week grid with blocks across
+  midnight and a now-line (updated once a minute without re-render).
+- Block editor sheet (profile, start/end steppers, preview, delete, save) and
+  long-press on an empty track for a new block; overlapping blocks are trimmed
+  or split, touching blocks of the same profile merged.
+- Live updates via `zeitwerk/plans/subscribe`; friendly states for missing
+  configuration, unknown plan, unavailable integration and non-admin users.
+- `de` / `en` card strings; card picker entry with preview of the first plan.
+- Standalone card preview with mocked `hass` (`frontend/dev/preview.html`).
+
+### Changed
+- Card URL is cache-busted with a hash of the bundle instead of the version.
+
 ## [0.1.0] - 2026-11-04
 
 ### Added
