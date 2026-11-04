@@ -81,11 +81,15 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 ## 0.4 – Holidays, timeline, drag, copy day
 
-- [ ] Holiday settings UI (source: Holiday calendar or Workday binary_sensor; mode off/like_day/own_day_type; next holidays preview)
-- [ ] `view: timeline` with `tags` filter
-- [ ] Drag block edges (touch + mouse, snap, keyboard alternative)
-- [ ] „Tag kopieren auf …“ / „Auch übernehmen für“
-- [ ] Release v0.4.0
+- [x] Holiday settings UI (source: Holiday calendar or Workday binary_sensor; mode off/like_day/own_day_type; next holidays preview)
+  - Section on the rules page. Sources = `calendar.*` + `binary_sensor.*` with a `workdays` attribute. `own_day_type` reuses a day type without weekdays or creates „Feiertag“. Preview via new `zeitwerk/holidays/upcoming` (works for sources no plan uses yet; Workday only knows ~8 days ahead – hint shown).
+- [x] `view: timeline` with `tags` filter
+  - Subscribes to all plans, `zeitwerk/preview` for today's segments (refetched 1 s after plan changes and at midnight). Clock and now-line updated per minute without re-render.
+- [x] Drag block edges (touch + mouse, snap, keyboard alternative)
+  - Invisible 22 px handles on both sides of an edge (44 px target), window-level pointer listeners so re-renders don't break the drag, click after drag suppressed. End may be dragged past midnight. Keyboard: ←/→ move, Shift = end, Alt = start (saved 0.8 s after the last key).
+- [x] „Tag kopieren auf …“ / „Auch übernehmen für“
+- [x] Release v0.4.0
+  - Tests: backend 80, frontend 47 (`dragBlock`, `copyDayType`). Headless click-through of drag, keyboard, also-for, copy, holidays (own day type → tab + row), timeline (tag filter, manual hatch, empty state) – no runtime errors. Bundle 122.9 KB / 32.7 KB gzip.
 
 ## 0.5 – Polish
 

@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
+### Added
+- Card `view: timeline` with `tags` filter and optional `title`: one band per
+  plan for today (scheduled blocks, manual override hatched, now-line),
+  current profile/value, next change („ab 22:00“ / „in 20 min“).
+- Holiday settings on the rules page: source (Holiday calendar / Workday),
+  mode off / like a weekday / own day type (created on demand), next
+  holidays. New websocket command `zeitwerk/holidays/upcoming`.
+- Drag block edges in the week grid (touch + mouse, snapped, live tooltip);
+  keyboard: ←/→ move, Shift = end, Alt = start, Enter/Delete open the editor.
+- „Auch übernehmen für“ in the block editor and „<day type> kopieren auf …“.
+
+### Changed
+- Day types without weekdays are only shown as a tab when they are the
+  holiday day type.
+
 ## [0.3.0] - 2026-11-04
 
 ### Added

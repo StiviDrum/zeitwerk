@@ -3,8 +3,8 @@
 Weekly schedules for Home Assistant built on **profiles** – like a thermostat
 week program, but for any entity.
 
-> **Status:** pre-release (0.x). Backend, week view, rules page and manual
-> override work.
+> **Status:** pre-release (0.x). Backend, week view, timeline, rules page,
+> holidays and manual override work.
 > Plans are still created via the websocket API (see below) until the plan
 > wizard in the card exists (0.5).
 
@@ -51,12 +51,26 @@ no dashboard resource needed. Add it via *Edit dashboard → Add card → Zeitwe
 
 ```yaml
 type: custom:zeitwerk-card
-view: week                  # only "week" in 0.2 (timeline follows in 0.4)
-plan: wohnzimmer_heizung    # plan id
+view: week                  # week | timeline
+plan: wohnzimmer_heizung    # plan id (week view)
 show_profile_sliders: true  # quick view of the profile values
 time_step: 15               # minutes, used for new blocks and the editor steppers
 compact: false              # hides sliders/legend, smaller grid
 ```
+
+Timeline of all plans (optionally filtered by tag):
+
+```yaml
+type: custom:zeitwerk-card
+view: timeline
+tags: [heizung]   # optional; plans with any of these tags
+title: Heizung    # optional
+```
+
+The timeline shows one band per plan for today (scheduled blocks, manual
+override hatched, now-line), the current profile and value and the next
+change („ab 22:00“ / „in 20 min“); plans not in their default profile get a
+border in the profile colour.
 
 What the week view does:
 
@@ -74,6 +88,13 @@ What the week view does:
   preview, delete, save). **Long-press an empty spot** → new block there.
   A new or moved block trims or splits the blocks it overlaps; a block of the
   default profile just clears that range. Editing the plan needs an admin user.
+- **Drag block edges** (mouse or touch, snapped to `time_step`, live time
+  tooltip). Keyboard: focus a block, ←/→ moves it, Shift+←/→ changes the end,
+  Alt+←/→ the start, Enter opens the editor, Delete opens it to confirm
+  deleting.
+- **„Auch übernehmen für“** in the editor adds the same block to other day
+  types; **„<day type> kopieren auf …“** below the grid replaces the blocks of
+  the chosen day types.
 
 - **Rules** (below the grid → *Overrides* / *Activation*): overrides in
   priority order with a live *active* badge – drag the handle (or focus it and
@@ -82,10 +103,13 @@ What the week view does:
   loaded). Activation: all/any, live ✓ per condition, "otherwise" behaviour
   (`when_inactive`) and immediate re-evaluation (`reevaluate`). A paused plan
   shows the reason in the header, e.g. „pausiert – Heizperiode: Aus“.
+- **Holidays** (rules page): source (Holiday calendar or Workday sensor), mode
+  off / like a weekday / own day (creates a „Feiertag“ day type with its own
+  row and tab) and the next three holidays.
 - A **manual override** shows as a chip („manuell bis 22:00“) and as a hatched
   range in today's row.
 
-Bundle size (0.3.0, minified): 99.0 KB, 27.3 KB gzip.
+Bundle size (0.4.0, minified): 122.9 KB, 32.7 KB gzip.
 
 ## Manual changes
 
@@ -177,7 +201,8 @@ Creating, editing and deleting plans is websocket-only (admin): `zeitwerk/plans/
 `zeitwerk/plans/update` (`plan_id`, `plan`), `zeitwerk/plans/delete` (`plan_id`),
 `zeitwerk/plans/subscribe` (optional `plan_id`; sends `init`, then
 `added`/`updated`/`removed`), `zeitwerk/preview` (`plan_ids`, `tag`, `start`,
-`end`; scheduled segments, max. 8 days).
+`end`; scheduled segments, max. 8 days), `zeitwerk/holidays/upcoming`
+(`source`, optional `count`; next holidays of a calendar/Workday source).
 
 ## Development
 
@@ -222,7 +247,10 @@ Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
 lange auf eine freie Stelle drücken = neuer Block, Profil-Regler ändern den
 Wert im Profil (z. B. Komfort 22 → 21,5 °C). Unter „Regeln“: Vorrang-Regeln
 (ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
-Aktivierung (alle/eine, „Sonst“, sofort neu bewerten).
+Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
+aus / wie Wochentag / eigener Tag, nächste Feiertage). Blockränder lassen
+sich ziehen, Tage kopieren. Zeitleiste aller Pläne: `view: timeline`
+(optional `tags: [heizung]`).
 
 Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis
 zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt
