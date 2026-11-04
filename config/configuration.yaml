@@ -1,6 +1,13 @@
 # Local dev instance – test bed for the heating reference case (SPEC §9).
 # Helpers only, no real devices.
-default_config:
+# Explicit component list instead of default_config: several default
+# components (usb, dhcp, ffmpeg, ...) do not work on native Windows.
+config:
+frontend:
+history:
+logbook:
+system_log:
+calendar:
 
 homeassistant:
   name: Zeitwerk Dev
@@ -17,7 +24,7 @@ logger:
 
 # Set-points read by the (simulated) thermostat logic
 input_number:
-  temperaturspeicher_wohnzimmer: &temp
+  temperaturspeicher_wohnzimmer:
     name: Temperaturspeicher Wohnzimmer
     min: 5
     max: 30
@@ -26,17 +33,37 @@ input_number:
     mode: slider
     icon: mdi:thermometer
   temperaturspeicher_schlafzimmer:
-    <<: *temp
     name: Temperaturspeicher Schlafzimmer
+    min: 5
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: slider
+    icon: mdi:thermometer
   temperaturspeicher_bad:
-    <<: *temp
     name: Temperaturspeicher Bad
+    min: 5
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: slider
+    icon: mdi:thermometer
   temperaturspeicher_kueche:
-    <<: *temp
     name: Temperaturspeicher Küche
+    min: 5
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: slider
+    icon: mdi:thermometer
   temperaturspeicher_buero:
-    <<: *temp
     name: Temperaturspeicher Büro
+    min: 5
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: slider
+    icon: mdi:thermometer
 
 input_boolean:
   urlaub:

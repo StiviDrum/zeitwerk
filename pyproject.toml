@@ -1,6 +1,6 @@
 [project]
 name = "zeitwerk"
-version = "0.0.1"
+version = "0.1.0"
 description = "Profile based weekly schedules for Home Assistant"
 requires-python = ">=3.14.2"
 license = "MIT"

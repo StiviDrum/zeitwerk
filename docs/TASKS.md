@@ -38,9 +38,12 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - Decision: plan CRUD is websocket-only; services are for automations. Added `clear_force` to undo force/skip.
 - [x] WebSocket API: `plans/list|get|create|update|delete|subscribe`, `preview`; admin checks; validation
   - subscribe sends `init` with all plans, then `added`/`updated`/`removed` events (plan incl. `status`).
-- [ ] Tests: everything in AGENTS.md §5 that applies to the engine, incl. DST days and restart
-- [ ] Dev instance: heating reference case created via websocket/service script (`scripts/seed_reference_plans.py`) and observed working
-- [ ] Release v0.1.0
+- [x] Tests: everything in AGENTS.md §5 that applies to the engine, incl. DST days and restart
+  - 67 tests (schema, schedule maths, engine, entities, services, websocket). Manual override tests come with 0.3.
+- [x] Dev instance: heating reference case created via websocket/service script (`scripts/seed_reference_plans.py`) and observed working
+  - Native Windows: `scripts/win_shims/run_hass.py` skips HA's OS check + signal handlers; `default_config` replaced by an explicit list (usb/dhcp/ffmpeg fail on Windows); `--skip-pip`.
+  - Checked live: 5 plans seeded, vacation override, force/clear, set_profile_value, activation off/on, switch off, restart with reapply.
+- [x] Release v0.1.0
 
 ## 0.2 – Card: week grid + profile quick view
 

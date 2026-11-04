@@ -1,14 +1,20 @@
 {
   "domain": "zeitwerk",
   "name": "Zeitwerk",
-  "codeowners": ["@StiviDrum"],
+  "codeowners": [
+    "@StiviDrum"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "websocket_api"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/StiviDrum/zeitwerk",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/StiviDrum/zeitwerk/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.0.1"
+  "version": "0.1.0"
 }
