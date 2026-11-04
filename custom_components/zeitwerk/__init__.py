@@ -14,12 +14,13 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from .const import CARD_FILENAME, CARD_URL_BASE, DOMAIN
+from .manager import ZeitwerkManager
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-type ZeitwerkConfigEntry = ConfigEntry[None]
+type ZeitwerkConfigEntry = ConfigEntry[ZeitwerkManager]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -30,11 +31,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ZeitwerkConfigEntry) -> bool:
     """Set up Zeitwerk from a config entry."""
+    manager = ZeitwerkManager(hass, entry.entry_id)
+    await manager.async_setup()
+    entry.runtime_data = manager
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ZeitwerkConfigEntry) -> bool:
     """Unload a config entry."""
+    await entry.runtime_data.async_unload()
     return True
 
 
