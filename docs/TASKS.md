@@ -93,11 +93,16 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 ## 0.5 – Polish
 
-- [ ] Visual card editor (`getConfigElement`, `getStubConfig`)
-- [ ] Plan creation wizard in the card (name, icon, profiles with target entity + values, initial day types)
-- [ ] Complete translations, repairs/issues for broken entity references
-- [ ] `compact` mode, light-theme check, `getGridOptions`
-- [ ] Release v0.5.0
+- [x] Visual card editor (`getConfigElement`, `getStubConfig`)
+  - `ha-form` with select/boolean/number selectors (plan list from `plans/list`, tags with custom values); native fallback form. `getStubConfig` is async and picks the first plan.
+- [x] Plan creation wizard in the card (name, icon, profiles with target entity + values, initial day types)
+  - `wizard.ts` (pure, tested): domain → action (`set_value`, `set_temperature`, `select_option`, `light.turn_on` brightness_pct, cover position, fan percentage, turn_on/off). Entity picker via `ha-selector` (text + datalist fallback), `ha-icon-picker` if available. One target entity per wizard-created plan.
+- [x] Complete translations, repairs/issues for broken entity references
+  - `issues.py` (not `repairs.py`, that name is HA's platform for fixable flows). Checked on runner start, plan change and entity registry updates. en/de key sets identical (42 keys); card strings are type-checked for both languages.
+- [x] `compact` mode, light-theme check, `getGridOptions`
+  - Light theme: success chip text mixed with the text colour for contrast. Fixed label overflow on narrow blocks (found in the headless check).
+- [x] Release v0.5.0
+  - Backend 83 tests, frontend 54. Headless click-through of all views incl. wizard and editor (an earlier flaky run came from the test script's fixed 200 ms waits; now explicit waits, 10/10 green). Bundle 146.5 KB / 37.5 KB gzip.
 
 ## 1.0 – Publish
 

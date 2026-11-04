@@ -3,10 +3,9 @@
 Weekly schedules for Home Assistant built on **profiles** – like a thermostat
 week program, but for any entity.
 
-> **Status:** pre-release (0.x). Backend, week view, timeline, rules page,
-> holidays and manual override work.
-> Plans are still created via the websocket API (see below) until the plan
-> wizard in the card exists (0.5).
+> **Status:** pre-release (0.x), feature complete for 1.0: backend, week view,
+> timeline, rules page, holidays, manual override, plan wizard and visual card
+> editor.
 
 A plan says *when* a profile applies (week grid with day types such as
 "workday" / "weekend" / "holiday"); a profile says *what* happens (any Home
@@ -47,7 +46,8 @@ end of the first pass is kept, so nothing switches twice.
 
 The integration serves the card and registers it with the frontend itself –
 no dashboard resource needed. Add it via *Edit dashboard → Add card → Zeitwerk*
-(the picker preview shows your first plan) or in YAML:
+(the picker preview shows your first plan; all options are available in the
+visual editor) or in YAML:
 
 ```yaml
 type: custom:zeitwerk-card
@@ -109,7 +109,20 @@ What the week view does:
 - A **manual override** shows as a chip („manuell bis 22:00“) and as a hatched
   range in today's row.
 
-Bundle size (0.4.0, minified): 122.9 KB, 32.7 KB gzip.
+- **New plan** (admins): „+ Neuer Plan“ in the timeline, or when the card has
+  no/an unknown plan. Pick the target entity (number, climate, select, light,
+  cover, fan, switch …), name, icon, tags, profiles with values and colours,
+  the default profile and a start layout (workday/weekend or every day). A
+  card configured with an unknown `plan:` id creates the plan under that id.
+
+Bundle size (0.5.0, minified): 146.5 KB, 37.5 KB gzip.
+
+## Repairs
+
+If a plan refers to entities that do not exist (profile targets, conditions,
+holiday source), Zeitwerk raises a warning under *Settings → Repairs* naming
+the plan and the missing entities. It disappears when the entities exist again
+(checked on start, on plan changes and when the entity registry changes).
 
 ## Manual changes
 
@@ -239,13 +252,15 @@ Zeitwerk ist eine Home-Assistant-Integration für Wochenpläne mit **Profilen**
 niemand zu Hause). Die Karte bringt sie selbst mit und registriert sie
 automatisch.
 
-**Status:** Vorabversion. Backend und Wochenansicht der Karte laufen; Pläne
-werden bis zum Plan-Assistenten (0.5) über die WebSocket-API angelegt.
+**Status:** Vorabversion, Funktionsumfang für 1.0 komplett.
 
 Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
 `type: custom:zeitwerk-card` mit `plan: <id>`. Block antippen = bearbeiten,
 lange auf eine freie Stelle drücken = neuer Block, Profil-Regler ändern den
-Wert im Profil (z. B. Komfort 22 → 21,5 °C). Unter „Regeln“: Vorrang-Regeln
+Wert im Profil (z. B. Komfort 22 → 21,5 °C). Neue Pläne legt man in der
+Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
+Start mit Werktag/Wochenende oder jeden Tag gleich). Fehlende Entitäten in
+einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Regeln“: Vorrang-Regeln
 (ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
 Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
 aus / wie Wochentag / eigener Tag, nächste Feiertage). Blockränder lassen

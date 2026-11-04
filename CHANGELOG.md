@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
+### Added
+- Plan creation wizard in the card (target entity → matching action,
+  profiles with values and colours, default profile, start layout); reachable
+  from the timeline and the "no plan" / "plan not found" states.
+- Visual card editor (`getConfigElement`) with HA's form elements and a
+  fallback form; plan dropdown, tags for the timeline.
+- Repair issue when a plan refers to missing entities (en/de).
+
+### Fixed
+- Block labels no longer overflow narrow blocks.
+- Better contrast of the "Plan läuft" chip in light themes.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
