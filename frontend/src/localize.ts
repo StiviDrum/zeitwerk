@@ -141,7 +141,14 @@ const en = {
   ed_sliders: "Show profile sliders",
   ed_compact: "Compact",
   ed_step: "Time step (minutes)",
-  plan_settings: "Plan settings",
+  rules_title: "Rules",
+  help: "Explanation",
+  help_overrides:
+    "Overrides replace the week plan while their conditions apply, e.g. “vacation on → Away”. Order is priority: the top matching rule wins; when none applies, the week plan is back.",
+  help_activation:
+    "Activation decides whether the plan runs at all, e.g. only during the heating season. If its conditions are not met, the plan is paused and switches nothing (or applies the profile chosen under “Otherwise” once).",
+  help_holidays:
+    "Holidays from a Holiday calendar or Workday sensor are treated like a chosen weekday or get their own day plan (row “Hol”).",
   day_editor_title: "Edit {day}",
   no_blocks: "No blocks – {profile} applies all day. Tap the bar or + Block.",
   delete_block: "Delete block",
@@ -303,7 +310,14 @@ const de: Strings = {
   ed_sliders: "Profil-Regler anzeigen",
   ed_compact: "Kompakt",
   ed_step: "Zeitraster (Minuten)",
-  plan_settings: "Plan-Einstellungen",
+  rules_title: "Regeln",
+  help: "Erklärung",
+  help_overrides:
+    "Vorrang-Regeln ersetzen den Wochenplan, solange ihre Bedingungen zutreffen – z. B. „Urlaub an → Abwesend“. Die Reihenfolge ist die Priorität: Die oberste zutreffende Regel gewinnt; trifft keine zu, gilt wieder der Wochenplan.",
+  help_activation:
+    "Die Aktivierung entscheidet, ob der Plan überhaupt läuft – z. B. nur in der Heizperiode. Sind die Bedingungen nicht erfüllt, ist der Plan pausiert und schaltet nichts (oder einmalig das unter „Sonst“ gewählte Profil).",
+  help_holidays:
+    "Feiertage aus einem Holiday-Kalender oder Workday-Sensor laufen wie ein gewählter Wochentag oder bekommen einen eigenen Tagesplan (Zeile „Ft“).",
   day_editor_title: "{day} bearbeiten",
   no_blocks: "Keine Blöcke – ganztägig gilt {profile}. Leiste antippen oder + Block.",
   delete_block: "Block löschen",

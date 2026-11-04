@@ -22,6 +22,8 @@ import { WEEKDAYS, type HomeAssistant, type Override, type Plan, type Weekday } 
 
 export type PlanMutator = (plan: Plan) => void;
 
+type HelpKey = "help_overrides" | "help_activation" | "help_holidays";
+
 type SubPage =
   | { kind: "menu" }
   | { kind: "overrides" }
@@ -49,6 +51,8 @@ export class ZeitwerkRules extends LitElement {
   @state() private _confirmDelete = false;
   @state() private _drag?: { index: number; startY: number; dy: number };
   @state() private _conditionsValid = true;
+  /** Open explanation (keys joined), toggled by the "?" buttons. */
+  @state() private _help?: string;
   @state() private _upcoming?: { date: string; name: string }[] | null;
   private _upcomingFor?: string | null;
 
@@ -302,28 +306,51 @@ export class ZeitwerkRules extends LitElement {
     }
   }
 
-  private _head(title: string, sub: string, back: () => void) {
+  /** "?" button toggling explanations; native tooltip on hover. */
+  private _helpButton(keys: HelpKey[]) {
+    const t = this.localize.t.bind(this.localize);
+    const id = keys.join(",");
+    const open = this._help === id;
+    return html`<button
+      class="help"
+      aria-label=${t("help")}
+      aria-expanded=${open ? "true" : "false"}
+      title=${keys.map((k) => t(k)).join("\n\n")}
+      @click=${() => (this._help = open ? undefined : id)}
+    >
+      ?
+    </button>`;
+  }
+
+  private _helpText(keys: HelpKey[]) {
+    if (this._help !== keys.join(",")) return nothing;
+    const t = this.localize.t.bind(this.localize);
+    return html`<div class="helptext" role="note">${keys.map((k) => html`<p>${t(k)}</p>`)}</div>`;
+  }
+
+  private _head(title: string, sub: string, back: () => void, help?: HelpKey[]) {
     return html`<div class="head">
-      <button class="round" aria-label=${this.localize.t("back")} @click=${back}>
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M15 6l-6 6 6 6" />
-        </svg>
-      </button>
-      <div class="titles">
-        <span class="title">${title}</span>
-        <span class="sub">${sub}</span>
+        <button class="round" aria-label=${this.localize.t("back")} @click=${back}>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
+        </button>
+        <div class="titles">
+          <span class="title">${title}${help ? this._helpButton(help) : nothing}</span>
+          <span class="sub">${sub}</span>
+        </div>
       </div>
-    </div>`;
+      ${help ? this._helpText(help) : nothing}`;
   }
 
   private _separator(title: string, hint?: string) {
@@ -411,7 +438,11 @@ export class ZeitwerkRules extends LitElement {
         </svg>
       </button>`;
     return html`
-      ${this._head(t("plan_settings"), plan.name, () => this._fire("zw-back"))}
+      ${this._head(t("rules_title"), plan.name, () => this._fire("zw-back"), [
+        "help_overrides",
+        "help_activation",
+        "help_holidays",
+      ])}
       <div class="menu">
         ${row("mdi:layers-outline", t("rules_overrides"), overrides, "overrides")}
         ${row("mdi:flash-outline", t("rules_activation"), activation, "activation")}
@@ -425,7 +456,9 @@ export class ZeitwerkRules extends LitElement {
     const plan = this.plan;
     const results = plan.status?.override_results ?? {};
     return html`
-      ${this._head(t("rules_overrides"), plan.name, () => this._open({ kind: "menu" }))}
+      ${this._head(t("rules_overrides"), plan.name, () => this._open({ kind: "menu" }), [
+        "help_overrides",
+      ])}
       ${this._separator(t("rules_overrides"), t("rules_overrides_hint"))}
       <div class="list">
         ${plan.overrides.map((ov, index) => {
@@ -514,7 +547,9 @@ export class ZeitwerkRules extends LitElement {
     const activation = plan.activation;
     const actResults = plan.status?.activation_results ?? [];
     return html`
-      ${this._head(t("rules_activation"), plan.name, () => this._open({ kind: "menu" }))}
+      ${this._head(t("rules_activation"), plan.name, () => this._open({ kind: "menu" }), [
+        "help_activation",
+      ])}
       ${this._separator(t("rules_activation"))}
       <div class="panel">
         <div class="between">
@@ -606,7 +641,12 @@ export class ZeitwerkRules extends LitElement {
 
   private _renderHolidayPage() {
     return html`
-      ${this._head(this.localize.t("rules_holidays"), this.plan.name, () => this._open({ kind: "menu" }))}
+      ${this._head(
+        this.localize.t("rules_holidays"),
+        this.plan.name,
+        () => this._open({ kind: "menu" }),
+        ["help_holidays"],
+      )}
       ${this._renderHolidays()}
       ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
     `;
@@ -1051,6 +1091,39 @@ export class ZeitwerkRules extends LitElement {
       }
       .switch[aria-checked="true"] span {
         background: var(--zw-on-accent);
+      }
+      .title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .help {
+        width: 26px;
+        height: 26px;
+        border-radius: 13px;
+        background: var(--zw-surface-2);
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--zw-text-2);
+        flex-shrink: 0;
+      }
+      .help[aria-expanded="true"] {
+        background: var(--zw-accent);
+        color: var(--zw-on-accent);
+      }
+      .helptext {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--zw-surface);
+        border: 1px solid var(--zw-border);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .helptext p {
+        margin: 0;
+      }
+      .helptext p + p {
+        margin-top: 8px;
       }
       .menu {
         display: flex;

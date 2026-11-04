@@ -37,6 +37,7 @@ import {
 import { CARD_VERSION } from "./version";
 
 const VALUE_DEBOUNCE_MS = 400;
+const SLIDER_HOLD_MS = 350;
 const NOTICE_MS = 4000;
 
 interface QuickRow {
@@ -67,6 +68,17 @@ export class ZeitwerkCard extends LitElement {
   @state() private _plan?: Plan | null;
   @state() private _error?: string;
   /** Day open in the day editor and its blocks when it was opened. */
+  /** Profile id of the slider that is being dragged after a hold. */
+  @state() private _armed?: string;
+  private _slider?: {
+    x: number;
+    y: number;
+    x0: number;
+    y0: number;
+    rect: DOMRect;
+    armed: boolean;
+    timer?: number;
+  };
   @state() private _editDay?: { day: DayKey; blocks: Block[] };
   @state() private _saveError: string | null = null;
   @state() private _busy = false;
@@ -136,6 +148,7 @@ export class ZeitwerkCard extends LitElement {
     window.clearInterval(this._clock);
     this._clock = undefined;
     window.clearTimeout(this._previewTimer);
+    this._sliderEnd();
     Object.values(this._valueTimers).forEach((t) => window.clearTimeout(t));
     this._valueTimers = {};
   }
@@ -412,12 +425,77 @@ export class ZeitwerkCard extends LitElement {
       .catch((err) => this._notify(errorMessage(err)));
   }
 
-  private _onSlider(row: QuickRow, ev: Event): void {
+  // Profile slider: on touch it only reacts after a short hold, so scrolling
+  // the dashboard does not change values.
+
+  private _sliderValue(row: QuickRow, clientX: number, rect: DOMRect): void {
     if (row.control.type !== "number") return;
-    const input = ev.target as HTMLInputElement;
     const { min, max, step } = row.control;
-    const value = snapValue(Number(input.value), min, max, step);
-    this._setValue(row, value);
+    const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    this._setValue(row, snapValue(min + f * (max - min), min, max, step));
+  }
+
+  private _sliderDown(row: QuickRow, ev: PointerEvent): void {
+    const el = ev.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    window.clearTimeout(this._slider?.timer);
+    const arm = () => {
+      if (!this._slider) return;
+      try {
+        el.setPointerCapture(ev.pointerId);
+      } catch {
+        // pointer already gone
+      }
+      this._slider.armed = true;
+      this._armed = row.profile.id;
+      if (ev.pointerType !== "mouse") navigator.vibrate?.(10);
+      this._sliderValue(row, this._slider.x, rect);
+    };
+    this._slider = {
+      x: ev.clientX,
+      y: ev.clientY,
+      x0: ev.clientX,
+      y0: ev.clientY,
+      rect,
+      armed: false,
+    };
+    if (ev.pointerType === "mouse") arm();
+    else this._slider.timer = window.setTimeout(arm, SLIDER_HOLD_MS);
+  }
+
+  private _sliderMove(row: QuickRow, ev: PointerEvent): void {
+    const s = this._slider;
+    if (!s) return;
+    s.x = ev.clientX;
+    if (s.armed) {
+      ev.preventDefault();
+      this._sliderValue(row, ev.clientX, s.rect);
+    } else if (Math.hypot(ev.clientX - s.x0, ev.clientY - s.y0) > 8) {
+      this._sliderEnd(); // moving before the hold = scrolling
+    }
+  }
+
+  private _sliderEnd = (): void => {
+    window.clearTimeout(this._slider?.timer);
+    this._slider = undefined;
+    this._armed = undefined;
+  };
+
+  private _sliderKey(row: QuickRow, ev: KeyboardEvent): void {
+    if (row.control.type !== "number" || row.qv.kind !== "value") return;
+    const { min, max, step } = row.control;
+    const v = Number(row.qv.value);
+    const map: Record<string, number> = {
+      ArrowLeft: v - step,
+      ArrowDown: v - step,
+      ArrowRight: v + step,
+      ArrowUp: v + step,
+      Home: min,
+      End: max,
+    };
+    if (!(ev.key in map)) return;
+    ev.preventDefault();
+    this._setValue(row, snapValue(map[ev.key], min, max, step));
   }
 
   private _setValue(row: QuickRow, value: number | string): void {
@@ -769,12 +847,7 @@ export class ZeitwerkCard extends LitElement {
     const l = this._l;
     const status = plan.status;
     const now = zonedNow(this.hass?.config?.time_zone);
-    const dayType = plan.week.day_types.find((d) => d.id === status?.day_type);
-    const dayText = [
-      l.weekdayLong(now.weekdayIndex),
-      status?.is_holiday ? l.t("holiday") : null,
-      dayType?.name,
-    ]
+    const dayText = [l.weekdayLong(now.weekdayIndex), status?.is_holiday ? l.t("holiday") : null]
       .filter(Boolean)
       .join(" · ");
 
@@ -855,7 +928,7 @@ export class ZeitwerkCard extends LitElement {
     return html`<button class="link settings" @click=${() => (this._page = "rules")}>
       <span class="licon"><ha-icon .icon=${"mdi:tune-variant"}></ha-icon></span>
       <span class="ltext">
-        <span class="ltitle">${l.t("plan_settings")}</span>
+        <span class="ltitle">${l.t("rules_title")}</span>
         ${summary.map((line) => html`<span class="lsub">${line}</span>`)}
       </span>
       <svg
@@ -919,16 +992,22 @@ export class ZeitwerkCard extends LitElement {
     if (control.type === "number" && qv.kind === "value") {
       const n = Number(qv.value);
       fill = fraction(n, control.min, control.max);
-      input = html`<input
-        type="range"
-        min=${control.min}
-        max=${control.max}
-        step=${control.step}
-        .value=${String(n)}
+      input = html`<div
+        class="hit"
+        role="slider"
+        tabindex="0"
         aria-label=${profile.name}
+        aria-valuemin=${control.min}
+        aria-valuemax=${control.max}
+        aria-valuenow=${n}
         aria-valuetext=${value}
-        @input=${(ev: Event) => this._onSlider(row, ev)}
-      />`;
+        @pointerdown=${(ev: PointerEvent) => this._sliderDown(row, ev)}
+        @pointermove=${(ev: PointerEvent) => this._sliderMove(row, ev)}
+        @pointerup=${this._sliderEnd}
+        @pointercancel=${this._sliderEnd}
+        @keydown=${(ev: KeyboardEvent) => this._sliderKey(row, ev)}
+        @contextmenu=${(ev: Event) => ev.preventDefault()}
+      ></div>`;
     } else if (control.type === "toggle" && qv.kind === "toggle") {
       fill = qv.on ? 1 : 0;
       input = html`<button
@@ -952,7 +1031,7 @@ export class ZeitwerkCard extends LitElement {
         )}
       </select>`;
     }
-    return html`<div class="slider">
+    return html`<div class="slider ${this._armed === profile.id ? "armed" : ""}">
       <div
         class="fill"
         style="width:${fill * 100}%;background:${tint(color, 30)};border-right-color:${color}"
@@ -1028,8 +1107,8 @@ export class ZeitwerkCard extends LitElement {
     const defaultProfile = this._profile(plan.default_profile);
 
     return html`<div class="grid">
-      <div class="axis">
-        <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
+      <div class="axis grid-axis">
+        ${[0, 6, 12, 18, 24].map((h) => html`<span style="left:${(h / 24) * 100}%">${h}</span>`)}
       </div>
       <div class="rows">
         ${rows.map(
@@ -1047,13 +1126,16 @@ export class ZeitwerkCard extends LitElement {
                     class="block ${seg.spill ? "spill" : ""}"
                     style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
                     ><span class="blabel"
-                      >${seg.width >= seg.label.length * 2.1 ? seg.label : ""}</span
+                      >${seg.width >= seg.label.length * 1.9 ? seg.label : ""}</span
                     ></span
                   >`;
                 })}
                 ${this._renderManual(plan, row)}
               </span>
             </button>`,
+        )}
+        ${[0.25, 0.5, 0.75].map(
+          (f) => html`<div class="hour-line" style="--zw-at:${f}" aria-hidden="true"></div>`,
         )}
         <div class="now-line" aria-hidden="true"></div>
         <div class="now-dot" aria-hidden="true"></div>
@@ -1345,7 +1427,7 @@ export class ZeitwerkCard extends LitElement {
         font-weight: 600;
         font-variant-numeric: tabular-nums;
       }
-      .slider input,
+      .slider .hit,
       .slider .overlay {
         position: absolute;
         inset: 0;
@@ -1355,6 +1437,18 @@ export class ZeitwerkCard extends LitElement {
         opacity: 0;
         cursor: pointer;
         touch-action: pan-y;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .slider.armed {
+        outline: 2px solid var(--zw-accent);
+        outline-offset: 2px;
+      }
+      .slider:has(.hit:focus-visible) {
+        outline: 2px solid var(--zw-accent);
+        outline-offset: 2px;
       }
 
       /* Day type tabs */
@@ -1402,6 +1496,21 @@ export class ZeitwerkCard extends LitElement {
         margin-left: 30px;
         font-size: 11px;
         color: var(--zw-text-2);
+      }
+      .grid-axis {
+        position: relative;
+        display: block;
+        height: 14px;
+      }
+      .grid-axis span {
+        position: absolute;
+        transform: translateX(-50%);
+      }
+      .grid-axis span:first-child {
+        transform: none;
+      }
+      .grid-axis span:last-child {
+        transform: translateX(-100%);
       }
       .rows {
         position: relative;
@@ -1474,6 +1583,14 @@ export class ZeitwerkCard extends LitElement {
         max-width: 100%;
         overflow: hidden;
         white-space: nowrap;
+      }
+      .hour-line {
+        position: absolute;
+        top: -4px;
+        bottom: -4px;
+        left: calc(30px + (100% - 30px) * var(--zw-at));
+        border-left: 1px dashed color-mix(in srgb, var(--zw-text) 35%, transparent);
+        pointer-events: none;
       }
       .now-line {
         position: absolute;

@@ -7,7 +7,7 @@
  * start < end <= start + 1440. Within one day type blocks must not overlap on
  * the circle (the backend validates the same rule).
  */
-import { MINUTES_PER_DAY, formatTime, parseTime, shortTime } from "./time";
+import { MINUTES_PER_DAY, formatTime, parseTime } from "./time";
 import { WEEKDAYS, type Block, type DayType, type Plan, type Weekday } from "./types";
 
 export interface Interval {
@@ -183,7 +183,7 @@ export function previousWeekday(weekday: Weekday): Weekday {
 const pct = (minutes: number) => (minutes / MINUTES_PER_DAY) * 100;
 
 function label(iv: Interval): string {
-  return `${shortTime(iv.start)}–${shortTime(iv.end % MINUTES_PER_DAY || MINUTES_PER_DAY)}`;
+  return `${formatTime(iv.start)}–${formatTime(iv.end % MINUTES_PER_DAY || MINUTES_PER_DAY)}`;
 }
 
 /**

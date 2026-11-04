@@ -147,9 +147,9 @@ describe("rowSegments (week grid incl. midnight)", () => {
   it("draws own blocks clipped at midnight and the spill of the previous day", () => {
     const segs = rowSegments(workday, workday);
     expect(segs.map((s) => [s.left, s.width, s.spill, s.label])).toEqual([
-      [0, (2 / 24) * 100, true, "22–2"],
-      [25, (2 / 24) * 100, false, "6–8"],
-      [(22 / 24) * 100, (2 / 24) * 100, false, "22–2"],
+      [0, (2 / 24) * 100, true, "22:00–02:00"],
+      [25, (2 / 24) * 100, false, "06:00–08:00"],
+      [(22 / 24) * 100, (2 / 24) * 100, false, "22:00–02:00"],
     ]);
   });
   it("today's blocks win over yesterday's spill", () => {

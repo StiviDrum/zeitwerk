@@ -17,7 +17,7 @@ import {
 } from "./day-plan";
 import type { Localizer } from "./localize";
 import { tokens } from "./styles";
-import { MINUTES_PER_DAY, formatTime, shortTime } from "./time";
+import { MINUTES_PER_DAY, formatTime } from "./time";
 import { WEEKDAYS, type Block, type Plan } from "./types";
 
 export interface DaySaveDetail {
@@ -231,13 +231,13 @@ export class ZeitwerkDayEditor extends LitElement {
       >
         ${this._blocks.map((b, i) => {
           const color = profileColor(this.plan, b.profile);
-          const label = `${shortTime(b.start)}–${shortTime(b.end)}`;
+          const label = `${formatTime(b.start)}–${formatTime(b.end)}`;
           const width = pct(b.end - b.start);
           return html`<div
             class="blk ${i === this._selected ? "sel" : ""}"
             style="left:${pct(b.start)}%;width:${width}%;background:${color};color:${textOn(color)}"
           >
-            <span class="blabel">${width >= label.length * 2.1 ? label : ""}</span>
+            <span class="blabel">${width >= label.length * 1.9 ? label : ""}</span>
             ${
               i === this._selected
                 ? html`<span class="handle start"></span><span class="handle end"></span>`
