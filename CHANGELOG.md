@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-04
+
+### Fixed
+- Card not found / endless spinner in the card picker: Home Assistant loads
+  integration modules in parallel with its app bundle, which replaces
+  `window.customElements` (scoped registry polyfill). The card now defines
+  its elements only after HA has defined `home-assistant`, so they land in
+  the registry HA uses.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added

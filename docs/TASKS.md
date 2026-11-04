@@ -105,6 +105,11 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Release v0.5.0
   - Backend 83 tests, frontend 54. Headless click-through of all views incl. wizard and editor (an earlier flaky run came from the test script's fixed 200 ms waits; now explicit waits, 10/10 green). Bundle 146.5 KB / 37.5 KB gzip.
 
+## 0.5.1 – Fix found in Steven's first install
+
+- [x] Card not found in the picker (endless spinner): HA imports `extra_modules` in parallel with `app.js`, which installs a scoped custom element registry polyfill and swaps `window.customElements`. Elements defined before the swap are invisible to HA ("Custom element not found"). Fix: `register.ts` defines all elements after `customElements.whenDefined("home-assistant")` (immediately outside HA). Unit-tested with a swapping fake registry.
+  - Verified in the dev instance with a real login (headless Chromium, service workers blocked – a fresh profile otherwise reloads once while the SW installs): picker preview renders, week + timeline cards in a real dashboard, HA's condition editor in the override editor, HA entity + icon picker in the wizard. `Cannot read properties of undefined (reading 'addEventListener')` also appears on HA's history page → HA's own, not Zeitwerk.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
