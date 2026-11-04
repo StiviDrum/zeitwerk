@@ -26,13 +26,14 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] `model.py`: Plan, Profile, DayType, Block, Override, Activation, Holidays, Options (dataclasses, to/from dict)
   - `schema.py`: structural + semantic validation (refs, overlaps on the 24 h circle, one day type per weekday, gaps allowed → default profile). Actions/conditions stored as given, validated with `cv.SCRIPT_SCHEMA` / `cv.CONDITIONS_SCHEMA` + HA async validators. `compat.py`: probatio/voluptuous.
 - [x] `store.py`: load/save, schema version 1, migration hook, debounced save
-- [ ] Config flow: single instance, no options yet
+- [x] Config flow: single instance, no options yet
 - [x] `engine.py`: day type resolution (incl. holidays both modes), active profile (activation → overrides → block → default), next change computation, blocks across midnight, one timer per plan, state listeners for condition entities, DST-safe via `dt_util`
   - Pure maths in `schedule.py` (day type, holidays both modes, midnight spill – today's block wins, 24:00, next change, preview, DST). All instants UTC internally (same-tz aware datetimes compare by wall time!). DST rule: gap times start at first valid instant; repeated hour holds the state of the end of the first pass. Runtime in `engine.py` (PlanRunner per plan) + `manager.py` (CRUD, storage, runners start via `async_at_started`). Holiday sources in `holidays.py` (calendar via `calendar.get_events`, workday via state + `workday.check_date`; Workday cannot detect a holiday on a non-working weekday). Extra sources: `disabled`, `forced`.
 - [x] `executor.py`: run profile actions with `Script`, own `Context` so manual changes can be detected later
 - [x] Apply only on change; `reapply_on_start`; `reapply_on_profile_change`
   - `last_applied` is persisted → with `reapply_on_start: false` a restart only applies if the profile changed meanwhile.
-- [ ] Entities per plan: `switch`, `sensor …_profile` (attributes per SPEC), `sensor …_next_change` (timestamp), `binary_sensor …_active`; one device per plan
+- [x] Entities per plan: `switch`, `sensor …_profile` (attributes per SPEC), `sensor …_next_change` (timestamp), `binary_sensor …_active`; one device per plan
+  - Extra profile attributes: `forced_until`, `error`. next_change is empty while an override is active or nothing changes within 8 days.
 - [ ] Services: `apply`, `set_profile_value`, `skip_next`, `force_profile` (+ plan CRUD services or websocket-only – decide, document in README)
 - [ ] WebSocket API: `plans/list|get|create|update|delete|subscribe`, `preview`; admin checks; validation
 - [ ] Tests: everything in AGENTS.md §5 that applies to the engine, incl. DST days and restart

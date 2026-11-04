@@ -8,6 +8,7 @@ from pathlib import Path
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -19,6 +20,8 @@ from .manager import ZeitwerkManager
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH]
 
 type ZeitwerkConfigEntry = ConfigEntry[ZeitwerkManager]
 
@@ -34,13 +37,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ZeitwerkConfigEntry) -> 
     manager = ZeitwerkManager(hass, entry.entry_id)
     await manager.async_setup()
     entry.runtime_data = manager
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ZeitwerkConfigEntry) -> bool:
     """Unload a config entry."""
-    await entry.runtime_data.async_unload()
-    return True
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await entry.runtime_data.async_unload()
+    return unloaded
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:

@@ -9,5 +9,20 @@
     "abort": {
       "single_instance_allowed": "Zeitwerk ist bereits eingerichtet."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "active": {
+        "name": "Aktiv"
+      }
+    },
+    "sensor": {
+      "profile": {
+        "name": "Profil"
+      },
+      "next_change": {
+        "name": "Nächster Wechsel"
+      }
+    }
   }
 }
