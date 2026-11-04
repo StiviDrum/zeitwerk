@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-04
+
+### Changed
+- Week view is display-only; tapping a day opens the new **day editor**: all
+  blocks of the day on one bar, add / select / delete, drag handles or blocks,
+  profile and time per block, and on save choose further days that get the
+  same day plan (their blocks are replaced). Unsaved changes ask before they
+  are discarded.
+- Blocks no longer cross midnight in the card (0:00–24:00); existing blocks
+  across midnight are split into evening and next morning when a day is saved.
+- Day-type tabs, the single-block editor, „Auch übernehmen für“ and
+  „Tag kopieren auf …“ are gone. Weekdays with identical plans are grouped
+  into day types automatically (backend format unchanged).
+
 ## [0.5.2] - 2026-11-04
 
 ### Added

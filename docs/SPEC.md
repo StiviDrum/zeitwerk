@@ -260,11 +260,12 @@ Validierung aller Eingaben mit `voluptuous`; Aktionen und Bedingungen mit den HA
 ### Ansichten
 
 1. **Wochenraster** (ein Plan): 7 Zeilen (Mo–So) oder Spalten, Blöcke farbig nach Profil.
-   - Block antippen → Profil wählen, Zeiten ändern, löschen.
-   - Block an den Rändern ziehen (Touch und Maus), Raster 15 min (konfigurierbar).
-   - Leere Stelle antippen → neuer Block.
-   - „Tag kopieren auf …“.
-   - Tagesprofile (Werktag/Wochenende) als Reiter.
+   - Hauptansicht nur Anzeige: jeder Wochentag eine Zeile, keine Reiter.
+   - Tag antippen → Tages-Editor: alle Blöcke des Tages auf einer 24-h-Leiste; Blöcke hinzufügen, löschen, Profil und Zeiten ändern, Ränder/Blöcke ziehen (Touch und Maus), Raster 15 min (konfigurierbar).
+   - Blöcke liegen innerhalb eines Tages (0:00–24:00), nichts tagesübergreifend.
+   - Speichern mit Auswahl, für welche weiteren Tage dieser Tagesplan gilt (deren Blöcke werden ersetzt).
+   - Intern bleiben Tagestypen das Speicherformat; Tage mit identischem Plan werden automatisch zusammengefasst (Name z. B. „Mo–Fr“).
+   - (Geändert 2026-11-04 auf Wunsch von Steven: früher Reiter je Tagestyp, Block antippen, „Tag kopieren auf …“.)
 2. **Zeitleiste** (mehrere Pläne): heute bzw. 24 h, ein Band pro Plan, „Jetzt“-Linie, nächster Wechsel als Text.
 3. **Profil-Editor**: Liste der Profile; je Profil die Aktionen.
    - Häufiger Fall „eine Entität auf einen Wert setzen“ bekommt eine **Schnellansicht**: Entität + passender Regler (Zahl/Temperatur, Auswahl, an/aus, Helligkeit …) aus den HA-Selektoren.

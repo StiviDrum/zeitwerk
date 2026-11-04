@@ -81,23 +81,16 @@ What the week view does:
   brightness, position, percentage, on/off). Dragging calls
   `zeitwerk.set_profile_value` (debounced 400 ms); on/off profiles are switched
   via the websocket API (admin).
-- **Day-type tabs** and a **week grid** with a now-line. Blocks across midnight
-  are drawn on both days. Holidays appear as a tab (`own_day_type`: own row;
-  `like_day`: highlights that weekday).
-- **Tap a block** → block editor inside the card (profile, start/end in
-  `time_step` steps or by dragging the handles/the block in the preview bar,
-  delete, save). **„Gilt für: Werktag (Mo–Fr) / nur Mittwoch“** edits a single
-  weekday: it is detached into its own day type (shown as its own tab). **Long-press an empty spot** → new block there.
-  A new or moved block trims or splits the blocks it overlaps; a block of the
-  default profile just clears that range. Editing the plan needs an admin user.
-- **Drag block edges** (mouse or touch, snapped to `time_step`, live time
-  tooltip). Keyboard: focus a block, ←/→ moves it, Shift+←/→ changes the end,
-  Alt+←/→ the start, Enter opens the editor, Delete opens it to confirm
-  deleting.
-- **„Auch übernehmen für“** in the editor adds the same block to other day
-  types; **„<day type> kopieren auf …“** below the grid replaces the blocks of
-  the chosen day types.
-
+- **Week grid** (display only) with a now-line: one row per weekday (plus
+  „Ft“ for an own holiday day). **Tap a day** to open the **day editor**: all
+  blocks of that day on a 24 h bar – tap a block to select it, tap an empty
+  spot or „+ Block“ to add one, drag the handles or the block (snapped to
+  `time_step`), change profile and times, delete. Blocks stay within the day
+  (0:00–24:00). On **Save** pick further days (Mo–So, quick Mo–Fr / Sa–So /
+  Alle) that get exactly this day plan – their old blocks are replaced.
+  Internally weekdays with the same plan are grouped into day types
+  automatically (so `day_type` attributes show names like „Mo–Fr“). Editing
+  needs an admin user.
 - **Plan settings** (one entry below the grid with a summary) → *Overrides*,
   *Activation*, *Holidays*, each on its own page.
 - **Overrides / Activation**: overrides in
@@ -119,7 +112,7 @@ What the week view does:
   the default profile and a start layout (workday/weekend or every day). A
   card configured with an unknown `plan:` id creates the plan under that id.
 
-Bundle size (0.5.0, minified): 146.5 KB, 37.5 KB gzip.
+Bundle size (0.6.0, minified): 146.4 KB, 36.8 KB gzip.
 
 ## Repairs
 
@@ -259,19 +252,17 @@ automatisch.
 **Status:** Vorabversion, Funktionsumfang für 1.0 komplett.
 
 Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
-`type: custom:zeitwerk-card` mit `plan: <id>`. Block antippen = bearbeiten,
-lange auf eine freie Stelle drücken = neuer Block, Profil-Regler ändern den
-Wert im Profil (z. B. Komfort 22 → 21,5 °C). Im Block-Editor wählt man
-„Gilt für: Werktag (Mo–Fr)“ oder „nur Mittwoch“ – damit lassen sich einzelne
-Tage abweichend planen. Vorrang, Aktivierung und Feiertage liegen gesammelt
+`type: custom:zeitwerk-card` mit `plan: <id>`. Tag im Wochenplan antippen
+= Tages-Editor (Blöcke hinzufügen/löschen/ziehen, beim Speichern weitere Tage
+wählen, die diesen Tagesplan übernehmen), Profil-Regler ändern den
+Wert im Profil (z. B. Komfort 22 → 21,5 °C). Vorrang, Aktivierung und Feiertage liegen gesammelt
 unter „Plan-Einstellungen“. Neue Pläne legt man in der
 Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
 Start mit Werktag/Wochenende oder jeden Tag gleich). Fehlende Entitäten in
 einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Regeln“: Vorrang-Regeln
 (ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
 Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
-aus / wie Wochentag / eigener Tag, nächste Feiertage). Blockränder lassen
-sich ziehen, Tage kopieren. Zeitleiste aller Pläne: `view: timeline`
+aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste aller Pläne: `view: timeline`
 (optional `tags: [heizung]`).
 
 Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis

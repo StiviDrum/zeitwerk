@@ -118,6 +118,14 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Overrides / Activation / Holidays grouped as „Plan-Einstellungen“ (one entry with summary → menu → separate pages).
   - Verified in real HA on a touch-emulated phone: only-Wednesday save, handle drag 22:00 → 23:00, X closes a new block, all three settings pages and back.
 
+## 0.6.0 – Day editor (Steven's redesign)
+
+- [x] Main grid read-only, no tabs; tap a day → day editor (in-card page) with all blocks on a 24 h bar: add (tap empty / „+ Block“), select, delete, drag handles/blocks (stop at neighbours, 0:00/24:00), profile + steppers for the selected block.
+- [x] Save → choose further days (Mo–So, Ft; quick Mo–Fr / Sa–So / Alle); their blocks are replaced. Discard confirmation for unsaved changes.
+- [x] No blocks across midnight in the card (bundle 146.4 KB / 36.8 KB gzip); `weekToDays` splits existing ones (today's blocks win, as in the engine), `daysToWeek` regroups identical weekdays into day types (existing ids/names kept when the weekday set is unchanged, new ones named „Mo–Fr“, „Mi“).
+- [x] Removed tabs, single-block editor, also-for, copy day. SPEC §5 and DESIGN updated.
+  - Tests: frontend 72 (day-plan: split/regroup/apply, gaps, add, drag). Verified in real HA on a touch-emulated phone: drag 22→23, add 06:00 block, apply to Wed+Thu (others unchanged, regrouped), delete + X asks to discard and leaves the plan unchanged.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
