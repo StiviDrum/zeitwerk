@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-04
+
+### Added
+- Edit a single weekday: „Gilt für: <Tagestyp> / nur <Tag>“ in the block
+  editor detaches that weekday into its own day type.
+- Drag the handles or the whole block in the editor's preview bar.
+
+### Changed
+- Block editor is an in-card page instead of a modal dialog (users could get
+  stuck in the dialog, e.g. inside HA's own dialogs/pop-ups).
+- Overrides, activation and holidays are grouped under one „Plan-Einstellungen“
+  entry with a summary; each opens its own page.
+- Deleting a block asks for confirmation (second tap).
+
 ## [0.5.1] - 2026-11-04
 
 ### Fixed

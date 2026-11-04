@@ -84,8 +84,10 @@ What the week view does:
 - **Day-type tabs** and a **week grid** with a now-line. Blocks across midnight
   are drawn on both days. Holidays appear as a tab (`own_day_type`: own row;
   `like_day`: highlights that weekday).
-- **Tap a block** → editor sheet (profile, start/end in `time_step` steps,
-  preview, delete, save). **Long-press an empty spot** → new block there.
+- **Tap a block** → block editor inside the card (profile, start/end in
+  `time_step` steps or by dragging the handles/the block in the preview bar,
+  delete, save). **„Gilt für: Werktag (Mo–Fr) / nur Mittwoch“** edits a single
+  weekday: it is detached into its own day type (shown as its own tab). **Long-press an empty spot** → new block there.
   A new or moved block trims or splits the blocks it overlaps; a block of the
   default profile just clears that range. Editing the plan needs an admin user.
 - **Drag block edges** (mouse or touch, snapped to `time_step`, live time
@@ -96,7 +98,9 @@ What the week view does:
   types; **„<day type> kopieren auf …“** below the grid replaces the blocks of
   the chosen day types.
 
-- **Rules** (below the grid → *Overrides* / *Activation*): overrides in
+- **Plan settings** (one entry below the grid with a summary) → *Overrides*,
+  *Activation*, *Holidays*, each on its own page.
+- **Overrides / Activation**: overrides in
   priority order with a live *active* badge – drag the handle (or focus it and
   press ↑/↓) to reorder, tap to edit name, profile, all/any and conditions
   (Home Assistant's own condition editor; JSON fallback if it cannot be
@@ -257,7 +261,10 @@ automatisch.
 Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
 `type: custom:zeitwerk-card` mit `plan: <id>`. Block antippen = bearbeiten,
 lange auf eine freie Stelle drücken = neuer Block, Profil-Regler ändern den
-Wert im Profil (z. B. Komfort 22 → 21,5 °C). Neue Pläne legt man in der
+Wert im Profil (z. B. Komfort 22 → 21,5 °C). Im Block-Editor wählt man
+„Gilt für: Werktag (Mo–Fr)“ oder „nur Mittwoch“ – damit lassen sich einzelne
+Tage abweichend planen. Vorrang, Aktivierung und Feiertage liegen gesammelt
+unter „Plan-Einstellungen“. Neue Pläne legt man in der
 Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
 Start mit Werktag/Wochenende oder jeden Tag gleich). Fehlende Entitäten in
 einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Regeln“: Vorrang-Regeln

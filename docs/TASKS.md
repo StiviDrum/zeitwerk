@@ -110,6 +110,14 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Card not found in the picker (endless spinner): HA imports `extra_modules` in parallel with `app.js`, which installs a scoped custom element registry polyfill and swaps `window.customElements`. Elements defined before the swap are invisible to HA ("Custom element not found"). Fix: `register.ts` defines all elements after `customElements.whenDefined("home-assistant")` (immediately outside HA). Unit-tested with a swapping fake registry.
   - Verified in the dev instance with a real login (headless Chromium, service workers blocked – a fresh profile otherwise reloads once while the SW installs): picker preview renders, week + timeline cards in a real dashboard, HA's condition editor in the override editor, HA entity + icon picker in the wizard. `Cannot read properties of undefined (reading 'addEventListener')` also appears on HA's history page → HA's own, not Zeitwerk.
 
+## 0.5.2 – Feedback from Steven's first use
+
+- [x] Edit single weekdays: block editor offers „Gilt für: Werktag (Mo–Fr) / nur Mittwoch“; `detachDay` moves the weekday into its own day type (reused if it already exists), tested.
+- [x] Drag in the block editor: handles and the whole block in the preview bar (pointer capture, snapped).
+- [x] „Cannot leave the window“: not reproducible here (desktop + touch emulation in real HA close fine). Removed the cause class anyway: the editor is an in-card page, no modal `<dialog>` any more (no focus/inert fights with HA dialogs or pop-ups).
+- [x] Overrides / Activation / Holidays grouped as „Plan-Einstellungen“ (one entry with summary → menu → separate pages).
+  - Verified in real HA on a touch-emulated phone: only-Wednesday save, handle drag 22:00 → 23:00, X closes a new block, all three settings pages and back.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
