@@ -183,6 +183,10 @@ const hass = {
     log("callWS", msg);
     window.mockCalls.push(msg);
     if (msg.type === "zeitwerk/plans/list") return { plans: [{ ...plan, status: status() }] };
+    if (msg.type === "zeitwerk/plans/create") {
+      const id = msg.plan.id || msg.plan.name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      return { ...msg.plan, id };
+    }
     if (msg.type === "zeitwerk/preview") {
       const dt = plan.week.day_types.find((d) => d.days.includes(["mon", "tue", "wed", "thu", "fri", "sat", "sun"][today]));
       const day = new Date();

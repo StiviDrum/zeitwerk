@@ -2,6 +2,8 @@ import { LitElement, css, html, nothing, type PropertyValues, type TemplateResul
 import { customElement, property, state } from "lit/decorators.js";
 import "./block-editor";
 import "./rules-page";
+import "./plan-wizard";
+import "./card-editor";
 import type { PlanMutator } from "./rules-page";
 import { conditionsSummary, pauseReason, type Condition } from "./conditions";
 import type { BlockEditTarget, BlockSaveDetail } from "./block-editor";
@@ -94,7 +96,7 @@ export class ZeitwerkCard extends LitElement {
   @state() private _notice?: string;
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
-  @state() private _page: "week" | "rules" = "week";
+  @state() private _page: "week" | "rules" | "wizard" = "week";
   /** Block being dragged / moved by keyboard, not yet saved. */
   @state() private _preview?: {
     dayTypeId: string;
@@ -147,6 +149,10 @@ export class ZeitwerkCard extends LitElement {
 
   public getGridOptions() {
     return { columns: 12, min_columns: 6, rows: "auto" };
+  }
+
+  public static getConfigElement(): HTMLElement {
+    return document.createElement("zeitwerk-card-editor");
   }
 
   public static async getStubConfig(hass?: HomeAssistant): Promise<Partial<ZeitwerkCardConfig>> {
@@ -727,6 +733,20 @@ export class ZeitwerkCard extends LitElement {
   protected render() {
     if (!this._config) return nothing;
     const l = this._l;
+    if (this._page === "wizard" && this.hass) {
+      const missing =
+        this._config.view !== "timeline" && this._plan === null ? this._config.plan : undefined;
+      return html`<ha-card>
+        <zeitwerk-plan-wizard
+          ?dark=${!!this.hass.themes?.darkMode}
+          .hass=${this.hass}
+          .localize=${l}
+          .presetId=${missing}
+          @zw-cancel=${() => (this._page = "week")}
+          @zw-created=${this._onCreated}
+        ></zeitwerk-plan-wizard>
+      </ha-card>`;
+    }
     if (this._config.view === "timeline") {
       if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
       if (!this.hass || this._plans === undefined) return this._message(l.t("loading"));
@@ -735,11 +755,11 @@ export class ZeitwerkCard extends LitElement {
     if (this._config.view && this._config.view !== "week") {
       return this._message(l.t("view_unsupported", { view: this._config.view }));
     }
-    if (!this._config.plan) return this._message(l.t("no_plan"));
+    if (!this._config.plan) return this._message(l.t("no_plan"), false, true);
     if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
     if (!this.hass || this._plan === undefined) return this._message(l.t("loading"));
     if (this._plan === null)
-      return this._message(l.t("plan_missing", { plan: this._config.plan }), true);
+      return this._message(l.t("plan_missing", { plan: this._config.plan }), true, true);
     return this._renderWeek(this._plan);
   }
 
@@ -789,7 +809,7 @@ export class ZeitwerkCard extends LitElement {
               </div>`
           : nothing
       }
-      ${body}
+      ${body} ${this._newPlanButton()}
     </ha-card>`;
   }
 
@@ -883,11 +903,29 @@ export class ZeitwerkCard extends LitElement {
     </div>`;
   }
 
-  private _message(text: string, isError = false) {
+  private _onCreated = (ev: CustomEvent<{ id: string; name: string }>): void => {
+    this._page = "week";
+    const { id, name } = ev.detail;
+    if (this._config?.view !== "timeline") {
+      if (this._config?.plan === id) this._resubscribe();
+      else this._notify(this._l.t("created", { name, id }));
+    }
+  };
+
+  private _newPlanButton() {
+    if (!this.hass?.user?.is_admin) return nothing;
+    return html`<button class="textbtn" @click=${() => (this._page = "wizard")}>
+      ${this._l.t("new_plan")}
+    </button>`;
+  }
+
+  private _message(text: string, isError = false, offerWizard = false) {
     return html`<ha-card>
       <div class="message ${isError ? "error" : ""}" role=${isError ? "alert" : nothing}>
         <span class="brand">Zeitwerk</span>
         <span>${text}</span>
+        ${this._notice ? html`<span class="notice">${this._notice}</span>` : nothing}
+        ${offerWizard ? this._newPlanButton() : nothing}
       </div>
     </ha-card>`;
   }
@@ -1445,7 +1483,7 @@ export class ZeitwerkCard extends LitElement {
       @click=${() => this._onBlockClick(seg)}
       @keydown=${(ev: KeyboardEvent) => this._onBlockKey(seg, ev)}
     >
-      <span>${seg.width >= 8 ? seg.label : ""}</span>
+      <span class="blabel">${seg.width >= seg.label.length * 2.1 ? seg.label : ""}</span>
       ${
         startEdge
           ? html`<span
@@ -1647,7 +1685,8 @@ export class ZeitwerkCard extends LitElement {
       }
       .chip.ok {
         background: color-mix(in srgb, var(--zw-ok) 14%, transparent);
-        color: var(--zw-ok);
+        /* darker in light themes for contrast */
+        color: color-mix(in srgb, var(--zw-ok) 70%, var(--zw-text));
       }
       .chip.bad {
         background: color-mix(in srgb, var(--zw-danger) 14%, transparent);
@@ -1847,6 +1886,11 @@ export class ZeitwerkCard extends LitElement {
       }
       .block span {
         pointer-events: none;
+      }
+      .blabel {
+        max-width: 100%;
+        overflow: hidden;
+        white-space: nowrap;
       }
       .now-line {
         position: absolute;
