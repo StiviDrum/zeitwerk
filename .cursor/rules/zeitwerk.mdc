@@ -1,0 +1,12 @@
+---
+description: Zeitwerk project instructions (always apply)
+alwaysApply: true
+---
+
+Follow `AGENTS.md` in the project root for every task. Source of truth: `docs/SPEC.md`, `docs/DESIGN.md`, `docs/TASKS.md`.
+
+- First message of a new project session: if no git remote is configured yet, ask Steven (in German) for the GitHub repo URL before writing any file.
+- Talk to Steven in German, keep it short. Code, comments, commits, README in English.
+- Keep `docs/TASKS.md` up to date; commit + push after every finished task; keep CI green.
+- Verify current Home Assistant APIs in the official developer docs instead of relying on memory.
+- Never touch Steven's production Home Assistant; test in the local dev instance only.

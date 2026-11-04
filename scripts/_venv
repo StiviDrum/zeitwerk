@@ -1,0 +1,10 @@
+# shellcheck shell=bash
+# Sourced by the other scripts: activates .venv (Linux/macOS and Windows Git Bash).
+cd "$(dirname "$0")/.." || exit 1
+if [ -f .venv/Scripts/activate ]; then
+  # shellcheck disable=SC1091
+  source .venv/Scripts/activate
+elif [ -f .venv/bin/activate ]; then
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+fi

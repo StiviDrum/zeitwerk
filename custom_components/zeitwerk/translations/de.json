@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zeitwerk",
+        "description": "Zeitwerk einrichten – Wochenpläne mit Profilen und Vorrang-Regeln."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Zeitwerk ist bereits eingerichtet."
+    }
+  }
+}

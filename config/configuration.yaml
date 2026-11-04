@@ -1,0 +1,61 @@
+# Local dev instance – test bed for the heating reference case (SPEC §9).
+# Helpers only, no real devices.
+default_config:
+
+homeassistant:
+  name: Zeitwerk Dev
+  time_zone: Europe/Berlin
+  country: DE
+  unit_system: metric
+  latitude: 50.11
+  longitude: 8.68
+
+logger:
+  default: info
+  logs:
+    custom_components.zeitwerk: debug
+
+# Set-points read by the (simulated) thermostat logic
+input_number:
+  temperaturspeicher_wohnzimmer: &temp
+    name: Temperaturspeicher Wohnzimmer
+    min: 5
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: slider
+    icon: mdi:thermometer
+  temperaturspeicher_schlafzimmer:
+    <<: *temp
+    name: Temperaturspeicher Schlafzimmer
+  temperaturspeicher_bad:
+    <<: *temp
+    name: Temperaturspeicher Bad
+  temperaturspeicher_kueche:
+    <<: *temp
+    name: Temperaturspeicher Küche
+  temperaturspeicher_buero:
+    <<: *temp
+    name: Temperaturspeicher Büro
+
+input_boolean:
+  urlaub:
+    name: Urlaub
+    icon: mdi:airplane
+  heizperiode:
+    name: Heizperiode
+    icon: mdi:radiator
+    initial: true
+  # Stand-ins for two persons (geofencing)
+  person_1_home:
+    name: Person 1 zu Hause
+    icon: mdi:account
+    initial: true
+  person_2_home:
+    name: Person 2 zu Hause
+    icon: mdi:account-outline
+    initial: true
+
+# Holiday source for Hesse: add via UI once
+#   Settings → Devices & services → Add integration → "Holiday" (Germany, Hesse)
+#   and/or "Workday" (Germany, province HE).

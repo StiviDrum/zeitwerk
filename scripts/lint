@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Format + lint Python and TypeScript.
+set -e
+source "$(dirname "$0")/_venv"
+ruff format .
+ruff check . --fix
+(cd frontend && npm run format && npm run lint)

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Create .venv (Python >= 3.14.2), install Python + Node dependencies.
+set -e
+cd "$(dirname "$0")/.."
+
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  if command -v py >/dev/null 2>&1; then PY="py -3.14"; else PY="python3.14"; fi
+fi
+
+if [ ! -d .venv ]; then
+  $PY -m venv .venv
+fi
+source scripts/_venv
+python -m pip install --upgrade pip
+python -m pip install -r requirements_test.txt
+
+(cd frontend && npm ci)
+echo "Setup done."

@@ -1,0 +1,212 @@
+# =====================================================================
+# Claude Glass – monochromer Glas-Look in Schwarz, Grau und Weiß
+# Ablage: /config/themes/claude_glass.yaml
+#
+# Aufbau nach dem Muster von "Liquid Glass Lite" (studio-prisma):
+#  - alle Farben auf oberster Ebene (gelten immer, auch bei hellem Gerät)
+#  - "modes: dark: {}" schaltet HA in den Dunkel-Modus und lädt die
+#    dunkle Palette für Dialoge, Formulare, Tooltips usw.
+#  - kein backdrop-filter (keine GPU-Unschärfe) -> flüssige Pop-ups
+# =====================================================================
+
+claude_glass:
+  # --- Grundflächen ---------------------------------------------------------
+  primary-background-color: "#0b0b0d"
+  secondary-background-color: "#131316"
+  card-background-color: "rgba(28, 28, 32, 0.80)"
+  ha-card-background: "rgba(255, 255, 255, 0.06)"
+  popup-background-color: "#121215"
+  lovelace-background: >-
+    radial-gradient(1200px 700px at 8% -10%, rgba(255,255,255,0.10), transparent 60%),
+    radial-gradient(900px 600px at 110% 15%, rgba(255,255,255,0.06), transparent 60%),
+    radial-gradient(800px 500px at 50% 120%, rgba(255,255,255,0.04), transparent 60%),
+    #08080a
+  color-scheme: "dark"
+
+  # --- Dialoge, Menüs, Hinweise ---------------------------------------------
+  mdc-theme-surface: "#121215"
+  mdc-dialog-content-background: "#121215"
+  mdc-dialog-scrim-color: "rgba(0, 0, 0, 0.70)"
+  ha-dialog-surface-background: "#121215"
+  mdc-menu-surface-fill-color: "#121215"
+  mdc-snackbar-fill-color: "#18181c"
+  mdc-snackbar-action-color: "#ffffff"
+  ha-toast-background-color: "#18181c"
+  ha-toast-text-color: "#f5f5f7"
+  paper-listbox-background-color: "#121215"
+  paper-listbox-color: "#f5f5f7"
+
+  # --- Kopfzeile & Seitenleiste ----------------------------------------------
+  app-header-background-color: "rgba(11, 11, 13, 0.85)"
+  app-header-text-color: "#f5f5f7"
+  app-header-selection-bar-color: "#ffffff"
+  sidebar-background-color: "#0b0b0d"
+  sidebar-text-color: "rgba(245, 245, 247, 0.80)"
+  sidebar-icon-color: "rgba(245, 245, 247, 0.55)"
+  sidebar-selected-text-color: "#ffffff"
+  sidebar-selected-icon-color: "#ffffff"
+  sidebar-selected-background-color: "rgba(255, 255, 255, 0.10)"
+  sidebar-menu-button-text-color: "#f5f5f7"
+
+  # --- Text & Akzente (monochrom) --------------------------------------------
+  primary-text-color: "#f5f5f7"
+  secondary-text-color: "rgba(245, 245, 247, 0.62)"
+  disabled-text-color: "rgba(245, 245, 247, 0.35)"
+  primary-color: "#e6e6e9"
+  light-primary-color: "#ffffff"
+  dark-primary-color: "#3a3a40"
+  accent-color: "#ffffff"
+  # Schrift auf hellen Primärflächen (Knöpfe, Abzeichen, Update-Hinweise)
+  text-primary-color: "#0b0b0d"
+  text-accent-color: "#0b0b0d"
+  divider-color: "rgba(255, 255, 255, 0.08)"
+  outline-color: "rgba(255, 255, 255, 0.12)"
+
+  # --- Status-Farben (Signale bleiben farbig) ---------------------------------
+  state-icon-color: "rgba(245, 245, 247, 0.80)"
+  state-icon-active-color: "#ffffff"
+  state-active-color: "#ffffff"
+  paper-item-icon-color: "rgba(245, 245, 247, 0.75)"
+  paper-item-icon-active-color: "#ffffff"
+  state-light-active-color: "#ffd59a"
+  state-switch-active-color: "#ffffff"
+  state-binary_sensor-alerting-color: "#ff5a6e"
+  state-climate-heating-color: "#ff8b4a"
+  state-climate-cooling-color: "#9cc8ff"
+  state-person-active-color: "#ffffff"
+  state-lock-active-color: "#ffffff"
+  success-color: "#4ad295"
+  warning-color: "#ffb454"
+  error-color: "#ff5a6e"
+  info-color: "#d0d0d6"
+  switch-checked-color: "#ffffff"
+  switch-unchecked-color: "rgba(255, 255, 255, 0.25)"
+  paper-slider-active-color: "#ffffff"
+  mdc-theme-primary: "#e6e6e9"
+  mdc-theme-on-primary: "#0b0b0d"
+
+  # --- Karten -----------------------------------------------------------------
+  ha-card-border-radius: "22px"
+  ha-card-border-width: "1px"
+  ha-card-border-color: "rgba(255, 255, 255, 0.12)"
+  ha-card-box-shadow: "0 8px 32px rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 255, 255, 0.04)"
+  code-editor-background-color: "#111114"
+  transition-duration: "200ms"
+  transition-timing-function: "cubic-bezier(0.4, 0, 0.2, 1)"
+
+  # --- Bubble Card ---------------------------------------------------------------
+  bubble-main-background-color: "rgba(255, 255, 255, 0.06)"
+  bubble-secondary-background-color: "rgba(255, 255, 255, 0.08)"
+  bubble-pop-up-background-color: "#121215"
+  bubble-backdrop-background-color: "rgba(0, 0, 0, 0.55)"
+  bubble-accent-color: "rgba(255, 255, 255, 0.22)"
+  bubble-icon-background-color: "rgba(255, 255, 255, 0.08)"
+  bubble-sub-button-background-color: "rgba(255, 255, 255, 0.08)"
+  bubble-border-radius: "22px"
+  bubble-button-border-radius: "20px"
+  bubble-pop-up-border-radius: "26px"
+  bubble-border: "1px solid rgba(255, 255, 255, 0.12)"
+  bubble-box-shadow: "0 0 16px rgba(255, 255, 255, 0.05)"
+
+  # --- Formulare: ältere Komponenten (mdc / paper / input) --------------------
+  mdc-text-field-fill-color: "rgba(255, 255, 255, 0.05)"
+  mdc-text-field-disabled-fill-color: "rgba(255, 255, 255, 0.02)"
+  mdc-text-field-ink-color: "#f5f5f7"
+  mdc-text-field-label-ink-color: "rgba(245, 245, 247, 0.65)"
+  mdc-text-field-idle-line-color: "rgba(255, 255, 255, 0.3)"
+  mdc-text-field-hover-line-color: "rgba(255, 255, 255, 0.5)"
+  mdc-text-field-disabled-ink-color: "rgba(245, 245, 247, 0.35)"
+  mdc-text-field-outlined-idle-border-color: "rgba(255, 255, 255, 0.2)"
+  mdc-text-field-outlined-hover-border-color: "rgba(255, 255, 255, 0.4)"
+  mdc-text-field-outlined-disabled-border-color: "rgba(255, 255, 255, 0.1)"
+  mdc-select-fill-color: "rgba(255, 255, 255, 0.05)"
+  mdc-select-ink-color: "#f5f5f7"
+  mdc-select-label-ink-color: "rgba(245, 245, 247, 0.65)"
+  mdc-select-idle-line-color: "rgba(255, 255, 255, 0.3)"
+  mdc-select-disabled-ink-color: "rgba(245, 245, 247, 0.35)"
+  mdc-list-item-text-color: "#f5f5f7"
+  mdc-list-item-graphic-color: "rgba(245, 245, 247, 0.7)"
+  mwc-list-item-text-color: "#f5f5f7"
+  mdc-theme-text-primary-on-background: "#f5f5f7"
+  mdc-theme-text-secondary-on-background: "rgba(245, 245, 247, 0.65)"
+  mdc-theme-text-hint-on-background: "rgba(245, 245, 247, 0.5)"
+  mdc-theme-text-disabled-on-background: "rgba(245, 245, 247, 0.35)"
+  mdc-list-item-hover-state-layer-color: "rgba(255, 255, 255, 0.08)"
+  mdc-list-item-hover-state-layer-opacity: "1"
+  mdc-list-item-focus-state-layer-color: "rgba(255, 255, 255, 0.12)"
+  mdc-button-disabled-fill-color: "rgba(255, 255, 255, 0.05)"
+  mdc-button-disabled-ink-color: "rgba(245, 245, 247, 0.35)"
+  mdc-button-outline-color: "rgba(255, 255, 255, 0.2)"
+  paper-input-container-color: "rgba(245, 245, 247, 0.65)"
+  paper-input-container-input-color: "#f5f5f7"
+  paper-input-container-focus-color: "#ffffff"
+  input-fill-color: "rgba(255, 255, 255, 0.05)"
+  input-ink-color: "#f5f5f7"
+  input-label-ink-color: "rgba(245, 245, 247, 0.65)"
+  input-idle-line-color: "rgba(255, 255, 255, 0.3)"
+  input-hover-line-color: "rgba(255, 255, 255, 0.5)"
+  input-outlined-idle-border-color: "rgba(255, 255, 255, 0.2)"
+  input-outlined-hover-border-color: "rgba(255, 255, 255, 0.4)"
+  input-disabled-fill-color: "rgba(255, 255, 255, 0.02)"
+  input-disabled-ink-color: "rgba(245, 245, 247, 0.35)"
+  input-disabled-line-color: "rgba(255, 255, 255, 0.15)"
+
+  # --- Formulare: neuere Komponenten (WebAwesome, HA 2025+) --------------------
+  wa-color-surface-default: "#121215"
+  wa-color-surface-raised: "#18181c"
+  wa-color-surface-lowered: "#0b0b0d"
+  wa-color-text-normal: "#f5f5f7"
+  wa-color-text-quiet: "rgba(245, 245, 247, 0.65)"
+  wa-color-neutral-fill-quiet: "rgba(255, 255, 255, 0.05)"
+  wa-color-neutral-fill-normal: "rgba(255, 255, 255, 0.08)"
+  wa-color-neutral-border-normal: "rgba(255, 255, 255, 0.2)"
+  wa-color-brand-fill-normal: "#e6e6e9"
+  wa-color-brand-fill-loud: "#ffffff"
+  wa-color-brand-on-loud: "#0b0b0d"
+  wa-color-brand-text-normal: "#ffffff"
+  ha-color-form-background: "rgba(255, 255, 255, 0.05)"
+  ha-color-form-background-hover: "rgba(255, 255, 255, 0.08)"
+  ha-color-form-background-disabled: "rgba(255, 255, 255, 0.02)"
+  ha-color-border-neutral-quiet: "rgba(255, 255, 255, 0.1)"
+  ha-color-border-neutral-normal: "rgba(255, 255, 255, 0.2)"
+  ha-color-border-neutral-loud: "rgba(255, 255, 255, 0.3)"
+  ha-color-border-danger-normal: "var(--error-color)"
+  ha-color-text-primary: "var(--primary-text-color)"
+  ha-color-text-secondary: "var(--secondary-text-color)"
+  ha-color-neutral-60: "rgba(245, 245, 247, 0.5)"
+  # Gefüllte Primär-Knöpfe: dunkelgrau mit weißer Schrift
+  ha-color-fill-primary-loud-resting: "var(--dark-primary-color)"
+  ha-color-fill-primary-loud-hover: "#4a4a52"
+  ha-color-fill-primary-loud-active: "var(--dark-primary-color)"
+  ha-color-fill-primary-normal-resting: "var(--dark-primary-color)"
+  ha-color-fill-primary-normal-hover: "#4a4a52"
+  ha-color-fill-primary-normal-active: "var(--dark-primary-color)"
+  ha-color-on-primary-quiet: "var(--primary-text-color)"
+  ha-color-on-primary-normal: "#ffffff"
+  ha-color-on-primary-loud: "#ffffff"
+
+  # --- Material Web 3 (Auswahllisten, Dialoge, Listen) -------------------------
+  md-sys-color-surface: "var(--popup-background-color)"
+  md-sys-color-surface-container: "var(--popup-background-color)"
+  md-sys-color-surface-container-low: "var(--primary-background-color)"
+  md-sys-color-surface-container-high: "var(--secondary-background-color)"
+  md-sys-color-surface-container-highest: "#1c1c20"
+  md-sys-color-surface-variant: "#1c1c20"
+  md-sys-color-on-surface: "var(--primary-text-color)"
+  md-sys-color-on-surface-variant: "var(--secondary-text-color)"
+  md-sys-color-primary: "var(--primary-color)"
+  md-sys-color-on-primary: "var(--text-primary-color)"
+  md-sys-color-secondary-container: "var(--sidebar-selected-background-color)"
+  md-sys-color-on-secondary-container: "#ffffff"
+  md-sys-color-outline: "var(--outline-color)"
+  md-sys-color-outline-variant: "var(--divider-color)"
+  md-sys-color-background: "var(--primary-background-color)"
+  md-sys-color-on-background: "var(--primary-text-color)"
+  md-list-item-label-text-color: "var(--primary-text-color)"
+  md-list-item-supporting-text-color: "var(--secondary-text-color)"
+  md-list-item-leading-icon-color: "var(--state-icon-color)"
+  md-list-item-container-color: "transparent"
+
+  # Dunkel-Modus erzwingen (lädt HAs dunkle Palette für alle übrigen Bereiche)
+  modes:
+    dark: {}

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Zeitwerk",
+        "description": "Set up Zeitwerk – weekly schedules with profiles and overrides."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Zeitwerk is already set up."
+    }
+  }
+}

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Node / build output (built in CI / release)
+node_modules/
+custom_components/zeitwerk/frontend/*.js
+custom_components/zeitwerk/frontend/*.js.map
+
+# Local HA dev instance – keep only the configuration
+config/*
+!config/configuration.yaml
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

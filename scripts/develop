@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Start a local Home Assistant with ./config and the integration from this repo.
+set -e
+source "$(dirname "$0")/_venv"
+
+python -m pip install -q -r requirements.txt
+mkdir -p config
+# Make custom_components/zeitwerk importable without symlinks (works on Windows).
+export PYTHONPATH="${PWD}${PYTHONPATH:+:${PYTHONPATH}}"
+if [ ! -e config/custom_components ]; then
+  mkdir -p config/custom_components
+fi
+rm -rf config/custom_components/zeitwerk
+cp -r custom_components/zeitwerk config/custom_components/zeitwerk
+
+hass --config "${PWD}/config" --debug

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Run backend (pytest) and frontend (vitest) tests.
+set -e
+source "$(dirname "$0")/_venv"
+python -m pytest "$@"
+(cd frontend && npm test)

@@ -1,0 +1,4 @@
+# Runtime for the local dev instance (scripts/develop)
+colorlog
+homeassistant==2026.10.4
+ruff

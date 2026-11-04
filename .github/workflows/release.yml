@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build card
+        working-directory: frontend
+        run: npm ci && npm run build
+      - name: Check versions match tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          test "$(jq -r .version custom_components/zeitwerk/manifest.json)" = "$tag"
+          test "$(jq -r .version frontend/package.json)" = "$tag"
+      - name: Zip integration
+        run: |
+          cd custom_components/zeitwerk
+          rm -f frontend/.gitkeep
+          zip -r "$GITHUB_WORKSPACE/zeitwerk.zip" . -x "__pycache__/*" "*/__pycache__/*"
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: zeitwerk.zip
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+          generate_release_notes: true
