@@ -34,8 +34,10 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - `last_applied` is persisted → with `reapply_on_start: false` a restart only applies if the profile changed meanwhile.
 - [x] Entities per plan: `switch`, `sensor …_profile` (attributes per SPEC), `sensor …_next_change` (timestamp), `binary_sensor …_active`; one device per plan
   - Extra profile attributes: `forced_until`, `error`. next_change is empty while an override is active or nothing changes within 8 days.
-- [ ] Services: `apply`, `set_profile_value`, `skip_next`, `force_profile` (+ plan CRUD services or websocket-only – decide, document in README)
-- [ ] WebSocket API: `plans/list|get|create|update|delete|subscribe`, `preview`; admin checks; validation
+- [x] Services: `apply`, `set_profile_value`, `skip_next`, `force_profile` (+ plan CRUD services or websocket-only – decide, document in README)
+  - Decision: plan CRUD is websocket-only; services are for automations. Added `clear_force` to undo force/skip.
+- [x] WebSocket API: `plans/list|get|create|update|delete|subscribe`, `preview`; admin checks; validation
+  - subscribe sends `init` with all plans, then `added`/`updated`/`removed` events (plan incl. `status`).
 - [ ] Tests: everything in AGENTS.md §5 that applies to the engine, incl. DST days and restart
 - [ ] Dev instance: heating reference case created via websocket/service script (`scripts/seed_reference_plans.py`) and observed working
 - [ ] Release v0.1.0

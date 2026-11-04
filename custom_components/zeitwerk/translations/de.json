@@ -24,5 +24,89 @@
         "name": "Nächster Wechsel"
       }
     }
+  },
+  "services": {
+    "apply": {
+      "name": "Aktuelles Profil anwenden",
+      "description": "Führt die Aktionen des aktuellen Profils sofort aus.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung."
+        }
+      }
+    },
+    "set_profile_value": {
+      "name": "Profilwert setzen",
+      "description": "Ändert den Wert einer Profil-Aktion (z. B. Komfort auf 21 °C).",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung."
+        },
+        "profile": {
+          "name": "Profil",
+          "description": "Profil-ID, z. B. comfort."
+        },
+        "value": {
+          "name": "Wert",
+          "description": "Neuer Wert."
+        },
+        "entity_id": {
+          "name": "Entität",
+          "description": "Ziel-Entität, falls das Profil mehrere Aktionen hat."
+        },
+        "key": {
+          "name": "Schlüssel",
+          "description": "Zu ändernder Datenschlüssel (Standard: value, temperature, option, …)."
+        }
+      }
+    },
+    "skip_next": {
+      "name": "Nächsten Wechsel überspringen",
+      "description": "Behält das aktuelle Profil bis zum übernächsten Wechsel.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung."
+        }
+      }
+    },
+    "force_profile": {
+      "name": "Profil erzwingen",
+      "description": "Erzwingt ein Profil für eine Dauer (Standard: bis zum nächsten Wechsel).",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung."
+        },
+        "profile": {
+          "name": "Profil",
+          "description": "Profil-ID, z. B. comfort."
+        },
+        "duration": {
+          "name": "Dauer",
+          "description": "Wie lange das Profil erzwungen wird."
+        }
+      }
+    },
+    "clear_force": {
+      "name": "Erzwungenes Profil aufheben",
+      "description": "Beendet ein erzwungenes oder übersprungenes Profil, der Plan läuft normal weiter.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, z. B. wohnzimmer_heizung."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Zeitwerk ist nicht eingerichtet."
+    },
+    "unknown_plan": {
+      "message": "Unbekannter Plan „{plan}“."
+    }
   }
 }

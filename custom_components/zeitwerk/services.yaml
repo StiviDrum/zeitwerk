@@ -1,0 +1,68 @@
+apply:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+
+set_profile_value:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    profile:
+      required: true
+      example: comfort
+      selector:
+        text:
+    value:
+      required: true
+      example: 21
+      selector:
+        text:
+    entity_id:
+      required: false
+      selector:
+        entity:
+    key:
+      required: false
+      example: value
+      selector:
+        text:
+
+skip_next:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+
+force_profile:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    profile:
+      required: true
+      example: comfort
+      selector:
+        text:
+    duration:
+      required: false
+      example: "02:00:00"
+      selector:
+        duration:
+
+clear_force:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:

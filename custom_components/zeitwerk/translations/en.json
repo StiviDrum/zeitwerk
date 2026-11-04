@@ -24,5 +24,89 @@
         "name": "Next change"
       }
     }
+  },
+  "services": {
+    "apply": {
+      "name": "Apply current profile",
+      "description": "Runs the actions of the plan's current profile now.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung."
+        }
+      }
+    },
+    "set_profile_value": {
+      "name": "Set profile value",
+      "description": "Changes the value of a profile's action (e.g. Comfort to 21 °C).",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung."
+        },
+        "profile": {
+          "name": "Profile",
+          "description": "Profile id, e.g. comfort."
+        },
+        "value": {
+          "name": "Value",
+          "description": "New value."
+        },
+        "entity_id": {
+          "name": "Entity",
+          "description": "Target entity, if the profile has several actions."
+        },
+        "key": {
+          "name": "Key",
+          "description": "Data key to change (default: value, temperature, option, …)."
+        }
+      }
+    },
+    "skip_next": {
+      "name": "Skip next change",
+      "description": "Keeps the current profile until the change after next.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung."
+        }
+      }
+    },
+    "force_profile": {
+      "name": "Force profile",
+      "description": "Forces a profile for a duration (default: until the next change).",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung."
+        },
+        "profile": {
+          "name": "Profile",
+          "description": "Profile id, e.g. comfort."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "How long the profile is forced."
+        }
+      }
+    },
+    "clear_force": {
+      "name": "Clear forced profile",
+      "description": "Ends a forced or skipped profile and returns to the schedule.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id, e.g. wohnzimmer_heizung."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Zeitwerk is not set up."
+    },
+    "unknown_plan": {
+      "message": "Unknown plan '{plan}'."
+    }
   }
 }

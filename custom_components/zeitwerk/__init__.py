@@ -16,6 +16,8 @@ from homeassistant.loader import async_get_integration
 
 from .const import CARD_FILENAME, CARD_URL_BASE, DOMAIN
 from .manager import ZeitwerkManager
+from .services import async_setup_services
+from .websocket_api import async_register_websocket
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +29,9 @@ type ZeitwerkConfigEntry = ConfigEntry[ZeitwerkManager]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the bundled Lovelace card once per Home Assistant start."""
+    """Register card, services and websocket API once per Home Assistant start."""
+    async_setup_services(hass)
+    async_register_websocket(hass)
     await _async_register_card(hass)
     return True
 
