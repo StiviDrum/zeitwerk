@@ -23,7 +23,8 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 ## 0.1 – Backend core
 
-- [ ] `model.py`: Plan, Profile, DayType, Block, Override, Activation, Holidays, Options (dataclasses, to/from dict)
+- [x] `model.py`: Plan, Profile, DayType, Block, Override, Activation, Holidays, Options (dataclasses, to/from dict)
+  - `schema.py`: structural + semantic validation (refs, overlaps on the 24 h circle, one day type per weekday, gaps allowed → default profile). Actions/conditions stored as given, validated with `cv.SCRIPT_SCHEMA` / `cv.CONDITIONS_SCHEMA` + HA async validators. `compat.py`: probatio/voluptuous.
 - [ ] `store.py`: load/save, schema version 1, migration hook, debounced save
 - [ ] Config flow: single instance, no options yet
 - [ ] `engine.py`: day type resolution (incl. holidays both modes), active profile (activation → overrides → block → default), next change computation, blocks across midnight, one timer per plan, state listeners for condition entities, DST-safe via `dt_util`
