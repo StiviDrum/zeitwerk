@@ -7,7 +7,7 @@
  * make inert.
  */
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import { profileColor, tint } from "./colors";
 import {
   conditionSummary,
@@ -16,7 +16,6 @@ import {
   uniqueId,
   type Condition,
 } from "./conditions";
-import "./conditions-editor";
 import type { Localizer } from "./localize";
 import { tokens } from "./styles";
 import { WEEKDAYS, type HomeAssistant, type Override, type Plan, type Weekday } from "./types";
@@ -35,7 +34,6 @@ function errorText(err: unknown): string {
   return String(err);
 }
 
-@customElement("zeitwerk-rules")
 export class ZeitwerkRules extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public plan!: Plan;

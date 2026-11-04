@@ -1,9 +1,11 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
-import "./block-editor";
-import "./rules-page";
-import "./plan-wizard";
-import "./card-editor";
+import { property, state } from "lit/decorators.js";
+import { ZeitwerkBlockEditor } from "./block-editor";
+import { ZeitwerkRules } from "./rules-page";
+import { ZeitwerkPlanWizard } from "./plan-wizard";
+import { ZeitwerkCardEditor } from "./card-editor";
+import { ZeitwerkConditionsEditor } from "./conditions-editor";
+import { defineElements } from "./register";
 import type { PlanMutator } from "./rules-page";
 import { conditionsSummary, pauseReason, type Condition } from "./conditions";
 import type { BlockEditTarget, BlockSaveDetail } from "./block-editor";
@@ -83,7 +85,6 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
-@customElement("zeitwerk-card")
 export class ZeitwerkCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @state() private _config?: ZeitwerkCardConfig;
@@ -2264,6 +2265,15 @@ declare global {
     }>;
   }
 }
+
+defineElements([
+  ["zeitwerk-block-editor", ZeitwerkBlockEditor],
+  ["zeitwerk-conditions-editor", ZeitwerkConditionsEditor],
+  ["zeitwerk-rules", ZeitwerkRules],
+  ["zeitwerk-plan-wizard", ZeitwerkPlanWizard],
+  ["zeitwerk-card-editor", ZeitwerkCardEditor],
+  ["zeitwerk-card", ZeitwerkCard],
+]);
 
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "zeitwerk-card")) {

@@ -1,13 +1,12 @@
 /** Visual editor for the card configuration (getConfigElement). */
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import { ensureHaSelector } from "./conditions-editor";
 import { localizer } from "./localize";
 import type { HomeAssistant, Plan, ZeitwerkCardConfig } from "./types";
 
 type Schema = { name: keyof ZeitwerkCardConfig; selector: Record<string, unknown> }[];
 
-@customElement("zeitwerk-card-editor")
 export class ZeitwerkCardEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @state() private _config?: ZeitwerkCardConfig;

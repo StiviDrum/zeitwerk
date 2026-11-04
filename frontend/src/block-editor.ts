@@ -6,7 +6,7 @@
  * theme variables from the card.
  */
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
-import { customElement, property, query, state } from "lit/decorators.js";
+import { property, query, state } from "lit/decorators.js";
 import { profileColor, tint } from "./colors";
 import type { Localizer } from "./localize";
 import { tokens } from "./styles";
@@ -27,7 +27,6 @@ export interface BlockSaveDetail {
   also?: string[];
 }
 
-@customElement("zeitwerk-block-editor")
 export class ZeitwerkBlockEditor extends LitElement {
   @property({ attribute: false }) public plan!: Plan;
   @property({ attribute: false }) public target!: BlockEditTarget;

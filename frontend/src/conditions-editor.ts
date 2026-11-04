@@ -4,7 +4,7 @@
  * otherwise a JSON text area.
  */
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import type { Condition } from "./conditions";
 import type { Localizer } from "./localize";
 import { tokens } from "./styles";
@@ -41,7 +41,6 @@ export function ensureHaSelector(): Promise<boolean> {
   return loading;
 }
 
-@customElement("zeitwerk-conditions-editor")
 export class ZeitwerkConditionsEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public localize!: Localizer;

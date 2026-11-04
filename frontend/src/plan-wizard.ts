@@ -3,7 +3,7 @@
  * with values, initial day types. Creates the plan via zeitwerk/plans/create.
  */
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import { ensureHaSelector } from "./conditions-editor";
 import type { Localizer } from "./localize";
 import { stepDecimals } from "./quickview";
@@ -33,7 +33,6 @@ const TARGET_DOMAINS = [
   "input_boolean",
 ];
 
-@customElement("zeitwerk-plan-wizard")
 export class ZeitwerkPlanWizard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public localize!: Localizer;
