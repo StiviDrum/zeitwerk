@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>zeitwerk-card preview</title>
+    <!--
+      Standalone preview of the built card with a mocked `hass` (no Home Assistant needed).
+      Build first (npm run build or npm run watch), then from the repo root:
+        python3 -m http.server 8000
+      and open http://localhost:8000/frontend/dev/preview.html
+      Query parameters: ?theme=light  ?lang=en  ?admin=0  ?plan=missing
+    -->
+    <style>
+      :root {
+        --primary-background-color: #0b0b0d;
+        --card-background-color: #151518;
+        --primary-text-color: #f5f5f7;
+        --secondary-text-color: rgba(245, 245, 247, 0.62);
+        --divider-color: rgba(255, 255, 255, 0.1);
+        --primary-color: #03a9f4;
+        --text-primary-color: #fff;
+        --success-color: #4ad295;
+        --error-color: #ff5a6e;
+      }
+      :root.light {
+        --primary-background-color: #fafafa;
+        --card-background-color: #ffffff;
+        --primary-text-color: #212121;
+        --secondary-text-color: #727272;
+        --divider-color: rgba(0, 0, 0, 0.12);
+      }
+      body {
+        margin: 0;
+        background: var(--primary-background-color);
+        font-family: Roboto, system-ui, sans-serif;
+      }
+      main {
+        width: 390px;
+        box-sizing: border-box;
+        padding: 16px;
+      }
+      ha-card {
+        display: block;
+        border-radius: 12px;
+        border: 1px solid var(--divider-color);
+      }
+    </style>
+  </head>
+  <body>
+    <main><zeitwerk-card></zeitwerk-card></main>
+    <script type="module" src="./mock-hass.js"></script>
+  </body>
+</html>
