@@ -20,6 +20,7 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] `.gitignore`, `LICENSE` (MIT, Steven Glab), `README.md` skeleton (en + de), `CHANGELOG.md`
 - [x] First push, CI green
   - HACS validation only works on public repos → job skipped while the repo is private.
+  - 2026-11-04: repo public, description + topics set → HACS validation runs and is green.
 
 ## 0.1 – Backend core
 
