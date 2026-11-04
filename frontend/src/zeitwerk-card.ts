@@ -7,7 +7,11 @@ import { conditionsSummary, pauseReason, type Condition } from "./conditions";
 import type { BlockEditTarget, BlockSaveDetail } from "./block-editor";
 import {
   blockAt,
+  copyDayType,
   dayTypeFor,
+  dragBlock,
+  toInterval,
+  type Edge,
   freeUntil,
   insertBlock,
   previousWeekday,
@@ -91,6 +95,32 @@ export class ZeitwerkCard extends LitElement {
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
   @state() private _page: "week" | "rules" = "week";
+  /** Block being dragged / moved by keyboard, not yet saved. */
+  @state() private _preview?: {
+    dayTypeId: string;
+    index: number;
+    block: Block;
+    rowKey?: string;
+    edge?: Edge;
+  };
+  @state() private _copyOpen = false;
+  /** Timeline view: all (tag-filtered) plans and today's scheduled segments. */
+  @state() private _plans?: Plan[];
+  @state() private _segments: Record<string, { start: string; end: string; profile: string }[]> =
+    {};
+  private _previewTimer?: number;
+  @state() private _copyTargets: string[] = [];
+  private _drag?: {
+    dayTypeId: string;
+    index: number;
+    edge: Edge;
+    original: Block;
+    startX: number;
+    width: number;
+    moved: boolean;
+  };
+  private _suppressClick = false;
+  private _keyTimer?: number;
 
   private _unsub?: Promise<() => Promise<void> | void>;
   private _subscribedPlan?: string;
@@ -145,6 +175,9 @@ export class ZeitwerkCard extends LitElement {
     window.clearInterval(this._clock);
     this._clock = undefined;
     this._cancelPress();
+    this._stopDrag();
+    window.clearTimeout(this._keyTimer);
+    window.clearTimeout(this._previewTimer);
     Object.values(this._valueTimers).forEach((t) => window.clearTimeout(t));
     this._valueTimers = {};
   }
@@ -178,6 +211,11 @@ export class ZeitwerkCard extends LitElement {
 
   /** Entities whose state changes are relevant for rendering (DESIGN.md §3). */
   private _watchedEntities(): string[] {
+    if (this._config?.view === "timeline") {
+      return (this._plans ?? []).flatMap((plan) =>
+        plan.profiles.map((p) => quickValue(p)?.entityId).filter((x): x is string => !!x),
+      );
+    }
     if (!this._plan) return [];
     const ids = [`switch.zeitwerk_${this._plan.id}`];
     for (const p of this._plan.profiles) {
@@ -209,7 +247,12 @@ export class ZeitwerkCard extends LitElement {
   private _resubscribe(): void {
     this._unsubscribe();
     this._plan = undefined;
+    this._plans = undefined;
     this._error = undefined;
+    if (this._config?.view === "timeline") {
+      this._subscribeAll();
+      return;
+    }
     const planId = this._config?.plan;
     if (!this.hass?.connection || !planId || this._config?.view !== "week" || !this.isConnected)
       return;
@@ -225,6 +268,54 @@ export class ZeitwerkCard extends LitElement {
       if (err?.code === "not_found") this._plan = null;
       else this._error = errorMessage(err);
     });
+  }
+
+  private _subscribeAll(): void {
+    if (!this.hass?.connection || !this.isConnected) return;
+    this._subscribedPlan = "*";
+    const unsub = this.hass.connection.subscribeMessage<PlanEvent>(
+      (msg) => {
+        let plans = this._plans ?? [];
+        if (msg.event === "init") plans = msg.plans ?? [];
+        else if (msg.event === "removed") plans = plans.filter((p) => p.id !== msg.plan_id);
+        else if (msg.plan) {
+          const plan = msg.plan;
+          const i = plans.findIndex((p) => p.id === msg.plan_id);
+          plans = i < 0 ? [...plans, plan] : plans.map((p, j) => (j === i ? plan : p));
+        }
+        this._plans = plans;
+        this._schedulePreview(msg.event === "init" ? 0 : 1000);
+      },
+      { type: "zeitwerk/plans/subscribe" },
+    );
+    this._unsub = unsub;
+    unsub.catch((err) => {
+      if (this._unsub !== unsub) return;
+      this._unsub = undefined;
+      this._error = errorMessage(err);
+    });
+  }
+
+  private _timelinePlans(): Plan[] {
+    const tags = this._config?.tags ?? [];
+    const plans = this._plans ?? [];
+    return tags.length ? plans.filter((p) => p.tags.some((t) => tags.includes(t))) : plans;
+  }
+
+  /** Fetch today's scheduled segments (debounced; plan edits change them). */
+  private _schedulePreview(delay: number): void {
+    window.clearTimeout(this._previewTimer);
+    this._previewTimer = window.setTimeout(() => {
+      const ids = this._timelinePlans().map((p) => p.id);
+      if (!this.hass || !ids.length) return;
+      this.hass
+        .callWS<{ plans: Record<string, { start: string; end: string; profile: string }[]> }>({
+          type: "zeitwerk/preview",
+          plan_ids: ids,
+        })
+        .then((r) => (this._segments = r.plans))
+        .catch(() => undefined);
+    }, delay);
   }
 
   private _onEvent(msg: PlanEvent): void {
@@ -278,8 +369,12 @@ export class ZeitwerkCard extends LitElement {
     this.style.setProperty("--zw-now", String(now.minutes / MINUTES_PER_DAY));
     const caption = this.renderRoot.querySelector<HTMLElement>(".now-time");
     if (caption) caption.textContent = this._l.t("now", { time: formatTime(now.minutes) });
-    if (this._nowWeekday !== undefined && this._nowWeekday !== now.weekdayIndex)
+    if (this._nowWeekday !== undefined && this._nowWeekday !== now.weekdayIndex) {
       this.requestUpdate();
+      if (this._config?.view === "timeline") this._schedulePreview(0);
+    }
+    const clock = this.renderRoot.querySelector<HTMLElement>(".tl-clock");
+    if (clock) clock.textContent = formatTime(now.minutes);
     this._nowWeekday = now.weekdayIndex;
   }
 
@@ -391,6 +486,7 @@ export class ZeitwerkCard extends LitElement {
   }
 
   private _onBlockClick(seg: Segment): void {
+    if (this._suppressClick) return;
     const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
     const block = dt?.blocks[seg.index];
     if (!dt || !block) return;
@@ -398,10 +494,152 @@ export class ZeitwerkCard extends LitElement {
   }
 
   private _onBlockKey(seg: Segment, ev: KeyboardEvent): void {
-    if (ev.key === "Enter" || ev.key === " ") {
+    if (ev.key === "Enter" || ev.key === " " || ev.key === "Delete" || ev.key === "Backspace") {
+      // Delete opens the editor, where deleting is confirmed with the button.
       ev.preventDefault();
       this._onBlockClick(seg);
+      return;
     }
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    ev.preventDefault();
+    if (!this.hass?.user?.is_admin) {
+      this._notify(this._l.t("admin_only"));
+      return;
+    }
+    const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
+    const original = dt?.blocks[seg.index];
+    if (!dt || !original) return;
+    const current =
+      this._preview?.dayTypeId === dt.id && this._preview.index === seg.index
+        ? this._preview.block
+        : original;
+    const edge: Edge = ev.shiftKey ? "end" : ev.altKey ? "start" : "move";
+    const delta = (ev.key === "ArrowLeft" ? -1 : 1) * this._step;
+    this._preview = {
+      dayTypeId: dt.id,
+      index: seg.index,
+      block: dragBlock(current, edge, delta, this._step),
+    };
+    window.clearTimeout(this._keyTimer);
+    this._keyTimer = window.setTimeout(() => this._commitPreview(), 800);
+  }
+
+  // --- Drag block edges -------------------------------------------------------
+
+  private _onEdgeDown(seg: Segment, edge: Edge, rowKey: string, ev: PointerEvent): void {
+    ev.stopPropagation();
+    ev.preventDefault();
+    if (ev.button !== 0) return;
+    if (!this.hass?.user?.is_admin) {
+      this._notify(this._l.t("admin_only"));
+      return;
+    }
+    const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
+    const original = dt?.blocks[seg.index];
+    const track = (ev.currentTarget as HTMLElement).closest(".track");
+    if (!dt || !original || !track) return;
+    this._cancelPress();
+    this._drag = {
+      dayTypeId: dt.id,
+      index: seg.index,
+      edge,
+      original,
+      startX: ev.clientX,
+      width: track.getBoundingClientRect().width,
+      moved: false,
+    };
+    this._preview = { dayTypeId: dt.id, index: seg.index, block: original, rowKey, edge };
+    window.addEventListener("pointermove", this._onDragMove);
+    window.addEventListener("pointerup", this._onDragEnd);
+    window.addEventListener("pointercancel", this._onDragCancel);
+  }
+
+  private _onDragMove = (ev: PointerEvent): void => {
+    const drag = this._drag;
+    if (!drag || !this._preview) return;
+    const dx = ev.clientX - drag.startX;
+    if (Math.abs(dx) > 3) drag.moved = true;
+    const delta = (dx / drag.width) * MINUTES_PER_DAY;
+    this._preview = {
+      ...this._preview,
+      block: dragBlock(drag.original, drag.edge, delta, this._step),
+    };
+  };
+
+  private _onDragEnd = (): void => {
+    const drag = this._drag;
+    this._stopDrag();
+    if (!drag) return;
+    if (drag.moved) {
+      this._suppressClick = true;
+      window.setTimeout(() => (this._suppressClick = false), 0);
+      this._commitPreview();
+    } else {
+      this._preview = undefined;
+    }
+  };
+
+  private _onDragCancel = (): void => {
+    this._stopDrag();
+    this._preview = undefined;
+  };
+
+  private _stopDrag(): void {
+    this._drag = undefined;
+    window.removeEventListener("pointermove", this._onDragMove);
+    window.removeEventListener("pointerup", this._onDragEnd);
+    window.removeEventListener("pointercancel", this._onDragCancel);
+  }
+
+  private async _commitPreview(): Promise<void> {
+    const preview = this._preview;
+    if (!preview || !this._plan) return;
+    const original = this._plan.week.day_types.find((d) => d.id === preview.dayTypeId)?.blocks[
+      preview.index
+    ];
+    if (original && original.start === preview.block.start && original.end === preview.block.end) {
+      this._preview = undefined;
+      return;
+    }
+    const def = this._plan.default_profile;
+    try {
+      await this._updatePlan((plan) => {
+        const dt = plan.week.day_types.find((d) => d.id === preview.dayTypeId);
+        if (dt) dt.blocks = replaceBlock(dt.blocks, preview.index, preview.block, def);
+      });
+    } catch (err) {
+      this._notify(this._l.t("save_failed", { error: errorMessage(err) }));
+    } finally {
+      if (this._preview === preview || this._preview?.block === preview.block)
+        this._preview = undefined;
+    }
+  }
+
+  /** Plan as shown: with the block being dragged replaced (not normalised yet). */
+  private _shownPlan(plan: Plan): Plan {
+    const preview = this._preview;
+    if (!preview) return plan;
+    return {
+      ...plan,
+      week: {
+        day_types: plan.week.day_types.map((dt) =>
+          dt.id === preview.dayTypeId
+            ? { ...dt, blocks: dt.blocks.map((b, i) => (i === preview.index ? preview.block : b)) }
+            : dt,
+        ),
+      },
+    };
+  }
+
+  private _copyDay(fromId: string): void {
+    const targets = this._copyTargets;
+    if (!targets.length) return;
+    this._updatePlan((plan) => copyDayType(plan, fromId, targets))
+      .then(() => {
+        this._copyOpen = false;
+        this._copyTargets = [];
+      })
+      .catch((err) => this._notify(this._l.t("save_failed", { error: errorMessage(err) })));
   }
 
   private _onTrackDown(row: GridRow, ev: PointerEvent): void {
@@ -446,16 +684,15 @@ export class ZeitwerkCard extends LitElement {
     });
   }
 
-  private async _saveBlocks(
-    dayTypeId: string,
-    change: (blocks: Block[]) => Block[],
-  ): Promise<void> {
+  private async _saveBlocks(changes: Record<string, (blocks: Block[]) => Block[]>): Promise<void> {
     this._busy = true;
     this._saveError = null;
     try {
       await this._updatePlan((plan) => {
-        const dt = plan.week.day_types.find((d) => d.id === dayTypeId);
-        if (dt) dt.blocks = change(dt.blocks);
+        for (const dt of plan.week.day_types) {
+          const change = changes[dt.id];
+          if (change) dt.blocks = change(dt.blocks);
+        }
       });
       this._editing = undefined;
     } catch (err) {
@@ -466,18 +703,23 @@ export class ZeitwerkCard extends LitElement {
   }
 
   private _onSave(ev: CustomEvent<BlockSaveDetail>): void {
-    const { target, block } = ev.detail;
+    const { target, block, also } = ev.detail;
     const def = this._plan!.default_profile;
-    this._saveBlocks(target.dayTypeId, (blocks) =>
-      target.index < 0
-        ? insertBlock(blocks, block, def)
-        : replaceBlock(blocks, target.index, block, def),
-    );
+    const changes: Record<string, (blocks: Block[]) => Block[]> = {
+      [target.dayTypeId]: (blocks) =>
+        target.index < 0
+          ? insertBlock(blocks, block, def)
+          : replaceBlock(blocks, target.index, block, def),
+    };
+    for (const id of also ?? []) {
+      if (id !== target.dayTypeId) changes[id] = (blocks) => insertBlock(blocks, block, def);
+    }
+    this._saveBlocks(changes);
   }
 
   private _onDelete(ev: CustomEvent<{ target: BlockEditTarget }>): void {
     const { target } = ev.detail;
-    this._saveBlocks(target.dayTypeId, (blocks) => removeBlock(blocks, target.index));
+    this._saveBlocks({ [target.dayTypeId]: (blocks) => removeBlock(blocks, target.index) });
   }
 
   // --- Rendering ------------------------------------------------------------
@@ -485,6 +727,11 @@ export class ZeitwerkCard extends LitElement {
   protected render() {
     if (!this._config) return nothing;
     const l = this._l;
+    if (this._config.view === "timeline") {
+      if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
+      if (!this.hass || this._plans === undefined) return this._message(l.t("loading"));
+      return this._renderTimeline();
+    }
     if (this._config.view && this._config.view !== "week") {
       return this._message(l.t("view_unsupported", { view: this._config.view }));
     }
@@ -494,6 +741,146 @@ export class ZeitwerkCard extends LitElement {
     if (this._plan === null)
       return this._message(l.t("plan_missing", { plan: this._config.plan }), true);
     return this._renderWeek(this._plan);
+  }
+
+  private _renderTimeline() {
+    const l = this._l;
+    const plans = this._timelinePlans();
+    const tz = this.hass?.config?.time_zone;
+    const now = zonedNow(tz);
+    let date: string;
+    try {
+      date = new Date().toLocaleDateString(l.lang, {
+        timeZone: tz,
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+      });
+    } catch {
+      date = new Date().toLocaleDateString();
+    }
+    const tags = this._config?.tags ?? [];
+    const title = this._config?.title ?? (tags.length === 1 ? tags[0] : l.t("timeline_title"));
+    const running = plans.filter((p) => p.enabled && p.status?.active).length;
+    const body = plans.length
+      ? plans.map((p) => this._renderTimelinePlan(p))
+      : html`<div class="message">
+          ${tags.length ? l.t("no_plans_tag", { tag: tags.join(", ") }) : l.t("no_plans")}
+        </div>`;
+    return html`<ha-card class="timeline">
+      <div class="tl-head">
+        <div class="tl-titles">
+          <span class="tl-date">${l.t("today_date", { date })}</span>
+          <span class="tl-title">${title}</span>
+        </div>
+        <span class="tl-clock">${formatTime(now.minutes)}</span>
+      </div>
+      ${
+        plans.length
+          ? html`<div class="chips">
+                <span class="chip ok"
+                  ><span class="dot"></span>${
+                    running === 1 ? l.t("plans_running_one") : l.t("plans_running", { n: running })
+                  }</span
+                >
+              </div>
+              <div class="axis tl-axis">
+                <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
+              </div>`
+          : nothing
+      }
+      ${body}
+    </ha-card>`;
+  }
+
+  private _renderTimelinePlan(plan: Plan) {
+    const l = this._l;
+    const tz = this.hass?.config?.time_zone;
+    const status = plan.status;
+    const current = plan.profiles.find((p) => p.id === status?.profile);
+    const color = current ? profileColor(plan, current) : "var(--zw-text-2)";
+    const isDefault = !current || current.id === plan.default_profile;
+    const def = profileColor(plan, plan.default_profile);
+    let sub: string;
+    if (!plan.enabled) sub = l.t("plan_off");
+    else if (status && !status.active && !current) sub = l.t("plan_paused");
+    else if (status?.manual_since) {
+      const entity = status.manual_entity ? this.hass?.states[status.manual_entity] : undefined;
+      const value = entity ? (this.hass?.formatEntityState?.(entity) ?? entity.state) : "";
+      sub = value ? `${l.t("manual_cap")} · ${value}` : l.t("manual_cap");
+    } else {
+      const value = current ? this._valueLabel(current) : "";
+      sub = current ? (value ? `${current.name} · ${value}` : current.name) : "";
+    }
+    let whenText = "";
+    if (status?.manual_since && status.manual_until) {
+      whenText = l.t("until_time", { time: zonedClock(status.manual_until, tz) });
+    } else if (status?.next_change) {
+      const mins = Math.round((new Date(status.next_change).getTime() - Date.now()) / 60_000);
+      whenText =
+        mins >= 0 && mins < 60
+          ? l.t("in_minutes", { n: Math.max(1, mins) })
+          : l.t("from_time", { time: zonedClock(status.next_change, tz) });
+    }
+    const next = status?.next_change
+      ? plan.profiles.find((p) => p.id === status.next_profile)
+      : undefined;
+    const nextValue = next ? this._valueLabel(next) || next.name : "";
+    const nextColor = next && next.id !== plan.default_profile ? profileColor(plan, next) : "";
+    const segs = (this._segments[plan.id] ?? [])
+      .map((seg) => ({
+        from: Math.max(0, minutesFromToday(seg.start, tz)),
+        to: Math.min(MINUTES_PER_DAY, minutesFromToday(seg.end, tz)),
+        profile: seg.profile,
+      }))
+      .filter((seg) => seg.to > seg.from && seg.profile !== plan.default_profile);
+    const manual = this._manualSegment(plan, 0);
+    const pct = (m: number) => (m / MINUTES_PER_DAY) * 100;
+    return html`<div
+      class="tl-plan"
+      style=${!isDefault && plan.enabled ? `border-color:${tint(color, 45)}` : ""}
+    >
+      <div class="tl-row">
+        <span class="tl-icon" style="background:${tint(color, 18)};color:${color}">
+          <ha-icon .icon=${current?.icon || plan.icon || "mdi:calendar-clock"}></ha-icon>
+        </span>
+        <span class="tl-text">
+          <span class="tl-name">${plan.name}</span>
+          <span class="tl-sub" style=${isDefault ? "" : `color:${color}`}>${sub}</span>
+        </span>
+        ${
+          whenText
+            ? html`<span class="tl-next">
+                <span class="tl-when">${whenText}</span>
+                <span class="tl-value" style=${nextColor ? `color:${nextColor}` : ""}
+                  >${nextValue}</span
+                >
+              </span>`
+            : nothing
+        }
+      </div>
+      <div class="band" style="background:${tint(def, 16)}">
+        ${segs.map(
+          (seg) =>
+            html`<span
+              class="band-seg"
+              style="left:${pct(seg.from)}%;width:${pct(seg.to - seg.from)}%;background:${profileColor(
+                plan,
+                seg.profile,
+              )}"
+            ></span>`,
+        )}
+        ${
+          manual
+            ? html`<span
+                class="band-seg hatch"
+                style="left:${manual.left}%;width:${manual.width}%"
+              ></span>`
+            : nothing
+        }
+        <span class="band-now" aria-hidden="true"></span>
+      </div>
+    </div>`;
   }
 
   private _message(text: string, isError = false) {
@@ -694,7 +1081,22 @@ export class ZeitwerkCard extends LitElement {
       <div class="links">
         ${row("mdi:layers-outline", l.t("rules_overrides"), overrides)}
         ${row("mdi:flash-outline", l.t("rules_activation"), activation)}
+        ${row("mdi:flag-outline", l.t("rules_holidays"), this._holidaySummary(plan))}
       </div>`;
+  }
+
+  private _holidaySummary(plan: Plan): string {
+    const l = this._l;
+    const h = plan.holidays;
+    if (h.mode === "off" || !h.source) return l.t("holiday_mode_off");
+    const source = String(this.hass?.states[h.source]?.attributes.friendly_name ?? h.source);
+    if (h.mode === "like_day") {
+      return l.t("holiday_summary_like", {
+        source,
+        day: l.weekdayLong(WEEKDAYS.indexOf(h.like_day ?? "sun")),
+      });
+    }
+    return l.t("holiday_summary_own", { source });
   }
 
   /** Hatched range of a manual override within one row (today/tomorrow). */
@@ -782,12 +1184,13 @@ export class ZeitwerkCard extends LitElement {
   private _tabs(plan: Plan): { id: string; name: string; sub: string }[] {
     const l = this._l;
     const holidayTypeId = plan.holidays.mode === "own_day_type" ? plan.holidays.day_type : null;
-    const tabs = plan.week.day_types.map((dt) => ({
+    const shown = plan.week.day_types.filter((dt) => dt.days.length || dt.id === holidayTypeId);
+    const tabs = shown.map((dt) => ({
       id: dt.id,
       name: dt.name,
       sub:
         dt.id === holidayTypeId
-          ? l.t("holiday")
+          ? l.t("holiday_days")
           : daysLabel(
               dt.days.map((d) => WEEKDAYS.indexOf(d)),
               l,
@@ -864,7 +1267,8 @@ export class ZeitwerkCard extends LitElement {
     return rows;
   }
 
-  private _renderGrid(plan: Plan) {
+  private _renderGrid(realPlan: Plan) {
+    const plan = this._shownPlan(realPlan);
     const l = this._l;
     const def = profileColor(plan, plan.default_profile);
     const rows = this._rows(plan);
@@ -907,8 +1311,8 @@ export class ZeitwerkCard extends LitElement {
                 @pointerleave=${this._cancelPress}
                 @contextmenu=${(ev: Event) => ev.preventDefault()}
               >
-                ${row.segments.map((seg) => this._renderBlock(plan, seg))}
-                ${this._renderManual(plan, row)}
+                ${row.segments.map((seg) => this._renderBlock(plan, seg, row.key))}
+                ${this._renderManual(plan, row)} ${this._renderTip(row)}
               </div>
             </div>`,
         )}
@@ -942,7 +1346,8 @@ export class ZeitwerkCard extends LitElement {
                     : nothing
                 }
               </div>
-              <div class="hint">${l.t("hint")}</div>`
+              ${this._renderCopy(realPlan)}
+              <div class="hint">${l.t("hint_drag", { step: this._step })}</div>`
       }
     </div>`;
   }
@@ -960,17 +1365,105 @@ export class ZeitwerkCard extends LitElement {
     ></div>`;
   }
 
-  private _renderBlock(plan: Plan, seg: Segment) {
+  private _renderTip(row: GridRow) {
+    const p = this._preview;
+    if (!p || p.rowKey !== row.key || !p.edge || p.edge === "move") return nothing;
+    const time = p.edge === "start" ? p.block.start : p.block.end;
+    const iv = toInterval(p.block);
+    const at = p.edge === "start" ? iv.start : iv.end % MINUTES_PER_DAY || MINUTES_PER_DAY;
+    return html`<div class="tip" style="left:${(at / MINUTES_PER_DAY) * 100}%">${time}</div>`;
+  }
+
+  private _renderCopy(plan: Plan) {
+    const l = this._l;
+    const selected = this._selectedTab(plan);
+    const from = plan.week.day_types.find((d) => d.id === selected);
+    if (!from || !this.hass?.user?.is_admin) return nothing;
+    const others = plan.week.day_types.filter(
+      (d) =>
+        d.id !== from.id &&
+        (d.days.length ||
+          (plan.holidays.mode === "own_day_type" && d.id === plan.holidays.day_type)),
+    );
+    if (!others.length) return nothing;
+    if (!this._copyOpen) {
+      return html`<button class="textbtn" @click=${() => (this._copyOpen = true)}>
+        ${l.t("copy_day", { name: from.name })}
+      </button>`;
+    }
+    return html`<div class="copy">
+      <span class="copy-title">${l.t("copy_day", { name: from.name })}</span>
+      <div class="chiprow">
+        ${others.map((d) => {
+          const on = this._copyTargets.includes(d.id);
+          return html`<button
+            class="pick"
+            aria-pressed=${on ? "true" : "false"}
+            @click=${() =>
+              (this._copyTargets = on
+                ? this._copyTargets.filter((x) => x !== d.id)
+                : [...this._copyTargets, d.id])}
+          >
+            ${d.name}
+          </button>`;
+        })}
+      </div>
+      <span class="copy-hint">${l.t("copy_hint")}</span>
+      <div class="copy-actions">
+        <button
+          class="textbtn"
+          @click=${() => {
+            this._copyOpen = false;
+            this._copyTargets = [];
+          }}
+        >
+          ${l.t("cancel")}
+        </button>
+        <button
+          class="accent"
+          ?disabled=${!this._copyTargets.length}
+          @click=${() => this._copyDay(from.id)}
+        >
+          ${l.t("copy_confirm")}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  private _renderBlock(plan: Plan, seg: Segment, rowKey: string) {
     const color = profileColor(plan, seg.profile);
     const profile = this._profile(seg.profile);
+    const block = plan.week.day_types.find((d) => d.id === seg.dayType)?.blocks[seg.index];
+    const crossing = block ? toInterval(block).end > MINUTES_PER_DAY : false;
+    const startEdge = !seg.spill;
+    const endEdge = crossing ? seg.spill : !seg.spill;
+    const dragging = this._preview?.dayTypeId === seg.dayType && this._preview.index === seg.index;
     return html`<button
-      class="block ${seg.spill ? "spill" : ""}"
+      class="block ${seg.spill ? "spill" : ""} ${dragging ? "dragging" : ""}"
       style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
       aria-label=${this._l.t("edit_block", { profile: profile?.name ?? seg.profile, time: seg.label })}
       @click=${() => this._onBlockClick(seg)}
       @keydown=${(ev: KeyboardEvent) => this._onBlockKey(seg, ev)}
     >
       <span>${seg.width >= 8 ? seg.label : ""}</span>
+      ${
+        startEdge
+          ? html`<span
+              class="edge start"
+              aria-hidden="true"
+              @pointerdown=${(ev: PointerEvent) => this._onEdgeDown(seg, "start", rowKey, ev)}
+            ></span>`
+          : nothing
+      }
+      ${
+        endEdge
+          ? html`<span
+              class="edge end"
+              aria-hidden="true"
+              @pointerdown=${(ev: PointerEvent) => this._onEdgeDown(seg, "end", rowKey, ev)}
+            ></span>`
+          : nothing
+      }
     </button>`;
   }
 
@@ -985,6 +1478,14 @@ export class ZeitwerkCard extends LitElement {
       .localize=${this._l}
       .valueLabels=${labels}
       .dayTypeLabel=${dt ? this._dayTypeLabel(dt) : ""}
+      .otherDayTypes=${plan.week.day_types
+        .filter(
+          (d) =>
+            d.id !== target.dayTypeId &&
+            (d.days.length ||
+              (plan.holidays.mode === "own_day_type" && d.id === plan.holidays.day_type)),
+        )
+        .map((d) => ({ id: d.id, name: d.name }))}
       .step=${this._step}
       .error=${this._saveError}
       .busy=${this._busy}
@@ -1403,6 +1904,225 @@ export class ZeitwerkCard extends LitElement {
         font-size: 12px;
         color: var(--zw-text-2);
         padding: 0 4px;
+      }
+      .tl-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 4px 4px 0;
+      }
+      .tl-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .tl-date {
+        font-size: 12px;
+        color: var(--zw-text-2);
+      }
+      .tl-title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .tl-clock {
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tl-axis {
+        margin: 4px 0 0;
+        padding: 0 14px;
+      }
+      .tl-plan {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 14px 14px;
+        border-radius: 26px;
+        background: var(--zw-surface);
+        border: 1px solid var(--zw-border);
+      }
+      .tl-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .tl-icon {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        --mdc-icon-size: 18px;
+      }
+      .tl-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .tl-name {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .tl-sub {
+        font-size: 12px;
+        color: var(--zw-text-2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tl-next {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        flex-shrink: 0;
+      }
+      .tl-when {
+        font-size: 11px;
+        color: var(--zw-text-2);
+      }
+      .tl-value {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .band {
+        position: relative;
+        height: 16px;
+        border-radius: 8px;
+      }
+      .band-seg {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 8px;
+      }
+      .band-now {
+        position: absolute;
+        top: -4px;
+        bottom: -4px;
+        left: calc(100% * var(--zw-now, 0));
+        width: 2px;
+        border-radius: 1px;
+        background: var(--zw-text);
+      }
+      .edge {
+        position: absolute;
+        top: -7px;
+        bottom: -7px;
+        width: 22px;
+        touch-action: none;
+        cursor: ew-resize;
+      }
+      .block .edge {
+        pointer-events: auto;
+      }
+      .edge.start {
+        left: -11px;
+      }
+      .edge.end {
+        right: -11px;
+      }
+      .edge::after {
+        content: "";
+        position: absolute;
+        top: 13px;
+        bottom: 13px;
+        left: 9px;
+        width: 4px;
+        border-radius: 2px;
+        background: currentColor;
+        opacity: 0;
+      }
+      .block:hover .edge::after,
+      .block:focus-visible .edge::after,
+      .block.dragging .edge::after {
+        opacity: 0.55;
+      }
+      .block.dragging {
+        z-index: 2;
+        outline: 2px solid var(--zw-text);
+      }
+      .block {
+        overflow: visible;
+      }
+      .tip {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        transform: translateX(-50%);
+        padding: 3px 8px;
+        border-radius: 8px;
+        background: var(--zw-text);
+        color: var(--zw-bg);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 3;
+      }
+      .textbtn {
+        align-self: flex-start;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 4px;
+        color: var(--zw-text);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .copy {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 18px;
+        background: var(--zw-surface);
+      }
+      .copy-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .copy-hint {
+        font-size: 12px;
+        color: var(--zw-text-2);
+      }
+      .chiprow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .pick {
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 18px;
+        border: 1px solid color-mix(in srgb, var(--zw-text) 18%, transparent);
+        font-size: 13px;
+      }
+      .pick[aria-pressed="true"] {
+        background: var(--zw-accent);
+        color: var(--zw-on-accent);
+        border-color: var(--zw-accent);
+      }
+      .copy-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        align-items: center;
+      }
+      .accent {
+        height: 36px;
+        padding: 0 18px;
+        border-radius: 18px;
+        background: var(--zw-accent);
+        color: var(--zw-on-accent);
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .accent:disabled {
+        opacity: 0.5;
       }
       .hatch {
         position: absolute;

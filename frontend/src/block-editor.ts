@@ -23,6 +23,8 @@ export interface BlockEditTarget {
 export interface BlockSaveDetail {
   target: BlockEditTarget;
   block: Block;
+  /** Other day types that get the same block. */
+  also?: string[];
 }
 
 @customElement("zeitwerk-block-editor")
@@ -32,6 +34,8 @@ export class ZeitwerkBlockEditor extends LitElement {
   @property({ attribute: false }) public localize!: Localizer;
   @property({ attribute: false }) public valueLabels: Record<string, string> = {};
   @property({ attribute: false }) public dayTypeLabel = "";
+  @property({ attribute: false }) public otherDayTypes: { id: string; name: string }[] = [];
+  @state() private _also: string[] = [];
   @property({ type: Number }) public step = 15;
   @property({ attribute: false }) public error: string | null = null;
   @property({ type: Boolean }) public busy = false;
@@ -86,7 +90,11 @@ export class ZeitwerkBlockEditor extends LitElement {
       end: formatTime(this._end),
       profile: this._profile,
     };
-    this._fire("zw-save", { target: this.target, block } satisfies BlockSaveDetail);
+    this._fire("zw-save", {
+      target: this.target,
+      block,
+      also: this._also,
+    } satisfies BlockSaveDetail);
   }
 
   private _onCancel(ev: Event): void {
@@ -216,6 +224,28 @@ export class ZeitwerkBlockEditor extends LitElement {
           </span>
         </div>
 
+        ${
+          this.otherDayTypes.length
+            ? html`<div class="field">
+                <span class="label">${t("also_for")}</span>
+                <div class="chips">
+                  ${this.otherDayTypes.map((d) => {
+                    const on = this._also.includes(d.id);
+                    return html`<button
+                      class="chip"
+                      aria-pressed=${on ? "true" : "false"}
+                      @click=${() =>
+                        (this._also = on
+                          ? this._also.filter((x) => x !== d.id)
+                          : [...this._also, d.id])}
+                    >
+                      ${d.name}
+                    </button>`;
+                  })}
+                </div>
+              </div>`
+            : nothing
+        }
         ${this.error ? html`<div class="error" role="alert">${this.error}</div>` : nothing}
 
         <div class="actions">
@@ -409,6 +439,23 @@ export class ZeitwerkBlockEditor extends LitElement {
         justify-content: space-between;
         font-size: 11px;
         color: var(--zw-text-2);
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chip {
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 18px;
+        border: 1px solid color-mix(in srgb, var(--zw-text) 18%, transparent);
+        font-size: 13px;
+      }
+      .chip[aria-pressed="true"] {
+        background: var(--zw-accent);
+        color: var(--zw-on-accent);
+        border-color: var(--zw-accent);
       }
       .error {
         font-size: 13px;

@@ -164,3 +164,44 @@ describe("rowSegments (week grid incl. midnight)", () => {
     expect(rowSegments(undefined, workday)).toHaveLength(1);
   });
 });
+
+describe("dragBlock / copyDayType", () => {
+  it("drags edges with snapping and minimum duration", async () => {
+    const { dragBlock } = await import("../src/blocks");
+    expect(dragBlock(b("16:00", "22:00"), "start", -67, 15)).toEqual(b("15:00", "22:00"));
+    expect(dragBlock(b("16:00", "22:00"), "end", 22, 15)).toEqual(b("16:00", "22:15"));
+    expect(dragBlock(b("16:00", "22:00"), "start", 600, 15)).toEqual(b("21:45", "22:00"));
+    expect(dragBlock(b("16:00", "22:00"), "end", -900, 15)).toEqual(b("16:00", "16:15"));
+    expect(dragBlock(b("01:00", "03:00"), "start", -200, 15)).toEqual(b("00:00", "03:00"));
+  });
+  it("end may run across midnight, at most 24 h", async () => {
+    const { dragBlock } = await import("../src/blocks");
+    expect(dragBlock(b("22:00", "23:00"), "end", 180, 15)).toEqual(b("22:00", "02:00"));
+    expect(dragBlock(b("22:00", "02:00"), "end", -180, 15)).toEqual(b("22:00", "23:00"));
+    expect(dragBlock(b("22:00", "23:00"), "end", 5000, 15)).toEqual(b("22:00", "22:00"));
+    expect(dragBlock(b("22:00", "02:00"), "start", -60, 15)).toEqual(b("21:00", "02:00"));
+  });
+  it("moves a block keeping its length", async () => {
+    const { dragBlock } = await import("../src/blocks");
+    expect(dragBlock(b("16:00", "22:00"), "move", 60, 15)).toEqual(b("17:00", "23:00"));
+    expect(dragBlock(b("16:00", "22:00"), "move", 180, 15)).toEqual(b("19:00", "01:00"));
+    expect(dragBlock(b("01:00", "03:00"), "move", -120, 15)).toEqual(b("00:00", "02:00"));
+  });
+  it("copies a day type", async () => {
+    const { copyDayType } = await import("../src/blocks");
+    const plan = {
+      week: {
+        day_types: [
+          { id: "a", name: "A", days: [], blocks: [b("06:00", "08:00")] },
+          { id: "b", name: "B", days: [], blocks: [b("09:00", "10:00")] },
+          { id: "c", name: "C", days: [], blocks: [] },
+        ],
+      },
+    } as unknown as import("../src/types").Plan;
+    copyDayType(plan, "a", ["b"]);
+    expect(plan.week.day_types[1].blocks).toEqual([b("06:00", "08:00")]);
+    expect(plan.week.day_types[2].blocks).toEqual([]);
+    plan.week.day_types[1].blocks[0].start = "05:00";
+    expect(plan.week.day_types[0].blocks[0].start).toBe("06:00");
+  });
+});

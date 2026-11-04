@@ -123,6 +123,16 @@ const emit = () => {
 
 const states = {
   "switch.zeitwerk_wohnzimmer_heizung": { entity_id: "switch.zeitwerk_wohnzimmer_heizung", state: "on", attributes: {} },
+  "calendar.deutschland_he": {
+    entity_id: "calendar.deutschland_he",
+    state: "off",
+    attributes: { friendly_name: "Feiertage Hessen" },
+  },
+  "binary_sensor.workday_sensor": {
+    entity_id: "binary_sensor.workday_sensor",
+    state: "on",
+    attributes: { friendly_name: "Arbeitstag", workdays: ["mon", "tue", "wed", "thu", "fri"] },
+  },
   "input_boolean.urlaub": { entity_id: "input_boolean.urlaub", state: "off", attributes: { friendly_name: "Urlaub" } },
   "input_boolean.heizperiode": {
     entity_id: "input_boolean.heizperiode",
@@ -163,7 +173,7 @@ const hass = {
   connection: {
     async subscribeMessage(cb, msg) {
       log("subscribe", msg);
-      if (msg.plan_id !== plan.id) throw { code: "not_found", message: `Plan '${msg.plan_id}' not found` };
+      if (msg.plan_id && msg.plan_id !== plan.id) throw { code: "not_found", message: `Plan '${msg.plan_id}' not found` };
       subscribers.add(cb);
       setTimeout(() => cb({ event: "init", plans: [{ ...plan, status: status() }] }), 50);
       return () => subscribers.delete(cb);
@@ -173,6 +183,31 @@ const hass = {
     log("callWS", msg);
     window.mockCalls.push(msg);
     if (msg.type === "zeitwerk/plans/list") return { plans: [{ ...plan, status: status() }] };
+    if (msg.type === "zeitwerk/preview") {
+      const dt = plan.week.day_types.find((d) => d.days.includes(["mon", "tue", "wed", "thu", "fri", "sat", "sun"][today]));
+      const day = new Date();
+      day.setHours(0, 0, 0, 0);
+      const at = (hhmm) => {
+        const [h, m] = hhmm.split(":").map(Number);
+        return new Date(day.getTime() + (h * 60 + m) * 60_000).toISOString();
+      };
+      return {
+        plans: {
+          [plan.id]: (dt?.blocks ?? []).map((b) => ({ start: at(b.start), end: at(b.end), profile: b.profile })),
+        },
+      };
+    }
+    if (msg.type === "zeitwerk/holidays/upcoming") {
+      const y = new Date().getFullYear();
+      return {
+        kind: msg.source.startsWith("calendar.") ? "calendar" : "workday",
+        holidays: [
+          { date: `${y}-12-25`, name: "1. Weihnachtstag" },
+          { date: `${y}-12-26`, name: "2. Weihnachtstag" },
+          { date: `${y + 1}-01-01`, name: "Neujahr" },
+        ],
+      };
+    }
     if (msg.type === "zeitwerk/plans/update") {
       plan = structuredClone(msg.plan);
       setTimeout(emit, 30);
@@ -197,7 +232,11 @@ const hass = {
 
 await import("../../custom_components/zeitwerk/frontend/zeitwerk-card.js");
 const card = document.querySelector("zeitwerk-card");
-card.setConfig({ type: "custom:zeitwerk-card", plan: params.get("plan") || "wohnzimmer_heizung" });
+card.setConfig(
+  params.get("view") === "timeline"
+    ? { type: "custom:zeitwerk-card", view: "timeline", tags: params.get("tag") ? [params.get("tag")] : [] }
+    : { type: "custom:zeitwerk-card", plan: params.get("plan") || "wohnzimmer_heizung" },
+);
 card.hass = hass;
 window.hass = hass;
 

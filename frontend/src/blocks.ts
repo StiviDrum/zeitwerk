@@ -228,3 +228,42 @@ export function rowSegments(
   });
   return out.sort((a, b) => a.left - b.left);
 }
+
+// --- Drag / keyboard editing -------------------------------------------------
+
+export type Edge = "start" | "end" | "move";
+
+/**
+ * Block after dragging an edge (or the whole block) by `delta` minutes,
+ * snapped to `step`. Keeps at least one step of duration; the end may run past
+ * midnight (up to 24 h after the start), the start stays on the block's day.
+ */
+export function dragBlock(block: Block, edge: Edge, delta: number, step: number): Block {
+  const iv = toInterval(block);
+  let { start, end } = iv;
+  if (edge === "start") {
+    const s = Math.round((start + delta) / step) * step;
+    start = Math.max(Math.max(0, end - MINUTES_PER_DAY), Math.min(s, end - step));
+    start = Math.min(start, MINUTES_PER_DAY - step);
+  } else if (edge === "end") {
+    const e = Math.round((end + delta) / step) * step;
+    end = Math.max(start + step, Math.min(e, start + MINUTES_PER_DAY));
+  } else {
+    const length = end - start;
+    const s = Math.round((start + delta) / step) * step;
+    start = Math.max(0, Math.min(s, MINUTES_PER_DAY - step));
+    end = start + length;
+  }
+  return fromInterval({ start, end, profile: iv.profile });
+}
+
+/** Copy all blocks of one day type to others (replacing their blocks). */
+export function copyDayType(plan: Plan, fromId: string, toIds: string[]): void {
+  const from = plan.week.day_types.find((d) => d.id === fromId);
+  if (!from) return;
+  for (const dt of plan.week.day_types) {
+    if (dt.id !== fromId && toIds.includes(dt.id)) {
+      dt.blocks = from.blocks.map((b) => ({ ...b }));
+    }
+  }
+}

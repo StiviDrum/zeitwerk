@@ -19,7 +19,7 @@ import {
 import "./conditions-editor";
 import type { Localizer } from "./localize";
 import { tokens } from "./styles";
-import type { HomeAssistant, Override, Plan } from "./types";
+import { WEEKDAYS, type HomeAssistant, type Override, type Plan, type Weekday } from "./types";
 
 export type PlanMutator = (plan: Plan) => void;
 
@@ -48,6 +48,165 @@ export class ZeitwerkRules extends LitElement {
   @state() private _confirmDelete = false;
   @state() private _drag?: { index: number; startY: number; dy: number };
   @state() private _conditionsValid = true;
+  @state() private _upcoming?: { date: string; name: string }[] | null;
+  private _upcomingFor?: string | null;
+
+  protected updated(): void {
+    const source = this.plan?.holidays.source ?? null;
+    if (this._page.kind === "list" && source !== this._upcomingFor) {
+      this._upcomingFor = source;
+      this._upcoming = undefined;
+      if (source && this.hass) {
+        this.hass
+          .callWS<{ holidays: { date: string; name: string }[] }>({
+            type: "zeitwerk/holidays/upcoming",
+            source,
+          })
+          .then((r) => {
+            if (this._upcomingFor === source) this._upcoming = r.holidays;
+          })
+          .catch(() => {
+            if (this._upcomingFor === source) this._upcoming = null;
+          });
+      }
+    }
+  }
+
+  /** Holiday calendars and Workday sensors known to Home Assistant. */
+  private _holidaySources(): string[] {
+    const states = this.hass?.states ?? {};
+    return Object.keys(states)
+      .filter(
+        (id) =>
+          id.startsWith("calendar.") ||
+          (id.startsWith("binary_sensor.") && Array.isArray(states[id].attributes.workdays)),
+      )
+      .sort();
+  }
+
+  private _setHolidays(changes: Partial<Plan["holidays"]>): void {
+    const t = this.localize.t.bind(this.localize);
+    this._run((p) => {
+      Object.assign(p.holidays, changes);
+      if (!p.holidays.source) p.holidays.mode = "off";
+      if (p.holidays.mode === "like_day" && !p.holidays.like_day) p.holidays.like_day = "sun";
+      if (p.holidays.mode === "own_day_type") {
+        let dt = p.week.day_types.find((d) => d.id === p.holidays.day_type && !d.days.length);
+        if (!dt) {
+          dt = p.week.day_types.find((d) => !d.days.length);
+        }
+        if (!dt) {
+          dt = {
+            id: uniqueId(
+              "holiday",
+              p.week.day_types.map((d) => d.id),
+            ),
+            name: t("holiday"),
+            days: [],
+            blocks: [],
+          };
+          p.week.day_types.push(dt);
+        }
+        p.holidays.day_type = dt.id;
+      }
+    });
+  }
+
+  private _renderHolidays() {
+    const t = this.localize.t.bind(this.localize);
+    const l = this.localize;
+    const h = this.plan.holidays;
+    const sources = this._holidaySources();
+    if (h.source && !sources.includes(h.source)) sources.unshift(h.source);
+    const modes: ["off" | "like_day" | "own_day_type", string][] = [
+      ["off", t("holiday_mode_off")],
+      ["like_day", t("holiday_mode_like")],
+      ["own_day_type", t("holiday_mode_own")],
+    ];
+    const fmtDate = (iso: string) => {
+      const d = new Date(`${iso}T12:00:00`);
+      const wd = l.weekdayShort((d.getDay() + 6) % 7);
+      return `${wd} ${d.toLocaleDateString(l.lang, { day: "2-digit", month: "2-digit" })}`;
+    };
+    return html`${this._separator(t("rules_holidays"))}
+      <div class="panel">
+        <label class="between">
+          <span class="label">${t("holiday_source")}</span>
+          <select
+            ?disabled=${this._busy}
+            @change=${(ev: Event) =>
+              this._setHolidays({ source: (ev.target as HTMLSelectElement).value || null })}
+          >
+            <option value="" ?selected=${!h.source}>${t("holiday_source_none")}</option>
+            ${sources.map(
+              (id) =>
+                html`<option value=${id} ?selected=${id === h.source}>
+                  ${String(this.hass?.states[id]?.attributes.friendly_name ?? id)}
+                </option>`,
+            )}
+          </select>
+        </label>
+        <div class="segmented wide" role="radiogroup" aria-label=${t("holiday_mode")}>
+          ${modes.map(
+            ([mode, label]) =>
+              html`<button
+                role="radio"
+                aria-checked=${h.mode === mode ? "true" : "false"}
+                ?disabled=${this._busy || (!h.source && mode !== "off")}
+                @click=${() => h.mode !== mode && this._setHolidays({ mode })}
+              >
+                ${label}
+              </button>`,
+          )}
+        </div>
+        ${
+          h.mode === "like_day"
+            ? html`<label class="between">
+                <span class="label">${t("holiday_like_day")}</span>
+                <select
+                  ?disabled=${this._busy}
+                  @change=${(ev: Event) =>
+                    this._setHolidays({
+                      like_day: (ev.target as HTMLSelectElement).value as Weekday,
+                    })}
+                >
+                  ${WEEKDAYS.map(
+                    (wd, i) =>
+                      html`<option value=${wd} ?selected=${wd === h.like_day}>
+                        ${l.weekdayLong(i)}
+                      </option>`,
+                  )}
+                </select>
+              </label>`
+            : nothing
+        }
+        ${
+          h.source
+            ? html`<div class="field">
+                <span class="label">${t("holiday_next")}</span>
+                ${
+                  this._upcoming === undefined
+                    ? html`<span class="muted">…</span>`
+                    : this._upcoming?.length
+                      ? this._upcoming.map(
+                          (u) =>
+                            html`<div class="between hday">
+                              <span>${u.name || t("holiday")}</span
+                              ><span class="muted">${fmtDate(u.date)}</span>
+                            </div>`,
+                        )
+                      : html`<span class="muted">${t("holiday_none_upcoming")}</span>`
+                }
+                ${
+                  h.source.startsWith("binary_sensor.")
+                    ? html`<span class="muted small">${t("holiday_workday_hint")}</span>`
+                    : nothing
+                }
+              </div>`
+            : nothing
+        }
+      </div>`;
+  }
 
   private get _admin(): boolean {
     return !!this.hass?.user?.is_admin;
@@ -362,6 +521,7 @@ export class ZeitwerkRules extends LitElement {
           </button>
         </label>
       </div>
+      ${this._renderHolidays()}
       ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
     `;
   }
@@ -805,6 +965,9 @@ export class ZeitwerkRules extends LitElement {
       }
       .switch[aria-checked="true"] span {
         background: var(--zw-on-accent);
+      }
+      .hday {
+        font-size: 13px;
       }
       .profiles {
         display: grid;

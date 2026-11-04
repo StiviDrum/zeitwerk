@@ -96,6 +96,7 @@ export interface ZeitwerkCardConfig {
   view?: "week" | "timeline" | "profiles";
   plan?: string;
   tags?: string[];
+  title?: string;
   show_profile_sliders?: boolean;
   time_step?: number;
   compact?: boolean;
