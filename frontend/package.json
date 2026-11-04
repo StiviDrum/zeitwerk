@@ -1,6 +1,6 @@
 {
   "name": "zeitwerk-card",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Lovelace card for the Zeitwerk Home Assistant integration",
   "private": true,
   "type": "module",

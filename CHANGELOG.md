@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-04
+
+### Added
+- Brand icon and logo (by Steven Glab): shipped in
+  `custom_components/zeitwerk/brand/` (shown by Home Assistant for custom
+  integrations that bring their own branding) and as README header.
+
 ## [0.6.1] - 2026-11-04
 
 ### Changed

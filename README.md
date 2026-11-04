@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-logo-dark.png">
+    <img src="docs/brand/readme-logo-light.png" alt="Zeitwerk" width="420">
+  </picture>
+</p>
+
 # Zeitwerk
 
 Weekly schedules for Home Assistant built on **profiles** – like a thermostat

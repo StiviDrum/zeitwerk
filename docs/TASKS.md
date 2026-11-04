@@ -139,5 +139,6 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
 - [ ] Brand assets for HACS/home-assistant/brands if wanted (ask Steven)
+  - 2026-11-04: Steven's icon/logo (SVG) in `docs/brand/`; PNGs (icon 256/512, logo 360×128/720×256, light + dark lettering) rendered with Inter and shipped in `custom_components/zeitwerk/brand/` – HA 2026.10 serves local branding of custom integrations (verified: icon on the integrations page). Not yet submitted to home-assistant/brands (HACS list icon) – needs Steven's OK.
 - [ ] HACS default repository submission checklist (ask Steven before submitting)
 - [ ] Release v1.0.0
