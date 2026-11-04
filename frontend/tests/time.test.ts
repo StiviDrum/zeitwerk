@@ -53,3 +53,13 @@ describe("time helpers", () => {
     expect(zonedNow("Europe/Berlin", new Date("2026-11-04T23:30:00Z")).weekday).toBe("thu");
   });
 });
+
+describe("minutesFromToday", () => {
+  it("counts across days in the server zone", async () => {
+    const { minutesFromToday } = await import("../src/time");
+    const now = new Date("2026-11-04T16:40:00Z"); // Wed 17:40 Berlin
+    expect(minutesFromToday("2026-11-04T21:00:00Z", "Europe/Berlin", now)).toBe(22 * 60);
+    expect(minutesFromToday("2026-11-05T05:00:00Z", "Europe/Berlin", now)).toBe(1440 + 6 * 60);
+    expect(minutesFromToday("2026-11-03T22:30:00Z", "Europe/Berlin", now)).toBe(-30);
+  });
+});

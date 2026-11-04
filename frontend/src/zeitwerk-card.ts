@@ -1,6 +1,9 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import "./block-editor";
+import "./rules-page";
+import type { PlanMutator } from "./rules-page";
+import { conditionsSummary, pauseReason, type Condition } from "./conditions";
 import type { BlockEditTarget, BlockSaveDetail } from "./block-editor";
 import {
   blockAt,
@@ -26,7 +29,15 @@ import {
   type QuickValue,
 } from "./quickview";
 import { tokens } from "./styles";
-import { MINUTES_PER_DAY, clamp, formatTime, snap, zonedClock, zonedNow } from "./time";
+import {
+  MINUTES_PER_DAY,
+  clamp,
+  formatTime,
+  minutesFromToday,
+  snap,
+  zonedClock,
+  zonedNow,
+} from "./time";
 import {
   WEEKDAYS,
   type Block,
@@ -57,6 +68,8 @@ interface GridRow {
   segments: Segment[];
   active: boolean;
   today: boolean;
+  /** 0 = today's row, 1 = tomorrow's row (manual override hatch). */
+  dayOffset: number | null;
 }
 
 function errorMessage(err: unknown): string {
@@ -77,6 +90,7 @@ export class ZeitwerkCard extends LitElement {
   @state() private _notice?: string;
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
+  @state() private _page: "week" | "rules" = "week";
 
   private _unsub?: Promise<() => Promise<void> | void>;
   private _subscribedPlan?: string;
@@ -170,6 +184,16 @@ export class ZeitwerkCard extends LitElement {
       const qv = quickValue(p);
       if (qv) ids.push(qv.entityId);
     }
+    // Condition entities: summaries and the pause reason show their state.
+    const conditions = [
+      ...this._plan.activation.conditions,
+      ...this._plan.overrides.flatMap((o) => o.conditions),
+    ];
+    for (const c of conditions) {
+      const e = c.entity_id;
+      if (typeof e === "string") ids.push(e);
+      else if (Array.isArray(e)) ids.push(...e.filter((x): x is string => typeof x === "string"));
+    }
     return ids;
   }
 
@@ -223,7 +247,7 @@ export class ZeitwerkCard extends LitElement {
     }
   }
 
-  private async _updatePlan(mutate: (plan: Plan) => void): Promise<void> {
+  private async _updatePlan(mutate: PlanMutator): Promise<void> {
     if (!this.hass || !this._plan) return;
     const plan = structuredClone(this._plan);
     delete plan.status;
@@ -487,6 +511,18 @@ export class ZeitwerkCard extends LitElement {
         ? plan.profiles.map((p) => this._quick(p)).filter((q): q is QuickRow => !!q)
         : [];
     const l = this._l;
+    if (this._page === "rules") {
+      return html`<ha-card>
+        <zeitwerk-rules
+          ?dark=${!!this.hass?.themes?.darkMode}
+          .hass=${this.hass}
+          .plan=${plan}
+          .localize=${l}
+          .save=${(m: PlanMutator) => this._updatePlan(m)}
+          @zw-back=${() => (this._page = "week")}
+        ></zeitwerk-rules>
+      </ha-card>`;
+    }
     return html`<ha-card class=${this._config!.compact ? "compact" : ""}>
       ${this._renderHeader(plan)} ${this._renderChips(plan)}
       ${
@@ -496,6 +532,7 @@ export class ZeitwerkCard extends LitElement {
           : nothing
       }
       ${this._separator(l.t("section_week"))} ${this._renderTabs(plan)} ${this._renderGrid(plan)}
+      ${this._config!.compact ? nothing : this._renderRulesLinks(plan)}
       ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
       ${this._editing ? this._renderEditor(plan, this._editing) : nothing}
     </ha-card>`;
@@ -527,7 +564,10 @@ export class ZeitwerkCard extends LitElement {
           >${current.name}${value ? ` ${value}` : ""}</span
         >${nextText}`;
     } else if (status?.source === "inactive") {
-      subline = l.t("plan_paused");
+      subline = this._pausedText(plan);
+    }
+    if (status?.source === "inactive" && current) {
+      subline = html`${subline} · ${this._pausedText(plan)}`;
     }
     return html`<div class="header">
       <div class="icon" style="background:${tint(color, 18)};color:${color}">
@@ -568,7 +608,7 @@ export class ZeitwerkCard extends LitElement {
     } else if (status?.error) {
       state = html`<span class="chip bad">${l.t("plan_error")}</span>`;
     } else if (status && !status.active) {
-      state = html`<span class="chip">${l.t("plan_paused")}</span>`;
+      state = html`<span class="chip">${this._pausedText(plan)}</span>`;
     } else {
       state = html`<span class="chip ok"><span class="dot"></span>${l.t("plan_running")}</span>`;
     }
@@ -585,11 +625,96 @@ export class ZeitwerkCard extends LitElement {
       const ov = plan.overrides.find((o) => o.id === source.slice(9));
       override = l.t("override_active", { name: ov?.name ?? source.slice(9) });
     }
+    const tz = this.hass?.config?.time_zone;
+    const manual = status?.manual_since
+      ? html`<span class="chip manual"
+          >${
+            status.manual_until
+              ? l.t("manual_until", { time: zonedClock(status.manual_until, tz) })
+              : l.t("manual")
+          }</span
+        >`
+      : nothing;
     return html`<div class="chips">
       <span class="chip"><ha-icon icon="mdi:calendar-blank-outline"></ha-icon>${dayText}</span>
-      ${state}
+      ${state} ${manual}
       <span class="chip muted">${override}</span>
     </div>`;
+  }
+
+  private _pausedText(plan: Plan): string {
+    const l = this._l;
+    const reason = pauseReason(
+      plan.activation.conditions as Condition[],
+      plan.status?.activation_results ?? [],
+      this.hass,
+      l,
+    );
+    return reason ? l.t("paused_reason", { reason }) : l.t("plan_paused");
+  }
+
+  private _renderRulesLinks(plan: Plan) {
+    const l = this._l;
+    const results = plan.status?.override_results ?? {};
+    const active = plan.overrides.filter((o) => results[o.id]);
+    const overrides = plan.overrides.length
+      ? `${plan.overrides.map((o) => o.name).join(", ")} · ${
+          active.length
+            ? active.map((o) => l.t("override_active", { name: o.name })).join(", ")
+            : l.t("none_active")
+        }`
+      : l.t("no_conditions");
+    const act = plan.activation;
+    const activation = act.conditions.length
+      ? `${conditionsSummary(act.conditions as Condition[], act.match, this.hass, l)} · ${
+          plan.status?.active ? l.t("fulfilled") : l.t("not_fulfilled")
+        }`
+      : l.t("always_runs");
+    const row = (icon: string, title: string, sub: string) =>
+      html`<button class="link" @click=${() => (this._page = "rules")}>
+        <span class="licon"><ha-icon .icon=${icon}></ha-icon></span>
+        <span class="ltext"
+          ><span class="ltitle">${title}</span><span class="lsub">${sub}</span></span
+        >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>`;
+    return html`${this._separator(l.t("section_rules"))}
+      <div class="links">
+        ${row("mdi:layers-outline", l.t("rules_overrides"), overrides)}
+        ${row("mdi:flash-outline", l.t("rules_activation"), activation)}
+      </div>`;
+  }
+
+  /** Hatched range of a manual override within one row (today/tomorrow). */
+  private _manualSegment(plan: Plan, dayOffset: number): { left: number; width: number } | null {
+    const status = plan.status;
+    if (!status?.manual_since) return null;
+    const tz = this.hass?.config?.time_zone;
+    const dayStart = (iso: string | null | undefined, fallback: number) =>
+      iso ? minutesFromToday(iso, tz) : fallback;
+    const from = Math.max(dayStart(status.manual_since, 0), dayOffset * MINUTES_PER_DAY);
+    const to = Math.min(
+      dayStart(status.manual_until, (dayOffset + 1) * MINUTES_PER_DAY),
+      (dayOffset + 1) * MINUTES_PER_DAY,
+    );
+    if (to <= from) return null;
+    const base = dayOffset * MINUTES_PER_DAY;
+    return {
+      left: ((from - base) / MINUTES_PER_DAY) * 100,
+      width: ((to - from) / MINUTES_PER_DAY) * 100,
+    };
   }
 
   private _renderSlider(plan: Plan, row: QuickRow) {
@@ -719,6 +844,7 @@ export class ZeitwerkCard extends LitElement {
         segments: rowSegments(dayType, dayTypeFor(plan, previousWeekday(wd))),
         active,
         today: i === now.weekdayIndex && !plan.status?.is_holiday,
+        dayOffset: (i - now.weekdayIndex + 7) % 7 <= 1 ? (i - now.weekdayIndex + 7) % 7 : null,
       };
     });
     if (plan.holidays.mode === "own_day_type") {
@@ -731,6 +857,7 @@ export class ZeitwerkCard extends LitElement {
           segments: rowSegments(holiday, undefined),
           active: holiday.id === selected,
           today: !!plan.status?.is_holiday,
+          dayOffset: null,
         });
       }
     }
@@ -781,6 +908,7 @@ export class ZeitwerkCard extends LitElement {
                 @contextmenu=${(ev: Event) => ev.preventDefault()}
               >
                 ${row.segments.map((seg) => this._renderBlock(plan, seg))}
+                ${this._renderManual(plan, row)}
               </div>
             </div>`,
         )}
@@ -817,6 +945,19 @@ export class ZeitwerkCard extends LitElement {
               <div class="hint">${l.t("hint")}</div>`
       }
     </div>`;
+  }
+
+  private _renderManual(plan: Plan, row: GridRow) {
+    if (row.dayOffset === null) return nothing;
+    // On a holiday the hatch belongs to the holiday row, not the weekday row.
+    if (plan.status?.is_holiday && plan.holidays.mode === "own_day_type") return nothing;
+    const seg = this._manualSegment(plan, row.dayOffset);
+    if (!seg) return nothing;
+    return html`<div
+      class="hatch"
+      style="left:${seg.left}%;width:${seg.width}%"
+      title=${this._l.t("manual")}
+    ></div>`;
   }
 
   private _renderBlock(plan: Plan, seg: Segment) {
@@ -1262,6 +1403,78 @@ export class ZeitwerkCard extends LitElement {
         font-size: 12px;
         color: var(--zw-text-2);
         padding: 0 4px;
+      }
+      .hatch {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 10px;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--zw-text) 55%, transparent) 0 2px,
+          transparent 2px 7px
+        );
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--zw-text) 40%, transparent);
+      }
+      .chip.manual {
+        background: repeating-linear-gradient(
+          135deg,
+          var(--zw-surface-2) 0 4px,
+          var(--zw-surface) 4px 8px
+        );
+      }
+      .links {
+        border-radius: 22px;
+        background: var(--zw-surface);
+        border: 1px solid var(--zw-border);
+        overflow: hidden;
+      }
+      .link {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 56px;
+        padding: 8px 14px 8px 10px;
+        text-align: left;
+        box-sizing: border-box;
+        color: var(--zw-text);
+      }
+      .link + .link {
+        border-top: 1px solid var(--zw-border);
+      }
+      .link svg {
+        color: var(--zw-text-2);
+        flex-shrink: 0;
+      }
+      .licon {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+        border-radius: 18px;
+        background: var(--zw-surface-2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        --mdc-icon-size: 18px;
+      }
+      .ltext {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .ltitle {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .lsub {
+        font-size: 12px;
+        color: var(--zw-text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .notice {
         font-size: 13px;

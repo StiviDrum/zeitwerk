@@ -41,7 +41,12 @@ let plan = {
   tags: ["heizung"],
   profiles: profiles("wohnzimmer"),
   default_profile: "eco",
-  activation: { match: "all", conditions: [], when_inactive: "none", reevaluate: true },
+  activation: {
+    match: "all",
+    conditions: [{ condition: "state", entity_id: "input_boolean.heizperiode", state: "on" }],
+    when_inactive: "none",
+    reevaluate: true,
+  },
   holidays: { source: "calendar.deutschland_he", mode: "like_day", like_day: "sun", day_type: null },
   week: {
     day_types: [
@@ -60,26 +65,56 @@ let plan = {
     ],
   },
   overrides: [
-    { id: "vacation", name: "Urlaub", profile: "away", match: "all", conditions: [] },
-    { id: "nobody_home", name: "Niemand zu Hause", profile: "away", match: "all", conditions: [] },
+    {
+      id: "vacation",
+      name: "Urlaub",
+      profile: "away",
+      match: "all",
+      conditions: [{ condition: "state", entity_id: "input_boolean.urlaub", state: "on" }],
+    },
+    {
+      id: "nobody_home",
+      name: "Niemand zu Hause",
+      profile: "away",
+      match: "all",
+      conditions: [
+        { condition: "state", entity_id: "input_boolean.person_1_home", state: "off" },
+        { condition: "state", entity_id: "input_boolean.person_2_home", state: "off" },
+      ],
+    },
   ],
   options: { reapply_on_start: true, reapply_on_profile_change: true, manual_override: "until_next" },
 };
 
 const today = (new Date().getDay() + 6) % 7;
-const status = () => ({
-  profile: "eco",
-  source: "schedule",
-  day_type: today < 5 ? "workday" : "weekend",
-  is_holiday: false,
-  active: true,
-  activation_results: [],
-  override_results: [],
-  next_change: new Date(Date.now() + 47 * 60_000).toISOString(),
-  next_profile: "comfort",
-  forced_until: null,
-  error: null,
-});
+const manual = params.get("manual") === "1";
+const status = () => {
+  const actResults = plan.activation.conditions.map((c) => states[c.entity_id]?.state === c.state);
+  const active = plan.activation.match === "any" ? actResults.some(Boolean) : actResults.every(Boolean);
+  const ovResults = Object.fromEntries(
+    plan.overrides.map((o) => {
+      const r = o.conditions.map((c) => states[c.entity_id]?.state === c.state);
+      return [o.id, r.length > 0 && (o.match === "any" ? r.some(Boolean) : r.every(Boolean))];
+    }),
+  );
+  const ov = plan.overrides.find((o) => ovResults[o.id]);
+  return {
+    profile: !active ? null : ov ? ov.profile : "eco",
+    source: !active ? "inactive" : ov ? `override:${ov.id}` : "default",
+    day_type: today < 5 ? "workday" : "weekend",
+    is_holiday: false,
+    active,
+    activation_results: actResults,
+    override_results: ovResults,
+    next_change: ov || !active ? null : new Date(Date.now() + 47 * 60_000).toISOString(),
+    next_profile: ov || !active ? null : "comfort",
+    forced_until: null,
+    manual_since: manual ? new Date(Date.now() - 50 * 60_000).toISOString() : null,
+    manual_until: manual ? new Date(Date.now() + 47 * 60_000).toISOString() : null,
+    manual_entity: manual ? "input_number.temperaturspeicher_wohnzimmer" : null,
+    error: null,
+  };
+};
 
 const subscribers = new Set();
 const emit = () => {
@@ -88,6 +123,22 @@ const emit = () => {
 
 const states = {
   "switch.zeitwerk_wohnzimmer_heizung": { entity_id: "switch.zeitwerk_wohnzimmer_heizung", state: "on", attributes: {} },
+  "input_boolean.urlaub": { entity_id: "input_boolean.urlaub", state: "off", attributes: { friendly_name: "Urlaub" } },
+  "input_boolean.heizperiode": {
+    entity_id: "input_boolean.heizperiode",
+    state: "on",
+    attributes: { friendly_name: "Heizperiode" },
+  },
+  "input_boolean.person_1_home": {
+    entity_id: "input_boolean.person_1_home",
+    state: "on",
+    attributes: { friendly_name: "Person 1 zu Hause" },
+  },
+  "input_boolean.person_2_home": {
+    entity_id: "input_boolean.person_2_home",
+    state: "on",
+    attributes: { friendly_name: "Person 2 zu Hause" },
+  },
   "input_number.temperaturspeicher_wohnzimmer": {
     entity_id: "input_number.temperaturspeicher_wohnzimmer",
     state: "18",
@@ -104,6 +155,10 @@ const hass = {
   locale: { language: params.get("lang") || "de" },
   config: { time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone, unit_system: { temperature: "°C" } },
   themes: { darkMode: !light },
+  formatEntityState: (entity, state) => {
+    const s = state ?? entity.state;
+    return s === "on" ? "An" : s === "off" ? "Aus" : s;
+  },
   user: { is_admin: params.get("admin") !== "0" },
   connection: {
     async subscribeMessage(cb, msg) {
@@ -145,3 +200,11 @@ const card = document.querySelector("zeitwerk-card");
 card.setConfig({ type: "custom:zeitwerk-card", plan: params.get("plan") || "wohnzimmer_heizung" });
 card.hass = hass;
 window.hass = hass;
+
+/** Simulate a state change, e.g. setState("input_boolean.urlaub", "on"). */
+window.setState = (entityId, state) => {
+  const next = { ...hass, states: { ...hass.states, [entityId]: { ...hass.states[entityId], state } } };
+  Object.assign(states, next.states);
+  card.hass = next;
+  emit();
+};

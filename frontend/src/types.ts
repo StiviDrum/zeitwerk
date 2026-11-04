@@ -47,9 +47,14 @@ export interface PlanStatus {
   day_type: string | null;
   is_holiday: boolean;
   active: boolean;
+  activation_results?: boolean[];
+  override_results?: Record<string, boolean>;
   next_change: string | null;
   next_profile: string | null;
   forced_until: string | null;
+  manual_since?: string | null;
+  manual_until?: string | null;
+  manual_entity?: string | null;
   error: string | null;
 }
 
@@ -121,6 +126,7 @@ export interface HomeAssistant {
   user?: { is_admin?: boolean };
   connection: HassConnection;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
+  formatEntityState?(entity: HassEntity, state?: string): string;
   callService(
     domain: string,
     service: string,
