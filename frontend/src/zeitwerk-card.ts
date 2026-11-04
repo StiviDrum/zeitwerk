@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { ZeitwerkBlockEditor } from "./block-editor";
+import { ZeitwerkDayEditor, type DaySaveDetail } from "./day-editor";
+import { applyDayPlan, weekToDays, type DayKey } from "./day-plan";
 import { ZeitwerkRules } from "./rules-page";
 import { ZeitwerkPlanWizard } from "./plan-wizard";
 import { ZeitwerkCardEditor } from "./card-editor";
@@ -8,25 +9,9 @@ import { ZeitwerkConditionsEditor } from "./conditions-editor";
 import { defineElements } from "./register";
 import type { PlanMutator } from "./rules-page";
 import { conditionsSummary, pauseReason, type Condition } from "./conditions";
-import type { BlockEditTarget, BlockSaveDetail } from "./block-editor";
-import {
-  blockAt,
-  copyDayType,
-  detachDay,
-  dayTypeFor,
-  dragBlock,
-  toInterval,
-  type Edge,
-  freeUntil,
-  insertBlock,
-  previousWeekday,
-  removeBlock,
-  replaceBlock,
-  rowSegments,
-  type Segment,
-} from "./blocks";
+import { dayTypeFor, previousWeekday, rowSegments, type Segment } from "./blocks";
 import { profileColor, textOn, tint } from "./colors";
-import { daysLabel, localizer, type Localizer } from "./localize";
+import { localizer, type Localizer } from "./localize";
 import {
   controlFor,
   formatValue,
@@ -38,15 +23,7 @@ import {
   type QuickValue,
 } from "./quickview";
 import { tokens } from "./styles";
-import {
-  MINUTES_PER_DAY,
-  clamp,
-  formatTime,
-  minutesFromToday,
-  snap,
-  zonedClock,
-  zonedNow,
-} from "./time";
+import { MINUTES_PER_DAY, formatTime, minutesFromToday, zonedClock, zonedNow } from "./time";
 import {
   WEEKDAYS,
   type Block,
@@ -55,15 +32,12 @@ import {
   type Plan,
   type PlanEvent,
   type Profile,
-  type Weekday,
   type ZeitwerkCardConfig,
 } from "./types";
 import { CARD_VERSION } from "./version";
 
-const LONG_PRESS_MS = 500;
 const VALUE_DEBOUNCE_MS = 400;
 const NOTICE_MS = 4000;
-const HOLIDAY_LIKE_TAB = "__holiday_like";
 
 interface QuickRow {
   profile: Profile;
@@ -72,7 +46,7 @@ interface QuickRow {
 }
 
 interface GridRow {
-  key: string;
+  key: DayKey;
   label: string;
   dayType: DayType | undefined;
   segments: Segment[];
@@ -92,46 +66,24 @@ export class ZeitwerkCard extends LitElement {
   @state() private _config?: ZeitwerkCardConfig;
   @state() private _plan?: Plan | null;
   @state() private _error?: string;
-  @state() private _tab?: string;
-  @state() private _editing?: BlockEditTarget;
+  /** Day open in the day editor and its blocks when it was opened. */
+  @state() private _editDay?: { day: DayKey; blocks: Block[] };
   @state() private _saveError: string | null = null;
   @state() private _busy = false;
   @state() private _notice?: string;
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
   @state() private _page: "week" | "rules" | "wizard" = "week";
-  /** Block being dragged / moved by keyboard, not yet saved. */
-  @state() private _preview?: {
-    dayTypeId: string;
-    index: number;
-    block: Block;
-    rowKey?: string;
-    edge?: Edge;
-  };
-  @state() private _copyOpen = false;
   /** Timeline view: all (tag-filtered) plans and today's scheduled segments. */
   @state() private _plans?: Plan[];
   @state() private _segments: Record<string, { start: string; end: string; profile: string }[]> =
     {};
   private _previewTimer?: number;
-  @state() private _copyTargets: string[] = [];
-  private _drag?: {
-    dayTypeId: string;
-    index: number;
-    edge: Edge;
-    original: Block;
-    startX: number;
-    width: number;
-    moved: boolean;
-  };
-  private _suppressClick = false;
-  private _keyTimer?: number;
 
   private _unsub?: Promise<() => Promise<void> | void>;
   private _subscribedPlan?: string;
   private _clock?: number;
   private _nowWeekday?: number;
-  private _press?: { timer: number; x: number; y: number };
   private _valueTimers: Record<string, number> = {};
   private _noticeTimer?: number;
 
@@ -183,9 +135,6 @@ export class ZeitwerkCard extends LitElement {
     window.clearTimeout(this._clock);
     window.clearInterval(this._clock);
     this._clock = undefined;
-    this._cancelPress();
-    this._stopDrag();
-    window.clearTimeout(this._keyTimer);
     window.clearTimeout(this._previewTimer);
     Object.values(this._valueTimers).forEach((t) => window.clearTimeout(t));
     this._valueTimers = {};
@@ -421,12 +370,37 @@ export class ZeitwerkCard extends LitElement {
     return this._plan?.profiles.find((p) => p.id === id);
   }
 
-  private _dayTypeLabel(dt: DayType): string {
-    const indices = dt.days.map((d) => WEEKDAYS.indexOf(d));
-    return `${dt.name} (${daysLabel(indices, this._l)})`;
+  // --- Actions --------------------------------------------------------------
+
+  private _dayName(day: DayKey): string {
+    return day === "holiday" ? this._l.t("holiday") : this._l.weekdayLong(WEEKDAYS.indexOf(day));
   }
 
-  // --- Actions --------------------------------------------------------------
+  private _openDay(day: DayKey): void {
+    if (!this._plan) return;
+    if (!this.hass?.user?.is_admin) {
+      this._notify(this._l.t("admin_only"));
+      return;
+    }
+    this._saveError = null;
+    this._busy = false;
+    this._editDay = { day, blocks: weekToDays(this._plan)[day] };
+  }
+
+  private _onSaveDay = async (ev: CustomEvent<DaySaveDetail>): Promise<void> => {
+    const { blocks, targets } = ev.detail;
+    const l = this._l;
+    this._busy = true;
+    this._saveError = null;
+    try {
+      await this._updatePlan((plan) => applyDayPlan(plan, targets, blocks, l));
+      this._editDay = undefined;
+    } catch (err) {
+      this._saveError = l.t("save_failed", { error: errorMessage(err) });
+    } finally {
+      this._busy = false;
+    }
+  };
 
   private _togglePlan(): void {
     if (!this.hass || !this._plan) return;
@@ -484,282 +458,7 @@ export class ZeitwerkCard extends LitElement {
     }).catch((err) => this._notify(errorMessage(err)));
   }
 
-  private _openEditor(target: BlockEditTarget): void {
-    if (!this.hass?.user?.is_admin) {
-      this._notify(this._l.t("admin_only"));
-      return;
-    }
-    this._saveError = null;
-    this._busy = false;
-    this._editing = target;
-  }
-
-  private _onBlockClick(seg: Segment, rowKey?: string): void {
-    if (this._suppressClick) return;
-    const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
-    const block = dt?.blocks[seg.index];
-    if (!dt || !block) return;
-    // A spill segment belongs to the block of the previous day.
-    const row = WEEKDAYS.includes(rowKey as Weekday) ? (rowKey as Weekday) : undefined;
-    const weekday = row && seg.spill ? previousWeekday(row) : row;
-    this._openEditor({ dayTypeId: dt.id, index: seg.index, block: { ...block }, weekday });
-  }
-
-  private _onBlockKey(seg: Segment, ev: KeyboardEvent, rowKey?: string): void {
-    if (ev.key === "Enter" || ev.key === " " || ev.key === "Delete" || ev.key === "Backspace") {
-      // Delete opens the editor, where deleting is confirmed with the button.
-      ev.preventDefault();
-      this._onBlockClick(seg, rowKey);
-      return;
-    }
-    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
-    ev.preventDefault();
-    if (!this.hass?.user?.is_admin) {
-      this._notify(this._l.t("admin_only"));
-      return;
-    }
-    const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
-    const original = dt?.blocks[seg.index];
-    if (!dt || !original) return;
-    const current =
-      this._preview?.dayTypeId === dt.id && this._preview.index === seg.index
-        ? this._preview.block
-        : original;
-    const edge: Edge = ev.shiftKey ? "end" : ev.altKey ? "start" : "move";
-    const delta = (ev.key === "ArrowLeft" ? -1 : 1) * this._step;
-    this._preview = {
-      dayTypeId: dt.id,
-      index: seg.index,
-      block: dragBlock(current, edge, delta, this._step),
-    };
-    window.clearTimeout(this._keyTimer);
-    this._keyTimer = window.setTimeout(() => this._commitPreview(), 800);
-  }
-
   // --- Drag block edges -------------------------------------------------------
-
-  private _onEdgeDown(seg: Segment, edge: Edge, rowKey: string, ev: PointerEvent): void {
-    ev.stopPropagation();
-    ev.preventDefault();
-    if (ev.button !== 0) return;
-    if (!this.hass?.user?.is_admin) {
-      this._notify(this._l.t("admin_only"));
-      return;
-    }
-    const dt = this._plan?.week.day_types.find((d) => d.id === seg.dayType);
-    const original = dt?.blocks[seg.index];
-    const track = (ev.currentTarget as HTMLElement).closest(".track");
-    if (!dt || !original || !track) return;
-    this._cancelPress();
-    this._drag = {
-      dayTypeId: dt.id,
-      index: seg.index,
-      edge,
-      original,
-      startX: ev.clientX,
-      width: track.getBoundingClientRect().width,
-      moved: false,
-    };
-    this._preview = { dayTypeId: dt.id, index: seg.index, block: original, rowKey, edge };
-    window.addEventListener("pointermove", this._onDragMove);
-    window.addEventListener("pointerup", this._onDragEnd);
-    window.addEventListener("pointercancel", this._onDragCancel);
-  }
-
-  private _onDragMove = (ev: PointerEvent): void => {
-    const drag = this._drag;
-    if (!drag || !this._preview) return;
-    const dx = ev.clientX - drag.startX;
-    if (Math.abs(dx) > 3) drag.moved = true;
-    const delta = (dx / drag.width) * MINUTES_PER_DAY;
-    this._preview = {
-      ...this._preview,
-      block: dragBlock(drag.original, drag.edge, delta, this._step),
-    };
-  };
-
-  private _onDragEnd = (): void => {
-    const drag = this._drag;
-    this._stopDrag();
-    if (!drag) return;
-    if (drag.moved) {
-      this._suppressClick = true;
-      window.setTimeout(() => (this._suppressClick = false), 0);
-      this._commitPreview();
-    } else {
-      this._preview = undefined;
-    }
-  };
-
-  private _onDragCancel = (): void => {
-    this._stopDrag();
-    this._preview = undefined;
-  };
-
-  private _stopDrag(): void {
-    this._drag = undefined;
-    window.removeEventListener("pointermove", this._onDragMove);
-    window.removeEventListener("pointerup", this._onDragEnd);
-    window.removeEventListener("pointercancel", this._onDragCancel);
-  }
-
-  private async _commitPreview(): Promise<void> {
-    const preview = this._preview;
-    if (!preview || !this._plan) return;
-    const original = this._plan.week.day_types.find((d) => d.id === preview.dayTypeId)?.blocks[
-      preview.index
-    ];
-    if (original && original.start === preview.block.start && original.end === preview.block.end) {
-      this._preview = undefined;
-      return;
-    }
-    const def = this._plan.default_profile;
-    try {
-      await this._updatePlan((plan) => {
-        const dt = plan.week.day_types.find((d) => d.id === preview.dayTypeId);
-        if (dt) dt.blocks = replaceBlock(dt.blocks, preview.index, preview.block, def);
-      });
-    } catch (err) {
-      this._notify(this._l.t("save_failed", { error: errorMessage(err) }));
-    } finally {
-      if (this._preview === preview || this._preview?.block === preview.block)
-        this._preview = undefined;
-    }
-  }
-
-  /** Plan as shown: with the block being dragged replaced (not normalised yet). */
-  private _shownPlan(plan: Plan): Plan {
-    const preview = this._preview;
-    if (!preview) return plan;
-    return {
-      ...plan,
-      week: {
-        day_types: plan.week.day_types.map((dt) =>
-          dt.id === preview.dayTypeId
-            ? { ...dt, blocks: dt.blocks.map((b, i) => (i === preview.index ? preview.block : b)) }
-            : dt,
-        ),
-      },
-    };
-  }
-
-  private _copyDay(fromId: string): void {
-    const targets = this._copyTargets;
-    if (!targets.length) return;
-    this._updatePlan((plan) => copyDayType(plan, fromId, targets))
-      .then(() => {
-        this._copyOpen = false;
-        this._copyTargets = [];
-      })
-      .catch((err) => this._notify(this._l.t("save_failed", { error: errorMessage(err) })));
-  }
-
-  private _onTrackDown(row: GridRow, ev: PointerEvent): void {
-    if (ev.button !== 0 || !row.dayType || (ev.target as HTMLElement).closest(".block")) return;
-    this._cancelPress();
-    const track = ev.currentTarget as HTMLElement;
-    const { clientX, clientY } = ev;
-    const timer = window.setTimeout(() => {
-      this._press = undefined;
-      const rect = track.getBoundingClientRect();
-      const minute = ((clientX - rect.left) / rect.width) * MINUTES_PER_DAY;
-      this._newBlockAt(
-        row.dayType!,
-        minute,
-        WEEKDAYS.includes(row.key as Weekday) ? (row.key as Weekday) : undefined,
-      );
-    }, LONG_PRESS_MS);
-    this._press = { timer, x: clientX, y: clientY };
-  }
-
-  private _onTrackMove(ev: PointerEvent): void {
-    if (!this._press) return;
-    if (Math.hypot(ev.clientX - this._press.x, ev.clientY - this._press.y) > 8) this._cancelPress();
-  }
-
-  private _cancelPress(): void {
-    if (this._press) window.clearTimeout(this._press.timer);
-    this._press = undefined;
-  }
-
-  private _newBlockAt(dayType: DayType, minute: number, weekday?: Weekday): void {
-    if (!this._plan) return;
-    const step = this._step;
-    const start = clamp(snap(minute, step), 0, MINUTES_PER_DAY - step);
-    if (blockAt(dayType.blocks, start) >= 0) return;
-    const end = Math.min(start + 120, freeUntil(dayType.blocks, start), MINUTES_PER_DAY);
-    const profile =
-      this._plan.profiles.find((p) => p.id !== this._plan!.default_profile) ??
-      this._plan.profiles[0];
-    navigator.vibrate?.(10);
-    this._tab = dayType.id;
-    this._openEditor({
-      dayTypeId: dayType.id,
-      index: -1,
-      block: { start: formatTime(start), end: formatTime(end), profile: profile.id },
-      weekday,
-    });
-  }
-
-  /**
-   * Apply block changes per day type id. With `onlyDay`, the target weekday is
-   * detached from its day type first and the change applies to it alone.
-   */
-  private async _saveBlocks(
-    target: BlockEditTarget,
-    onlyDay: boolean | undefined,
-    changes: Record<string, (blocks: Block[]) => Block[]>,
-  ): Promise<void> {
-    this._busy = true;
-    this._saveError = null;
-    const l = this._l;
-    try {
-      await this._updatePlan((plan) => {
-        if (onlyDay && target.weekday) {
-          const id = detachDay(
-            plan,
-            target.weekday,
-            l.weekdayLong(WEEKDAYS.indexOf(target.weekday)),
-          );
-          const change = changes[target.dayTypeId];
-          delete changes[target.dayTypeId];
-          changes[id] = change;
-          this._tab = id;
-        }
-        for (const dt of plan.week.day_types) {
-          const change = changes[dt.id];
-          if (change) dt.blocks = change(dt.blocks);
-        }
-      });
-      this._editing = undefined;
-    } catch (err) {
-      this._saveError = this._l.t("save_failed", { error: errorMessage(err) });
-    } finally {
-      this._busy = false;
-    }
-  }
-
-  private _onSave(ev: CustomEvent<BlockSaveDetail>): void {
-    const { target, block, also, onlyDay } = ev.detail;
-    const def = this._plan!.default_profile;
-    const changes: Record<string, (blocks: Block[]) => Block[]> = {
-      [target.dayTypeId]: (blocks) =>
-        target.index < 0
-          ? insertBlock(blocks, block, def)
-          : replaceBlock(blocks, target.index, block, def),
-    };
-    for (const id of also ?? []) {
-      if (id !== target.dayTypeId) changes[id] = (blocks) => insertBlock(blocks, block, def);
-    }
-    this._saveBlocks(target, onlyDay, changes);
-  }
-
-  private _onDelete(ev: CustomEvent<{ target: BlockEditTarget; onlyDay?: boolean }>): void {
-    const { target, onlyDay } = ev.detail;
-    this._saveBlocks(target, onlyDay, {
-      [target.dayTypeId]: (blocks) => removeBlock(blocks, target.index),
-    });
-  }
 
   // --- Rendering ------------------------------------------------------------
 
@@ -969,8 +668,25 @@ export class ZeitwerkCard extends LitElement {
         ? plan.profiles.map((p) => this._quick(p)).filter((q): q is QuickRow => !!q)
         : [];
     const l = this._l;
-    if (this._editing) {
-      return html`<ha-card>${this._renderEditor(plan, this._editing)}</ha-card>`;
+    if (this._editDay) {
+      const labels: Record<string, string> = {};
+      for (const p of plan.profiles) labels[p.id] = this._valueLabel(p);
+      return html`<ha-card>
+        <zeitwerk-day-editor
+          ?dark=${!!this.hass?.themes?.darkMode}
+          .plan=${plan}
+          .day=${this._editDay.day}
+          .initial=${this._editDay.blocks}
+          .localize=${l}
+          .valueLabels=${labels}
+          .withHoliday=${plan.holidays.mode === "own_day_type" && !!plan.holidays.day_type}
+          .step=${this._step}
+          .error=${this._saveError}
+          .busy=${this._busy}
+          @zw-close=${() => (this._editDay = undefined)}
+          @zw-save-day=${this._onSaveDay}
+        ></zeitwerk-day-editor>
+      </ha-card>`;
     }
     if (this._page === "rules") {
       return html`<ha-card>
@@ -992,7 +708,7 @@ export class ZeitwerkCard extends LitElement {
               <div class="sliders">${quick.map((q) => this._renderSlider(plan, q))}</div>`
           : nothing
       }
-      ${this._separator(l.t("section_week"))} ${this._renderTabs(plan)} ${this._renderGrid(plan)}
+      ${this._separator(l.t("section_week"))} ${this._renderGrid(plan)}
       ${this._config!.compact ? nothing : this._renderRulesLinks(plan)}
       ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
     </ha-card>`;
@@ -1254,65 +970,12 @@ export class ZeitwerkCard extends LitElement {
     </div>`;
   }
 
-  private _tabs(plan: Plan): { id: string; name: string; sub: string }[] {
-    const l = this._l;
-    const holidayTypeId = plan.holidays.mode === "own_day_type" ? plan.holidays.day_type : null;
-    const shown = plan.week.day_types.filter((dt) => dt.days.length || dt.id === holidayTypeId);
-    const tabs = shown.map((dt) => ({
-      id: dt.id,
-      name: dt.name,
-      sub:
-        dt.id === holidayTypeId
-          ? l.t("holiday_days")
-          : daysLabel(
-              dt.days.map((d) => WEEKDAYS.indexOf(d)),
-              l,
-            ),
-    }));
-    if (plan.holidays.mode === "like_day" && plan.holidays.like_day) {
-      tabs.push({
-        id: HOLIDAY_LIKE_TAB,
-        name: l.t("holiday"),
-        sub: l.t("holiday_like", { day: l.weekdayShort(WEEKDAYS.indexOf(plan.holidays.like_day)) }),
-      });
-    }
-    return tabs;
-  }
-
-  private _selectedTab(plan: Plan): string | undefined {
-    const tabs = this._tabs(plan);
-    if (this._tab && tabs.some((t) => t.id === this._tab)) return this._tab;
-    const today = plan.status?.day_type;
-    return tabs.find((t) => t.id === today)?.id ?? tabs[0]?.id;
-  }
-
-  private _renderTabs(plan: Plan) {
-    const tabs = this._tabs(plan);
-    if (tabs.length < 2) return nothing;
-    const selected = this._selectedTab(plan);
-    return html`<div class="tabs" role="tablist" aria-label=${this._l.t("day_type_tabs")}>
-      ${tabs.map(
-        (t) =>
-          html`<button
-            role="tab"
-            aria-selected=${t.id === selected ? "true" : "false"}
-            @click=${() => (this._tab = t.id)}
-          >
-            <span class="tname">${t.name}</span><span class="tsub">${t.sub}</span>
-          </button>`,
-      )}
-    </div>`;
-  }
-
   private _rows(plan: Plan): GridRow[] {
     const l = this._l;
-    const selected = this._selectedTab(plan);
     const now = zonedNow(this.hass?.config?.time_zone);
-    const likeDay = plan.holidays.mode === "like_day" ? plan.holidays.like_day : null;
     const rows: GridRow[] = WEEKDAYS.map((wd, i) => {
       const dayType = dayTypeFor(plan, wd);
-      const active =
-        selected === HOLIDAY_LIKE_TAB ? wd === likeDay : !!dayType && dayType.id === selected;
+      const active = true;
       return {
         key: wd,
         label: l.weekdayShort(i),
@@ -1331,7 +994,7 @@ export class ZeitwerkCard extends LitElement {
           label: l.t("holiday_short"),
           dayType: holiday,
           segments: rowSegments(holiday, undefined),
-          active: holiday.id === selected,
+          active: true,
           today: !!plan.status?.is_holiday,
           dayOffset: null,
         });
@@ -1340,8 +1003,7 @@ export class ZeitwerkCard extends LitElement {
     return rows;
   }
 
-  private _renderGrid(realPlan: Plan) {
-    const plan = this._shownPlan(realPlan);
+  private _renderGrid(plan: Plan) {
     const l = this._l;
     const def = profileColor(plan, plan.default_profile);
     const rows = this._rows(plan);
@@ -1372,22 +1034,26 @@ export class ZeitwerkCard extends LitElement {
       <div class="rows">
         ${rows.map(
           (row) =>
-            html`<div class="row ${row.active ? "" : "dim"}">
+            html`<button
+              class="row"
+              aria-label=${l.t("day_editor_title", { day: this._dayName(row.key) })}
+              @click=${() => this._openDay(row.key)}
+            >
               <span class="day ${row.today ? "today" : ""}">${row.label}</span>
-              <div
-                class="track"
-                style="background:${tint(def, 16)}"
-                @pointerdown=${(ev: PointerEvent) => this._onTrackDown(row, ev)}
-                @pointermove=${this._onTrackMove}
-                @pointerup=${this._cancelPress}
-                @pointercancel=${this._cancelPress}
-                @pointerleave=${this._cancelPress}
-                @contextmenu=${(ev: Event) => ev.preventDefault()}
-              >
-                ${row.segments.map((seg) => this._renderBlock(plan, seg, row.key))}
-                ${this._renderManual(plan, row)} ${this._renderTip(row)}
-              </div>
-            </div>`,
+              <span class="track" style="background:${tint(def, 16)}">
+                ${row.segments.map((seg) => {
+                  const color = profileColor(plan, seg.profile);
+                  return html`<span
+                    class="block ${seg.spill ? "spill" : ""}"
+                    style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
+                    ><span class="blabel"
+                      >${seg.width >= seg.label.length * 2.1 ? seg.label : ""}</span
+                    ></span
+                  >`;
+                })}
+                ${this._renderManual(plan, row)}
+              </span>
+            </button>`,
         )}
         <div class="now-line" aria-hidden="true"></div>
         <div class="now-dot" aria-hidden="true"></div>
@@ -1419,8 +1085,7 @@ export class ZeitwerkCard extends LitElement {
                     : nothing
                 }
               </div>
-              ${this._renderCopy(realPlan)}
-              <div class="hint">${l.t("hint_drag", { step: this._step })}</div>`
+              <div class="hint">${l.t("tap_day_hint")}</div>`
       }
     </div>`;
   }
@@ -1436,139 +1101,6 @@ export class ZeitwerkCard extends LitElement {
       style="left:${seg.left}%;width:${seg.width}%"
       title=${this._l.t("manual")}
     ></div>`;
-  }
-
-  private _renderTip(row: GridRow) {
-    const p = this._preview;
-    if (!p || p.rowKey !== row.key || !p.edge || p.edge === "move") return nothing;
-    const time = p.edge === "start" ? p.block.start : p.block.end;
-    const iv = toInterval(p.block);
-    const at = p.edge === "start" ? iv.start : iv.end % MINUTES_PER_DAY || MINUTES_PER_DAY;
-    return html`<div class="tip" style="left:${(at / MINUTES_PER_DAY) * 100}%">${time}</div>`;
-  }
-
-  private _renderCopy(plan: Plan) {
-    const l = this._l;
-    const selected = this._selectedTab(plan);
-    const from = plan.week.day_types.find((d) => d.id === selected);
-    if (!from || !this.hass?.user?.is_admin) return nothing;
-    const others = plan.week.day_types.filter(
-      (d) =>
-        d.id !== from.id &&
-        (d.days.length ||
-          (plan.holidays.mode === "own_day_type" && d.id === plan.holidays.day_type)),
-    );
-    if (!others.length) return nothing;
-    if (!this._copyOpen) {
-      return html`<button class="textbtn" @click=${() => (this._copyOpen = true)}>
-        ${l.t("copy_day", { name: from.name })}
-      </button>`;
-    }
-    return html`<div class="copy">
-      <span class="copy-title">${l.t("copy_day", { name: from.name })}</span>
-      <div class="chiprow">
-        ${others.map((d) => {
-          const on = this._copyTargets.includes(d.id);
-          return html`<button
-            class="pick"
-            aria-pressed=${on ? "true" : "false"}
-            @click=${() =>
-              (this._copyTargets = on
-                ? this._copyTargets.filter((x) => x !== d.id)
-                : [...this._copyTargets, d.id])}
-          >
-            ${d.name}
-          </button>`;
-        })}
-      </div>
-      <span class="copy-hint">${l.t("copy_hint")}</span>
-      <div class="copy-actions">
-        <button
-          class="textbtn"
-          @click=${() => {
-            this._copyOpen = false;
-            this._copyTargets = [];
-          }}
-        >
-          ${l.t("cancel")}
-        </button>
-        <button
-          class="accent"
-          ?disabled=${!this._copyTargets.length}
-          @click=${() => this._copyDay(from.id)}
-        >
-          ${l.t("copy_confirm")}
-        </button>
-      </div>
-    </div>`;
-  }
-
-  private _renderBlock(plan: Plan, seg: Segment, rowKey: string) {
-    const color = profileColor(plan, seg.profile);
-    const profile = this._profile(seg.profile);
-    const block = plan.week.day_types.find((d) => d.id === seg.dayType)?.blocks[seg.index];
-    const crossing = block ? toInterval(block).end > MINUTES_PER_DAY : false;
-    const startEdge = !seg.spill;
-    const endEdge = crossing ? seg.spill : !seg.spill;
-    const dragging = this._preview?.dayTypeId === seg.dayType && this._preview.index === seg.index;
-    return html`<button
-      class="block ${seg.spill ? "spill" : ""} ${dragging ? "dragging" : ""}"
-      style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
-      aria-label=${this._l.t("edit_block", { profile: profile?.name ?? seg.profile, time: seg.label })}
-      @click=${() => this._onBlockClick(seg, rowKey)}
-      @keydown=${(ev: KeyboardEvent) => this._onBlockKey(seg, ev, rowKey)}
-    >
-      <span class="blabel">${seg.width >= seg.label.length * 2.1 ? seg.label : ""}</span>
-      ${
-        startEdge
-          ? html`<span
-              class="edge start"
-              aria-hidden="true"
-              @pointerdown=${(ev: PointerEvent) => this._onEdgeDown(seg, "start", rowKey, ev)}
-            ></span>`
-          : nothing
-      }
-      ${
-        endEdge
-          ? html`<span
-              class="edge end"
-              aria-hidden="true"
-              @pointerdown=${(ev: PointerEvent) => this._onEdgeDown(seg, "end", rowKey, ev)}
-            ></span>`
-          : nothing
-      }
-    </button>`;
-  }
-
-  private _renderEditor(plan: Plan, target: BlockEditTarget) {
-    const dt = plan.week.day_types.find((d) => d.id === target.dayTypeId);
-    const labels: Record<string, string> = {};
-    for (const p of plan.profiles) labels[p.id] = this._valueLabel(p);
-    const weekday = target.weekday;
-    return html`<zeitwerk-block-editor
-      ?dark=${!!this.hass?.themes?.darkMode}
-      .weekdayLabel=${weekday ? this._l.weekdayLong(WEEKDAYS.indexOf(weekday)) : ""}
-      .sharedDayType=${!!weekday && !!dt && dt.days.length > 1 && dt.days.includes(weekday)}
-      .plan=${plan}
-      .target=${target}
-      .localize=${this._l}
-      .valueLabels=${labels}
-      .dayTypeLabel=${dt ? this._dayTypeLabel(dt) : ""}
-      .otherDayTypes=${plan.week.day_types
-        .filter(
-          (d) =>
-            d.id !== target.dayTypeId &&
-            (d.days.length ||
-              (plan.holidays.mode === "own_day_type" && d.id === plan.holidays.day_type)),
-        )
-        .map((d) => ({ id: d.id, name: d.name }))}
-      .step=${this._step}
-      .error=${this._saveError}
-      .busy=${this._busy}
-      @zw-close=${() => (this._editing = undefined)}
-      @zw-save=${this._onSave}
-      @zw-delete=${this._onDelete}
-    ></zeitwerk-block-editor>`;
   }
 
   static styles = [
@@ -1881,6 +1413,19 @@ export class ZeitwerkCard extends LitElement {
         display: flex;
         align-items: center;
         gap: 4px;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        border-radius: 10px;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .row:hover .track {
+        outline: 1px solid color-mix(in srgb, var(--zw-text) 25%, transparent);
       }
       .row.dim {
         opacity: 0.32;
@@ -2310,7 +1855,7 @@ declare global {
 }
 
 defineElements([
-  ["zeitwerk-block-editor", ZeitwerkBlockEditor],
+  ["zeitwerk-day-editor", ZeitwerkDayEditor],
   ["zeitwerk-conditions-editor", ZeitwerkConditionsEditor],
   ["zeitwerk-rules", ZeitwerkRules],
   ["zeitwerk-plan-wizard", ZeitwerkPlanWizard],
