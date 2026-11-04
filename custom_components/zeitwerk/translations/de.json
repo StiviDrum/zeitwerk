@@ -124,7 +124,7 @@
         },
         "blocks": {
           "name": "Blöcke",
-          "description": "Liste von {start: 'HH:MM', end: 'HH:MM', profile: 'PROFIL-ID'}, z. B. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
+          "description": "Liste von Objekten mit start (HH:MM), end (HH:MM) und profile (Profil-ID), z. B. start 06:00, end 08:00, profile comfort."
         }
       }
     },
@@ -178,7 +178,7 @@
     },
     "update_plan": {
       "name": "Plan ändern",
-      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. Aktivierung: {match: all|any, conditions: [...], when_inactive: none | profile:ID, reevaluate: true|false} – ist sie nicht erfüllt, ist der Plan pausiert. Feiertage: {source: calendar.* oder binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: ID}. Optionen: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:N}. Profil: {id, name, color, icon, actions: [Home-Assistant-Aktionen]}. Erfordert Admin.",
+      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. activation = Objekt mit match (all oder any), conditions (Liste von HA-Bedingungen), when_inactive (none oder profile:ID) und reevaluate (true/false) – ist die Aktivierung nicht erfüllt, ist der Plan pausiert. holidays = Objekt mit source (calendar.* oder binary_sensor.* der Workday-Integration), mode (off, like_day oder own_day_type), like_day (mon…sun) und day_type (ID). options = Objekt mit reapply_on_start, reapply_on_profile_change und manual_override (until_next, ignore oder minutes:N). Ein Profil = Objekt mit id, name, color, icon und actions (Liste von HA-Aktionen). Erfordert Admin.",
       "fields": {
         "plan": {
           "name": "Plan",

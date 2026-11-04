@@ -124,7 +124,7 @@
         },
         "blocks": {
           "name": "Blocks",
-          "description": "List of {start: 'HH:MM', end: 'HH:MM', profile: 'PROFILE-ID'}, e.g. [{start: '06:00', end: '08:00', profile: 'comfort'}]."
+          "description": "List of objects with start (HH:MM), end (HH:MM) and profile (profile id), e.g. start 06:00, end 08:00, profile comfort."
         }
       }
     },
@@ -178,7 +178,7 @@
     },
     "update_plan": {
       "name": "Update plan",
-      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. Activation: {match: all|any, conditions: [...], when_inactive: none | profile:ID, reevaluate: true|false} – if not met the plan is paused. Holidays: {source: calendar.* or binary_sensor.* (Workday), mode: off|like_day|own_day_type, like_day: mon…sun, day_type: ID}. Options: {reapply_on_start, reapply_on_profile_change, manual_override: until_next|ignore|minutes:N}. Profile: {id, name, color, icon, actions: [Home Assistant actions]}. Requires admin.",
+      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. activation = object with match (all or any), conditions (list of HA conditions), when_inactive (none or profile:ID) and reevaluate (true/false) – if the activation is not met the plan is paused. holidays = object with source (calendar.* or binary_sensor.* of the Workday integration), mode (off, like_day or own_day_type), like_day (mon…sun) and day_type (ID). options = object with reapply_on_start, reapply_on_profile_change and manual_override (until_next, ignore or minutes:N). A profile = object with id, name, color, icon and actions (list of HA actions). Requires admin.",
       "fields": {
         "plan": {
           "name": "Plan",
