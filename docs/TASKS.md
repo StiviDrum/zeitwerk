@@ -41,7 +41,8 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Tests: everything in AGENTS.md §5 that applies to the engine, incl. DST days and restart
   - 67 tests (schema, schedule maths, engine, entities, services, websocket). Manual override tests come with 0.3.
 - [x] Dev instance: heating reference case created via websocket/service script (`scripts/seed_reference_plans.py`) and observed working
-  - Native Windows: `scripts/win_shims/run_hass.py` skips HA's OS check + signal handlers; `default_config` replaced by an explicit list (usb/dhcp/ffmpeg fail on Windows); `--skip-pip`.
+  - Recommended dev environment since 2026-11-04: WSL2 Ubuntu 24.04, repo in `~/zeitwerk` (Python 3.14 from deadsnakes, Node 22 from NodeSource, git uses the Windows credential manager). `scripts/develop` symlinks the integration and lets HA install component requirements.
+  - Fallback native Windows: `scripts/win_shims/run_hass.py` skips HA's OS check + signal handlers; `default_config` replaced by an explicit list (usb/dhcp/ffmpeg fail on Windows); `--skip-pip`.
   - Checked live: 5 plans seeded, vacation override, force/clear, set_profile_value, activation off/on, switch off, restart with reapply.
 - [x] Release v0.1.0
 

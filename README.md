@@ -118,8 +118,10 @@ Creating, editing and deleting plans is websocket-only (admin): `zeitwerk/plans/
 ## Development
 
 Requirements: Git, Node.js ≥ 20, Python ≥ 3.14.2 (the version current Home
-Assistant requires). Scripts are Bash (on Windows use Git Bash; native Windows
-works – Unix-only modules are shimmed for local runs only, CI runs on Linux).
+Assistant requires). Recommended: Linux or **WSL2** on Windows (clone the repo
+inside the WSL home, e.g. `~/zeitwerk`; `http://localhost:8123` works from the
+Windows browser). Native Windows (Git Bash) still works as a fallback – Unix-only
+modules are shimmed for local runs only; CI always runs on Linux.
 
 ```bash
 scripts/setup      # .venv + Python and npm dependencies

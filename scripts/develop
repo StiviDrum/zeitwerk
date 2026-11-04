@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
 # Start a local Home Assistant with ./config and the integration from this repo.
 # Open http://localhost:8123 afterwards. Stop with Ctrl+C.
+# Recommended: run inside WSL2/Linux. Native Windows works with shims (fallback).
 set -e
 source "$(dirname "$0")/_venv"
 
-python -m pip install -q -r requirements_test.txt colorlog gtts
+python -m pip install -q -r requirements_test.txt colorlog
 (cd frontend && npm run build)
-
-# Copy instead of symlink (works on Windows) - rerun after backend changes.
 mkdir -p config/custom_components
 rm -rf config/custom_components/zeitwerk
-cp -r custom_components/zeitwerk config/custom_components/zeitwerk
 
 case "$(uname -s)" in
   MINGW* | MSYS* | CYGWIN*)
-    # Native Windows: Unix-only modules are shimmed, OS check/signals skipped.
+    # Native Windows fallback: no symlinks -> copy (rerun after backend changes);
+    # Unix-only modules are shimmed, OS check/signals skipped, no runtime pip.
+    python -m pip install -q gtts
+    cp -r custom_components/zeitwerk config/custom_components/zeitwerk
     export PYTHONPATH="scripts/win_shims"
     python scripts/win_shims/run_hass.py --config "$(pwd -W)/config" --skip-pip
     ;;
   *)
-    hass --config "${PWD}/config" --skip-pip
+    # Linux / WSL2: symlink, so a restart picks up backend changes; HA installs
+    # the requirements of its own components on first start.
+    ln -s ../../custom_components/zeitwerk config/custom_components/zeitwerk
+    hass --config "${PWD}/config"
     ;;
 esac
