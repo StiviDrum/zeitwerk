@@ -79,7 +79,8 @@ What the week view does:
 - **Profile sliders** for profiles that set exactly one value on one entity
   (`input_number`/`number` value, climate temperature, select option,
   brightness, position, percentage, on/off). Dragging calls
-  `zeitwerk.set_profile_value` (debounced 400 ms); on/off profiles are switched
+  `zeitwerk.set_profile_value` (debounced 400 ms; on touch screens the slider
+  reacts only after a short hold, so scrolling never changes a value); on/off profiles are switched
   via the websocket API (admin).
 - **Week grid** (display only) with a now-line: one row per weekday (plus
   „Ft“ for an own holiday day). **Tap a day** to open the **day editor**: all
@@ -91,7 +92,7 @@ What the week view does:
   Internally weekdays with the same plan are grouped into day types
   automatically (so `day_type` attributes show names like „Mo–Fr“). Editing
   needs an admin user.
-- **Plan settings** (one entry below the grid with a summary) → *Overrides*,
+- **Rules** (one entry below the grid with a summary; „?“ explains them) → *Overrides*,
   *Activation*, *Holidays*, each on its own page.
 - **Overrides / Activation**: overrides in
   priority order with a live *active* badge – drag the handle (or focus it and

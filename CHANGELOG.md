@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-04
+
+### Changed
+- Week grid: dashed lines at 6, 12 and 18 o'clock, axis labels aligned to
+  them, block times always as HH:MM (05:00–08:00).
+- Day chip shows only the weekday (plus „Feiertag“ on holidays).
+- „Plan-Einstellungen“ renamed to „Regeln“; „?“ buttons explain overrides,
+  activation and holidays (click to expand, tooltip on hover).
+- Profile sliders on touch screens react only after a short hold (350 ms), so
+  scrolling the dashboard no longer changes values; keyboard support
+  (arrows, Home/End).
+
 ## [0.6.0] - 2026-11-04
 
 ### Changed

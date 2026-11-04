@@ -126,6 +126,15 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Removed tabs, single-block editor, also-for, copy day. SPEC §5 and DESIGN updated.
   - Tests: frontend 72 (day-plan: split/regroup/apply, gaps, add, drag). Verified in real HA on a touch-emulated phone: drag 22→23, add 06:00 block, apply to Wed+Thu (others unchanged, regrouped), delete + X asks to discard and leaves the plan unchanged.
 
+## 0.6.1 – Polish from Steven
+
+- [x] Dashed lines at 6/12/18 h across all rows; axis labels positioned exactly on them.
+- [x] Day chip: weekday only (+ „Feiertag“ on holidays), no auto day-type names.
+- [x] „Regeln“ instead of „Plan-Einstellungen“; „?“ help (click toggles text, native tooltip on hover) on the rules menu and each rules page.
+- [x] Block labels HH:MM–HH:MM in grid and day editor.
+- [x] Profile slider: custom `role="slider"`; touch needs a 350 ms hold (movement before = scroll, ignored), mouse immediate, keyboard arrows/Home/End.
+  - Verified in real HA (touch emulation): quick swipe leaves 22 °C, hold + drag changes the value; help shows 3 paragraphs.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
