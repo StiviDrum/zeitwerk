@@ -139,7 +139,7 @@ What the week view does:
   the default profile and a start layout (workday/weekend or every day). A
   card configured with an unknown `plan:` id creates the plan under that id.
 
-Bundle size (0.8.0, minified): 188.3 KB, 45.7 KB gzip.
+Bundle size (0.8.3, minified): 174.8 KB, 45.9 KB gzip.
 
 ## Repairs
 

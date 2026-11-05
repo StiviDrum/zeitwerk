@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Code cleanup without functional or visual changes (verified by pixel
+  comparison of all card pages): removed dead code from the old block dialog,
+  shared page styles, cached localizers / time formatters / watched entities,
+  CSS minified at build time (bundle 197.7 → 174.8 KB).
+- Engine: the next change is searched lazily (stops at the first change) and
+  an unchanged timer is kept instead of being re-created on every evaluation.
+- English name for a new holiday day type when Home Assistant runs in English.
+
 ## [0.8.2] - 2026-11-05
 
 ### Added
