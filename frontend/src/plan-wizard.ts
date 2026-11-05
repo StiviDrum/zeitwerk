@@ -10,6 +10,7 @@ import { stepDecimals } from "./quickview";
 import { tokens } from "./styles";
 import type { HomeAssistant } from "./types";
 import { PALETTE } from "./colors";
+import { MAX_PROFILES } from "./profile-actions";
 import {
   buildPlan,
   defaultProfiles,
@@ -43,10 +44,70 @@ export class ZeitwerkPlanWizard extends LitElement {
   @state() private _error?: string;
   @state() private _busy = false;
   @state() private _native = false;
+  /** Existing plans that can be copied instead of starting empty. */
+  @state() private _templates: { id: string; name: string }[] = [];
+  @state() private _template = "";
+  @state() private _copyName = "";
 
   public connectedCallback(): void {
     super.connectedCallback();
     ensureHaSelector().then((ok) => (this._native = ok));
+    this.hass
+      ?.callWS<{ plans: { id: string; name: string }[] }>({ type: "zeitwerk/plans/list" })
+      .then((r) => (this._templates = r.plans.map((p) => ({ id: p.id, name: p.name }))))
+      .catch(() => undefined);
+  }
+
+  private async _copy(): Promise<void> {
+    const t = this.localize.t.bind(this.localize);
+    const name = this._copyName.trim();
+    if (!name) {
+      this._error = t("name_required");
+      return;
+    }
+    this._busy = true;
+    try {
+      const created = await this.hass!.callWS<{ id: string; name: string }>({
+        type: "zeitwerk/plans/duplicate",
+        plan_id: this._template,
+        name,
+      });
+      this.dispatchEvent(
+        new CustomEvent("zw-created", {
+          detail: { id: created.id, name: created.name },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    } catch (err) {
+      const msg =
+        err && typeof err === "object" && "message" in err ? String(err.message) : String(err);
+      this._error = t("save_failed", { error: msg });
+    } finally {
+      this._busy = false;
+    }
+  }
+
+  private _templateField() {
+    if (!this._templates.length) return nothing;
+    const t = this.localize.t.bind(this.localize);
+    return html`<label class="field">
+      <span class="label">${t("wizard_template")}</span>
+      <select
+        @change=${(ev: Event) => {
+          this._template = (ev.target as HTMLSelectElement).value;
+          const tpl = this._templates.find((x) => x.id === this._template);
+          this._copyName = tpl ? `${tpl.name} (${t("copy_suffix")})` : "";
+          this._error = undefined;
+        }}
+      >
+        <option value="" ?selected=${!this._template}>${t("wizard_template_empty")}</option>
+        ${this._templates.map(
+          (p) =>
+            html`<option value=${p.id} ?selected=${p.id === this._template}>${p.name}</option>`,
+        )}
+      </select>
+    </label>`;
   }
 
   protected willUpdate(changed: PropertyValues): void {
@@ -112,6 +173,7 @@ export class ZeitwerkPlanWizard extends LitElement {
 
   private _addProfile(): void {
     const d = this._draft!;
+    if (d.profiles.length >= MAX_PROFILES) return;
     const last = d.profiles[d.profiles.length - 1];
     this._update({
       profiles: [
@@ -238,7 +300,6 @@ export class ZeitwerkPlanWizard extends LitElement {
   protected render() {
     if (!this._draft || !this.localize) return nothing;
     const t = this.localize.t.bind(this.localize);
-    const d = this._draft;
     const back = () =>
       this.dispatchEvent(new CustomEvent("zw-cancel", { bubbles: true, composed: true }));
     return html`
@@ -260,7 +321,38 @@ export class ZeitwerkPlanWizard extends LitElement {
         </button>
         <span class="title">${t("wizard_title")}</span>
       </div>
+      ${
+        this._template
+          ? html`<div class="panel">
+                ${this._templateField()}
+                <label class="field">
+                  <span class="label">${t("name")}</span>
+                  <input
+                    type="text"
+                    .value=${this._copyName}
+                    @input=${(ev: Event) => (this._copyName = (ev.target as HTMLInputElement).value)}
+                  />
+                </label>
+                <span class="muted">${t("duplicate_hint")}</span>
+              </div>
+              ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+              <div class="actions">
+                <button class="danger" @click=${back}>${t("cancel")}</button>
+                <button class="primary" ?disabled=${this._busy} @click=${this._copy}>
+                  ${t("duplicate_create")}
+                </button>
+              </div>`
+          : this._renderNew(back)
+      }
+    `;
+  }
+
+  private _renderNew(back: () => void) {
+    const t = this.localize.t.bind(this.localize);
+    const d = this._draft!;
+    return html`
       <div class="panel">
+        ${this._templateField()}
         <label class="field">
           <span class="label">${t("wizard_target")}</span>
           ${this._entityField()}
@@ -346,7 +438,13 @@ export class ZeitwerkPlanWizard extends LitElement {
               </button>
             </div>`,
         )}
-        <button class="add" @click=${this._addProfile}>${t("add_profile")}</button>
+        <button
+          class="add"
+          ?disabled=${d.profiles.length >= MAX_PROFILES}
+          @click=${this._addProfile}
+        >
+          ${t("add_profile")}
+        </button>
         <label class="between">
           <span class="label">${t("default_profile")}</span>
           <select

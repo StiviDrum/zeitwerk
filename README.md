@@ -89,7 +89,18 @@ What the week view does:
   `zeitwerk.set_profile_value` (debounced 400 ms; on touch screens the slider
   reacts only after a short hold, so scrolling never changes a value); on/off profiles are switched
   via the websocket API (admin).
-- **Week grid** (display only) with a now-line: one row per weekday (plus
+- **Profiles** (gear next to the „Profile“ heading, admin): name, icon,
+  colour, default profile (exactly one; it applies wherever no block is
+  planned) and 1–5 profiles. What the profiles switch: either **one entity
+  for all** (each profile sets its own value – temperature, option, on/off,
+  brightness …) or **own entities per profile**, each profile with one or
+  more „entity → value“ lines (e.g. Morning: light A on – Evening: light B on
+  and light A off). Anything else can be edited as actions with Home
+  Assistant's action editor. Deleting a profile: its blocks disappear (the
+  default profile applies there) and rules using it switch to the default
+  profile.
+- **Week grid** (display only) with a now-line; block labels adapt to the
+  available width („06:00–08:00“, „06:00“ or none – hover shows the span): one row per weekday (plus
   „Ft“ for an own holiday day). **Tap a day** to open the **day editor**: all
   blocks of that day on a 24 h bar – tap a block to select it, tap an empty
   spot or „+ Block“ to add one, drag the handles or the block (snapped to
@@ -111,6 +122,12 @@ What the week view does:
 - **Holidays** (rules page): source (Holiday calendar or Workday sensor), mode
   off / like a weekday / own day (creates a „Feiertag“ day type with its own
   row and tab) and the next three holidays.
+- **Undo**: after every change made in the card (day, rules, profiles,
+  slider) „Gespeichert · Rückgängig“ is shown for 10 s. Undo is refused if the
+  plan was changed elsewhere in the meantime.
+- **Duplicate plan** (rules page, or „Vorlage“ in the new-plan wizard): copies
+  everything; the copy starts switched off so two plans never control the
+  same entities.
 - A **manual override** shows as a chip („manuell bis 22:00“) and as a hatched
   range in today's row.
 
@@ -120,7 +137,7 @@ What the week view does:
   the default profile and a start layout (workday/weekend or every day). A
   card configured with an unknown `plan:` id creates the plan under that id.
 
-Bundle size (0.6.0, minified): 146.4 KB, 36.8 KB gzip.
+Bundle size (0.8.0, minified): 188.3 KB, 45.7 KB gzip.
 
 ## Repairs
 
@@ -198,7 +215,9 @@ Full model: [docs/SPEC.md](docs/SPEC.md) §3.
 
 | Service | Fields | Purpose |
 |---|---|---|
-| `zeitwerk.apply` | `plan` | apply the current profile now |
+| `zeitwerk.apply` | optional `plan` (one or a list; empty = all) | run the current profile's actions again and end a manual override (disabled plans are skipped) |
+| `zeitwerk.enable` / `zeitwerk.disable` | optional `plan` (one or a list; empty = all) | switch plans on / off |
+| `zeitwerk.duplicate_plan` | `plan`, optional `name`, `new_plan` | copy a plan (starts switched off), returns `plan_id` |
 | `zeitwerk.set_profile_value` | `plan`, `profile`, `value`, optional `entity_id`, `key` | change a profile value (e.g. Comfort → 21 °C) |
 | `zeitwerk.skip_next` | `plan` | keep the current profile through the next change |
 | `zeitwerk.force_profile` | `plan`, `profile`, optional `duration` | force a profile (default: until the next change) |
@@ -211,12 +230,23 @@ Full model: [docs/SPEC.md](docs/SPEC.md) §3.
 | `zeitwerk.create_plan` | `plan` (object) | create a plan, returns `plan_id` |
 | `zeitwerk.delete_plan` | `plan` | delete a plan |
 
+A plan has 1–5 profiles; when `update_plan` removes a profile, its blocks are
+dropped and rules using it switch to the default profile.
+
 Editing services (`set_*`, `remove_override`, `update_plan`, `create_plan`,
-`delete_plan`) need an admin user; calls from automations (no user) are
+`duplicate_plan`, `delete_plan`) need an admin user; calls from automations (no user) are
 allowed. The profile sensor additionally exposes `plan_id`, `profiles`
 (id → name) and `overrides` (with `active`).
 
 ```yaml
+# Somebody turned the thermostat up by hand: back to the schedule for all plans
+action: zeitwerk.apply
+---
+# Summer: pause all heating plans
+action: zeitwerk.disable
+data:
+  plan: [wohnzimmer_heizung, bad_heizung]
+---
 action: zeitwerk.force_profile
 data:
   plan: wohnzimmer_heizung
@@ -306,8 +336,12 @@ Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
 `type: custom:zeitwerk-card` mit `plan: <id>`. Tag im Wochenplan antippen
 = Tages-Editor (Blöcke hinzufügen/löschen/ziehen, beim Speichern weitere Tage
 wählen, die diesen Tagesplan übernehmen), Profil-Regler ändern den
-Wert im Profil (z. B. Komfort 22 → 21,5 °C). Vorrang, Aktivierung und Feiertage liegen gesammelt
-unter „Plan-Einstellungen“. Neue Pläne legt man in der
+Wert im Profil (z. B. Komfort 22 → 21,5 °C). Das Zahnrad neben „Profile“ öffnet die Profilverwaltung:
+Name, Symbol, Farbe, Standardprofil, 1–5 Profile und was sie schalten – eine
+Entität für alle (jedes Profil mit eigenem Wert) oder eigene Entitäten je
+Profil (z. B. morgens Licht A, abends Licht B). Nach jeder Änderung gibt es
+10 s lang „Rückgängig“. Pläne lassen sich duplizieren (Regeln-Seite oder
+Vorlage im Assistenten); die Kopie startet ausgeschaltet. Neue Pläne legt man in der
 Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
 Start mit Werktag/Wochenende oder jeden Tag gleich). Fehlende Entitäten in
 einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Regeln“: Vorrang-Regeln
@@ -318,7 +352,8 @@ aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste aller Pläne:
 
 Alles, was die Karte kann, gibt es auch als Dienst (`zeitwerk.get_plan`,
 `set_day_plan`, `set_override`, `remove_override`, `update_plan`,
-`create_plan`, `delete_plan`) – damit können Automationen oder ein Assistent
+`create_plan`, `duplicate_plan`, `delete_plan`, `enable`, `disable`,
+`apply`) – damit können Automationen oder ein Assistent
 wie Claude (über MCP) Zeitwerk vollständig bedienen, z. B. eine Vorrang-Regel
 „Geofencing-Helfer an → Abwesend“ anlegen.
 
@@ -331,5 +366,6 @@ danach unter *Einstellungen → Geräte & Dienste* „Zeitwerk“ hinzufügen.
 
 Pro Plan gibt es einen Schalter (Plan an/aus), einen Profil-Sensor, einen
 Sensor „Nächster Wechsel“ und einen Binärsensor „Aktiv“. Dienste:
-`zeitwerk.apply`, `set_profile_value`, `skip_next`, `force_profile`,
-`clear_force`.
+`zeitwerk.apply` (ohne Plan: alle; setzt nach einer Handänderung wieder die
+Planwerte), `enable`/`disable` (ohne Plan: alle), `set_profile_value`,
+`skip_next`, `force_profile`, `clear_force`.

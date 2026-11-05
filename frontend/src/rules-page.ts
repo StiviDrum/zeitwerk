@@ -29,6 +29,7 @@ type SubPage =
   | { kind: "overrides" }
   | { kind: "activation" }
   | { kind: "holidays" }
+  | { kind: "duplicate"; name: string }
   | { kind: "override"; index: number; draft: Override }
   | { kind: "activation-edit"; match: "all" | "any"; conditions: Condition[] };
 
@@ -44,6 +45,8 @@ export class ZeitwerkRules extends LitElement {
   @property({ attribute: false }) public plan!: Plan;
   @property({ attribute: false }) public localize!: Localizer;
   @property({ attribute: false }) public save!: (mutate: PlanMutator) => Promise<void>;
+  /** Copy the plan under a new name (the copy starts switched off). */
+  @property({ attribute: false }) public duplicate?: (name: string) => Promise<void>;
 
   @state() private _page: SubPage = { kind: "menu" };
   @state() private _error?: string;
@@ -301,6 +304,8 @@ export class ZeitwerkRules extends LitElement {
         return this._renderActivation();
       case "holidays":
         return this._renderHolidayPage();
+      case "duplicate":
+        return this._renderDuplicate(this._page);
       default:
         return this._renderMenu();
     }
@@ -412,13 +417,8 @@ export class ZeitwerkRules extends LitElement {
                 })
               : t("holiday_mode_own")
           }`;
-    const row = (
-      icon: string,
-      title: string,
-      sub: string,
-      kind: "overrides" | "activation" | "holidays",
-    ) =>
-      html`<button class="menu-row" @click=${() => this._open({ kind })}>
+    const row = (icon: string, title: string, sub: string, open: () => void) =>
+      html`<button class="menu-row" @click=${open}>
         <span class="ricon neutral"><ha-icon .icon=${icon}></ha-icon></span>
         <span class="rtext"
           ><span class="rtitle">${title}</span><span class="rsub">${sub}</span></span
@@ -444,9 +444,64 @@ export class ZeitwerkRules extends LitElement {
         "help_holidays",
       ])}
       <div class="menu">
-        ${row("mdi:layers-outline", t("rules_overrides"), overrides, "overrides")}
-        ${row("mdi:flash-outline", t("rules_activation"), activation, "activation")}
-        ${row("mdi:flag-outline", t("rules_holidays"), holidays, "holidays")}
+        ${row("mdi:layers-outline", t("rules_overrides"), overrides, () => this._open({ kind: "overrides" }))}
+        ${row("mdi:flash-outline", t("rules_activation"), activation, () => this._open({ kind: "activation" }))}
+        ${row("mdi:flag-outline", t("rules_holidays"), holidays, () => this._open({ kind: "holidays" }))}
+      </div>
+      ${
+        this.duplicate
+          ? html`<div class="menu">
+              ${row("mdi:content-copy", t("duplicate_plan"), t("duplicate_sub"), () => {
+                if (!this._admin) {
+                  this._error = t("admin_only");
+                  return;
+                }
+                this._open({ kind: "duplicate", name: `${plan.name} (${t("copy_suffix")})` });
+              })}
+            </div>`
+          : nothing
+      }
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+    `;
+  }
+
+  private _renderDuplicate(page: { kind: "duplicate"; name: string }) {
+    const t = this.localize.t.bind(this.localize);
+    const create = async () => {
+      if (!page.name.trim() || !this.duplicate) return;
+      this._busy = true;
+      this._error = undefined;
+      try {
+        await this.duplicate(page.name.trim());
+        this._open({ kind: "menu" });
+      } catch (err) {
+        this._error = t("save_failed", { error: errorText(err) });
+      } finally {
+        this._busy = false;
+      }
+    };
+    return html`
+      ${this._head(t("duplicate_plan"), this.plan.name, () => this._open({ kind: "menu" }))}
+      <div class="panel">
+        <label class="field">
+          <span class="label">${t("name")}</span>
+          <input
+            type="text"
+            .value=${page.name}
+            @input=${(ev: Event) => {
+              page.name = (ev.target as HTMLInputElement).value;
+              this.requestUpdate();
+            }}
+          />
+        </label>
+        <span class="muted">${t("duplicate_hint")}</span>
+      </div>
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+      <div class="actions">
+        <button class="danger" @click=${() => this._open({ kind: "menu" })}>${t("cancel")}</button>
+        <button class="primary" ?disabled=${this._busy || !page.name.trim()} @click=${create}>
+          ${t("duplicate_create")}
+        </button>
       </div>
     `;
   }

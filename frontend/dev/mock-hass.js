@@ -133,6 +133,8 @@ const states = {
     state: "on",
     attributes: { friendly_name: "Arbeitstag", workdays: ["mon", "tue", "wed", "thu", "fri"] },
   },
+  "light.flur": { entity_id: "light.flur", state: "off", attributes: { friendly_name: "Flur" } },
+  "light.kueche": { entity_id: "light.kueche", state: "off", attributes: { friendly_name: "Küche" } },
   "input_boolean.urlaub": { entity_id: "input_boolean.urlaub", state: "off", attributes: { friendly_name: "Urlaub" } },
   "input_boolean.heizperiode": {
     entity_id: "input_boolean.heizperiode",
@@ -211,6 +213,9 @@ const hass = {
           { date: `${y + 1}-01-01`, name: "Neujahr" },
         ],
       };
+    }
+    if (msg.type === "zeitwerk/plans/duplicate") {
+      return { ...plan, id: msg.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), name: msg.name, enabled: false };
     }
     if (msg.type === "zeitwerk/plans/update") {
       plan = structuredClone(msg.plan);

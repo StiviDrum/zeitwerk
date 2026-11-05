@@ -15,6 +15,7 @@ import {
   type DayKey,
   type DragMode,
 } from "./day-plan";
+import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
 import type { Localizer } from "./localize";
 import { tokens } from "./styles";
 import { MINUTES_PER_DAY, formatTime } from "./time";
@@ -54,6 +55,25 @@ export class ZeitwerkDayEditor extends LitElement {
     original: DayBlock[];
   };
   private _tapStart?: { x: number; minute: number };
+  @state() private _barPx = 0;
+  private _barObs?: { el: Element; stop: () => void };
+  private _measure?: TextMeasure;
+
+  protected updated(): void {
+    const bar = this.renderRoot.querySelector(".bar");
+    if (bar !== this._barObs?.el) {
+      this._barObs?.stop();
+      this._barObs = bar
+        ? { el: bar, stop: observeWidth(bar, (w) => (this._barPx = w)) }
+        : undefined;
+    }
+  }
+
+  public disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._barObs?.stop();
+    this._barObs = undefined;
+  }
 
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("day") || changed.has("initial")) {
@@ -233,11 +253,17 @@ export class ZeitwerkDayEditor extends LitElement {
           const color = profileColor(this.plan, b.profile);
           const label = `${formatTime(b.start)}–${formatTime(b.end)}`;
           const width = pct(b.end - b.start);
+          const measure = (this._measure ??= canvasMeasure(
+            `700 11px ${getComputedStyle(this).fontFamily || "sans-serif"}`,
+          ));
           return html`<div
             class="blk ${i === this._selected ? "sel" : ""}"
+            title=${label}
             style="left:${pct(b.start)}%;width:${width}%;background:${color};color:${textOn(color)}"
           >
-            <span class="blabel">${width >= label.length * 1.9 ? label : ""}</span>
+            <span class="blabel"
+              >${fitLabel([label, formatTime(b.start)], (width / 100) * this._barPx, measure)}</span
+            >
             ${
               i === this._selected
                 ? html`<span class="handle start"></span><span class="handle end"></span>`

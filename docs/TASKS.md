@@ -144,10 +144,21 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - Tests: 9 new (day logic, get_plan, set_day_plan incl. validation, geofencing override end-to-end, update/create/delete, admin check). Backend 92.
   - SPEC §4 lists only the original four services; the editing services are an addition requested by Steven (2026-11-04).
 
+## 0.8.0 – Profiles editor, undo, duplicate, plan control services
+
+- [x] Services `enable` / `disable` (one, several or all plans), `apply` for several/all plans, `duplicate_plan` (copy starts off); ws `zeitwerk/plans/duplicate`.
+- [x] Max 5 profiles (schema); removing a profile drops its blocks and points overrides/`when_inactive` at the default profile (backend `replace_missing_profiles` + card).
+- [x] Card: profiles page (gear next to „Profile“): name, icon, colour palette, default profile, add/delete (1–5), one entity for all vs own entity rows per profile, HA action editor for complex profiles.
+- [x] Staged block labels (measured width: span / start / none, title with the span) in the grid and day editor; removed the „Jetzt …“ caption.
+- [x] Undo bar (10 s) after card changes incl. sliders; conflict check against the plan after the change.
+- [x] Duplicate plan in the rules menu and as wizard template; wizard capped at 5 profiles.
+  - 2026-11-05: home-assistant/brands no longer accepts custom integrations (PR template, Brands Proxy API since HA 2026.3) – local `brand/` folder is the way; nothing to submit.
+  - Verified in the dev instance: services via websocket call_service, profiles page with HA entity/icon pickers, save + undo.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
-- [ ] Brand assets for HACS/home-assistant/brands if wanted (ask Steven)
+- [x] Brand assets: shipped locally in `brand/` (brands repo closed for custom integrations since HA 2026.3)
   - 2026-11-04: Steven's icon/logo (SVG) in `docs/brand/`; PNGs (icon 256/512, logo 360×128/720×256, light + dark lettering) rendered with Inter and shipped in `custom_components/zeitwerk/brand/` – HA 2026.10 serves local branding of custom integrations (verified: icon on the integrations page). Not yet submitted to home-assistant/brands (HACS list icon) – needs Steven's OK.
 - [ ] HACS default repository submission checklist (ask Steven before submitting)
 - [ ] Release v1.0.0

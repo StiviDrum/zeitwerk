@@ -3,6 +3,7 @@ import { property, state } from "lit/decorators.js";
 import { ZeitwerkDayEditor, type DaySaveDetail } from "./day-editor";
 import { applyDayPlan, weekToDays, type DayKey } from "./day-plan";
 import { ZeitwerkRules } from "./rules-page";
+import { ZeitwerkProfiles } from "./profiles-page";
 import { ZeitwerkPlanWizard } from "./plan-wizard";
 import { ZeitwerkCardEditor } from "./card-editor";
 import { ZeitwerkConditionsEditor } from "./conditions-editor";
@@ -22,6 +23,7 @@ import {
   type Control,
   type QuickValue,
 } from "./quickview";
+import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
 import { tokens } from "./styles";
 import { MINUTES_PER_DAY, formatTime, minutesFromToday, zonedClock, zonedNow } from "./time";
 import {
@@ -39,6 +41,7 @@ import { CARD_VERSION } from "./version";
 const VALUE_DEBOUNCE_MS = 400;
 const SLIDER_HOLD_MS = 350;
 const NOTICE_MS = 4000;
+const UNDO_MS = 10_000;
 
 interface QuickRow {
   profile: Profile;
@@ -55,6 +58,13 @@ interface GridRow {
   today: boolean;
   /** 0 = today's row, 1 = tomorrow's row (manual override hatch). */
   dayOffset: number | null;
+}
+
+/** Copy of a plan without its runtime status (what plans/update takes). */
+function stripStatus(plan: Plan): Plan {
+  const copy = structuredClone(plan);
+  delete copy.status;
+  return copy;
 }
 
 function errorMessage(err: unknown): string {
@@ -85,12 +95,22 @@ export class ZeitwerkCard extends LitElement {
   @state() private _notice?: string;
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
-  @state() private _page: "week" | "rules" | "wizard" = "week";
+  @state() private _page: "week" | "rules" | "wizard" | "profiles" = "week";
+  /** Last change made in this card, offered for undo for a few seconds. */
+  @state() private _undo?: { before: Plan; after: string };
+  private _undoTimer?: number;
+  /** Plan before the current series of slider changes (one undo step). */
+  private _sliderBefore?: Plan;
+  private _sliderUndo?: { before: Plan; profileId: string; value: number | string };
   /** Timeline view: all (tag-filtered) plans and today's scheduled segments. */
   @state() private _plans?: Plan[];
   @state() private _segments: Record<string, { start: string; end: string; profile: string }[]> =
     {};
   private _previewTimer?: number;
+  /** Width of a week-grid track in px (staged block labels). */
+  @state() private _trackPx = 0;
+  private _trackObs?: { el: Element; stop: () => void };
+  private _measure?: TextMeasure;
 
   private _unsub?: Promise<() => Promise<void> | void>;
   private _subscribedPlan?: string;
@@ -149,6 +169,8 @@ export class ZeitwerkCard extends LitElement {
     this._clock = undefined;
     window.clearTimeout(this._previewTimer);
     this._sliderEnd();
+    this._trackObs?.stop();
+    this._trackObs = undefined;
     Object.values(this._valueTimers).forEach((t) => window.clearTimeout(t));
     this._valueTimers = {};
   }
@@ -178,6 +200,18 @@ export class ZeitwerkCard extends LitElement {
 
   protected updated(): void {
     this._updateNow();
+    const track = this.renderRoot.querySelector(".rows .track");
+    if (track !== this._trackObs?.el) {
+      this._trackObs?.stop();
+      this._trackObs = track
+        ? {
+            el: track,
+            stop: observeWidth(track, (w) => {
+              if (Math.abs(w - this._trackPx) > 0.5) this._trackPx = w;
+            }),
+          }
+        : undefined;
+    }
   }
 
   /** Entities whose state changes are relevant for rendering (DESIGN.md §3). */
@@ -306,21 +340,92 @@ export class ZeitwerkCard extends LitElement {
         }
       }
       this._pending = pending;
+      this._checkSliderUndo();
     }
   }
 
   private async _updatePlan(mutate: PlanMutator): Promise<void> {
     if (!this.hass || !this._plan) return;
-    const plan = structuredClone(this._plan);
-    delete plan.status;
+    const before = stripStatus(this._plan);
+    const plan = structuredClone(before);
     mutate(plan);
-    await this.hass.callWS({ type: "zeitwerk/plans/update", plan_id: plan.id, plan });
+    const saved = await this.hass.callWS<Plan>({
+      type: "zeitwerk/plans/update",
+      plan_id: plan.id,
+      plan,
+    });
+    this._offerUndo(before, saved);
   }
 
-  private _notify(text: string): void {
+  /** Show "Gespeichert · Rückgängig" for a change from `before` to `after`. */
+  private _offerUndo(before: Plan, after: Plan | undefined | null): void {
+    if (!after) return;
+    window.clearTimeout(this._undoTimer);
+    this._notice = undefined;
+    this._undo = { before, after: JSON.stringify(stripStatus(after)) };
+    this._undoTimer = window.setTimeout(() => (this._undo = undefined), UNDO_MS);
+  }
+
+  private _doUndo = async (): Promise<void> => {
+    const undo = this._undo;
+    window.clearTimeout(this._undoTimer);
+    this._undo = undefined;
+    if (!undo || !this.hass || !this._plan) return;
+    const l = this._l;
+    if (JSON.stringify(stripStatus(this._plan)) !== undo.after) {
+      this._notify(l.t("undo_conflict"));
+      return;
+    }
+    try {
+      await this.hass.callWS({
+        type: "zeitwerk/plans/update",
+        plan_id: undo.before.id,
+        plan: undo.before,
+      });
+      this._notify(l.t("undone"));
+    } catch (err) {
+      this._notify(l.t("save_failed", { error: errorMessage(err) }));
+    }
+  };
+
+  /** Offer undo for slider changes once the backend confirmed the value. */
+  private _checkSliderUndo(): void {
+    const pending = this._sliderUndo;
+    if (!pending || !this._plan) return;
+    if (this._plan.id !== pending.before.id) {
+      this._sliderUndo = undefined;
+      return;
+    }
+    const qv = quickValue(this._profile(pending.profileId));
+    if (qv?.kind === "value" && qv.value === pending.value) {
+      this._sliderUndo = undefined;
+      this._offerUndo(pending.before, this._plan);
+    }
+  }
+
+  private _renderUndo() {
+    if (!this._undo) return nothing;
+    const l = this._l;
+    return html`<div class="notice undo" role="status">
+      <span>${l.t("saved")}</span>
+      <button class="undo-btn" @click=${this._doUndo}>${l.t("undo")}</button>
+    </div>`;
+  }
+
+  private _duplicate = async (name: string): Promise<void> => {
+    if (!this.hass || !this._plan) return;
+    const copy = await this.hass.callWS<Plan>({
+      type: "zeitwerk/plans/duplicate",
+      plan_id: this._plan.id,
+      name,
+    });
+    this._notify(this._l.t("duplicated", { name: copy.name, id: copy.id }), 12_000);
+  };
+
+  private _notify(text: string, ms = NOTICE_MS): void {
     this._notice = text;
     window.clearTimeout(this._noticeTimer);
-    this._noticeTimer = window.setTimeout(() => (this._notice = undefined), NOTICE_MS);
+    this._noticeTimer = window.setTimeout(() => (this._notice = undefined), ms);
   }
 
   // --- Now line -------------------------------------------------------------
@@ -334,12 +439,10 @@ export class ZeitwerkCard extends LitElement {
     }, msToMinute);
   }
 
-  /** Update only the CSS variable and the caption time – no full re-render. */
+  /** Update only the CSS variable and the clock – no full re-render. */
   private _updateNow(): void {
     const now = zonedNow(this.hass?.config?.time_zone);
     this.style.setProperty("--zw-now", String(now.minutes / MINUTES_PER_DAY));
-    const caption = this.renderRoot.querySelector<HTMLElement>(".now-time");
-    if (caption) caption.textContent = this._l.t("now", { time: formatTime(now.minutes) });
     if (this._nowWeekday !== undefined && this._nowWeekday !== now.weekdayIndex) {
       this.requestUpdate();
       if (this._config?.view === "timeline") this._schedulePreview(0);
@@ -505,6 +608,7 @@ export class ZeitwerkCard extends LitElement {
     window.clearTimeout(this._valueTimers[profileId]);
     const planId = this._plan.id;
     const entityId = row.qv.entityId;
+    this._sliderBefore ??= stripStatus(this._plan);
     this._valueTimers[profileId] = window.setTimeout(() => {
       delete this._valueTimers[profileId];
       this.hass
@@ -514,7 +618,17 @@ export class ZeitwerkCard extends LitElement {
           value,
           entity_id: entityId,
         })
+        .then(() => {
+          if (Object.keys(this._valueTimers).length) return;
+          const before = this._sliderBefore;
+          this._sliderBefore = undefined;
+          if (before) {
+            this._sliderUndo = { before, profileId, value };
+            this._checkSliderUndo();
+          }
+        })
         .catch((err) => {
+          this._sliderBefore = undefined;
           const pending = { ...this._pending };
           delete pending[profileId];
           this._pending = pending;
@@ -774,27 +888,73 @@ export class ZeitwerkCard extends LitElement {
           .plan=${plan}
           .localize=${l}
           .save=${(m: PlanMutator) => this._updatePlan(m)}
+          .duplicate=${this._duplicate}
           @zw-back=${() => (this._page = "week")}
         ></zeitwerk-rules>
+        ${this._renderUndo()}
+        ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
+      </ha-card>`;
+    }
+    if (this._page === "profiles") {
+      return html`<ha-card>
+        <zeitwerk-profiles
+          ?dark=${!!this.hass?.themes?.darkMode}
+          .hass=${this.hass}
+          .plan=${plan}
+          .localize=${l}
+          .save=${(m: PlanMutator) => this._updatePlan(m)}
+          @zw-back=${() => (this._page = "week")}
+        ></zeitwerk-profiles>
       </ha-card>`;
     }
     return html`<ha-card class=${this._config!.compact ? "compact" : ""}>
       ${this._renderHeader(plan)} ${this._renderChips(plan)}
+      ${this._config!.compact ? nothing : this._separator(l.t("section_profiles"), this._openProfiles)}
       ${
-        quick.length
-          ? html`${this._separator(l.t("section_profiles"))}
-              <div class="sliders">${quick.map((q) => this._renderSlider(plan, q))}</div>`
-          : nothing
+        this._config!.compact
+          ? nothing
+          : quick.length
+            ? html`<div class="sliders">${quick.map((q) => this._renderSlider(plan, q))}</div>`
+            : html`<div class="pchips">
+                ${plan.profiles.map(
+                  (p) =>
+                    html`<span class="pchip"
+                      ><span class="swatch" style="background:${profileColor(plan, p)}"></span
+                      >${p.name}</span
+                    >`,
+                )}
+              </div>`
       }
       ${this._separator(l.t("section_week"))} ${this._renderGrid(plan)}
-      ${this._config!.compact ? nothing : this._renderRulesLinks(plan)}
+      ${this._config!.compact ? nothing : this._renderRulesLinks(plan)} ${this._renderUndo()}
       ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
     </ha-card>`;
   }
 
-  private _separator(title: string) {
-    return html`<div class="separator"><span>${title}</span><span class="line"></span></div>`;
+  private _separator(title: string, gear?: () => void) {
+    return html`<div class="separator">
+      <span>${title}</span><span class="line"></span>${
+        gear
+          ? html`<button
+              class="gear"
+              aria-label=${this._l.t("edit_profiles")}
+              title=${this._l.t("edit_profiles")}
+              @click=${gear}
+            >
+              <ha-icon .icon=${"mdi:cog-outline"}></ha-icon>
+            </button>`
+          : nothing
+      }
+    </div>`;
   }
+
+  private _openProfiles = (): void => {
+    if (!this.hass?.user?.is_admin) {
+      this._notify(this._l.t("admin_only"));
+      return;
+    }
+    this._page = "profiles";
+  };
 
   private _renderHeader(plan: Plan) {
     const l = this._l;
@@ -1086,22 +1246,9 @@ export class ZeitwerkCard extends LitElement {
     const l = this._l;
     const def = profileColor(plan, plan.default_profile);
     const rows = this._rows(plan);
-    const status = plan.status;
-    const tz = this.hass?.config?.time_zone;
-    const now = zonedNow(tz);
-    let nextText = l.t("no_next_change");
-    if (status?.next_change) {
-      const when = new Date(status.next_change);
-      const sameDay =
-        zonedNow(tz, when).weekdayIndex === now.weekdayIndex &&
-        when.getTime() - Date.now() < 86_400_000;
-      const time = zonedClock(status.next_change, tz);
-      const next = this._profile(status.next_profile);
-      nextText = l.t("next_change", {
-        time: sameDay ? time : `${l.weekdayShort(zonedNow(tz, when).weekdayIndex)} ${time}`,
-        profile: next?.name ?? status.next_profile ?? "",
-      });
-    }
+    const measure = (this._measure ??= canvasMeasure(
+      `700 11px ${getComputedStyle(this).fontFamily || "sans-serif"}`,
+    ));
     const used = new Set(plan.week.day_types.flatMap((d) => d.blocks.map((b) => b.profile)));
     const legend = plan.profiles.filter((p) => used.has(p.id) && p.id !== plan.default_profile);
     const defaultProfile = this._profile(plan.default_profile);
@@ -1122,11 +1269,13 @@ export class ZeitwerkCard extends LitElement {
               <span class="track" style="background:${tint(def, 16)}">
                 ${row.segments.map((seg) => {
                   const color = profileColor(plan, seg.profile);
+                  const px = (seg.width / 100) * this._trackPx;
                   return html`<span
                     class="block ${seg.spill ? "spill" : ""}"
+                    title="${seg.label} · ${this._profile(seg.profile)?.name ?? seg.profile}"
                     style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
                     ><span class="blabel"
-                      >${seg.width >= seg.label.length * 1.9 ? seg.label : ""}</span
+                      >${fitLabel([seg.label, seg.short], px, measure)}</span
                     ></span
                   >`;
                 })}
@@ -1139,13 +1288,6 @@ export class ZeitwerkCard extends LitElement {
         )}
         <div class="now-line" aria-hidden="true"></div>
         <div class="now-dot" aria-hidden="true"></div>
-      </div>
-      <div class="caption">
-        <span class="cdot"></span>
-        <span
-          ><span class="now-time">${l.t("now", { time: formatTime(now.minutes) })}</span> ·
-          ${nextText}</span
-        >
       </div>
       ${
         this._config!.compact
@@ -1612,21 +1754,6 @@ export class ZeitwerkCard extends LitElement {
         background: var(--zw-text);
         pointer-events: none;
       }
-      .caption {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 6px;
-        font-size: 12px;
-        color: var(--zw-text-2);
-      }
-      .cdot {
-        width: 8px;
-        height: 8px;
-        border-radius: 4px;
-        background: var(--zw-text);
-        flex-shrink: 0;
-      }
       .legend {
         display: flex;
         flex-wrap: wrap;
@@ -1952,6 +2079,46 @@ export class ZeitwerkCard extends LitElement {
         border-radius: 12px;
         background: var(--zw-surface);
       }
+      .notice.undo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 4px 4px 4px 14px;
+      }
+      .pchips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        font-size: 13px;
+        color: var(--zw-text-2);
+      }
+      .pchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .undo-btn {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 18px;
+        background: var(--zw-surface-2);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .gear {
+        width: 32px;
+        height: 32px;
+        margin-right: -6px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--zw-text-2);
+      }
+      .gear:hover {
+        background: var(--zw-surface);
+      }
     `,
   ];
 }
@@ -1975,6 +2142,7 @@ defineElements([
   ["zeitwerk-day-editor", ZeitwerkDayEditor],
   ["zeitwerk-conditions-editor", ZeitwerkConditionsEditor],
   ["zeitwerk-rules", ZeitwerkRules],
+  ["zeitwerk-profiles", ZeitwerkProfiles],
   ["zeitwerk-plan-wizard", ZeitwerkPlanWizard],
   ["zeitwerk-card-editor", ZeitwerkCardEditor],
   ["zeitwerk-card", ZeitwerkCard],

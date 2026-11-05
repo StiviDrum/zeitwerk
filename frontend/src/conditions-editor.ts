@@ -45,6 +45,8 @@ export class ZeitwerkConditionsEditor extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public localize!: Localizer;
   @property({ attribute: false }) public value: Condition[] = [];
+  /** Which HA editor to show: conditions (default) or actions. */
+  @property({ attribute: false }) public kind: "condition" | "action" = "condition";
   @state() private _native?: boolean;
   @state() private _text = "";
   @state() private _jsonError?: string;
@@ -98,13 +100,15 @@ export class ZeitwerkConditionsEditor extends LitElement {
     if (this._native && this.hass) {
       return html`<ha-selector
         .hass=${this.hass}
-        .selector=${{ condition: {} }}
+        .selector=${{ [this.kind]: {} }}
         .value=${this.value}
         @value-changed=${this._onSelector}
       ></ha-selector>`;
     }
     return html`<label>
-      <span class="hint">${this.localize.t("conditions_json")}</span>
+      <span class="hint"
+        >${this.localize.t(this.kind === "action" ? "actions_json" : "conditions_json")}</span
+      >
       <textarea spellcheck="false" .value=${this._text} @input=${this._onText}></textarea>
       ${
         this._jsonError

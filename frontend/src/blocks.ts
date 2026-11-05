@@ -165,7 +165,10 @@ export interface Segment {
   left: number;
   width: number;
   profile: string;
+  /** Full time span, e.g. "06:00–08:00". */
   label: string;
+  /** Short form when the full span does not fit: start time ("–08:00" for spills). */
+  short: string;
   dayType: string;
   index: number;
   /** Part of a block that started on the previous day. */
@@ -205,6 +208,7 @@ export function rowSegments(
       width: pct(end - iv.start),
       profile: iv.profile,
       label: label(iv),
+      short: formatTime(iv.start),
       dayType: dayType.id,
       index,
       spill: false,
@@ -220,6 +224,7 @@ export function rowSegments(
         width: pct(e - s),
         profile: iv.profile,
         label: label(iv),
+        short: `–${formatTime(iv.end - MINUTES_PER_DAY)}`,
         dayType: previous.id,
         index,
         spill: true,

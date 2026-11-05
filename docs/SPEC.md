@@ -267,7 +267,7 @@ Validierung aller Eingaben mit `voluptuous`; Aktionen und Bedingungen mit den HA
    - Intern bleiben Tagestypen das Speicherformat; Tage mit identischem Plan werden automatisch zusammengefasst (Name z. B. „Mo–Fr“).
    - (Geändert 2026-11-04 auf Wunsch von Steven: früher Reiter je Tagestyp, Block antippen, „Tag kopieren auf …“.)
 2. **Zeitleiste** (mehrere Pläne): heute bzw. 24 h, ein Band pro Plan, „Jetzt“-Linie, nächster Wechsel als Text.
-3. **Profil-Editor**: Liste der Profile; je Profil die Aktionen.
+3. **Profil-Editor** (Zahnrad neben „Profile“): 1–5 Profile mit Name, Symbol, Farbe; genau ein Standardprofil. Aktionen entweder „eine Entität für alle“ (je Profil ein Wert) oder „eigene je Profil“ (Zeilen Entität → Wert); sonst HA-Aktionseditor. Profil löschen: seine Blöcke entfallen (dort gilt das Standardprofil), Regeln wechseln aufs Standardprofil. (Ergänzt 2026-11-05.)
    - Häufiger Fall „eine Entität auf einen Wert setzen“ bekommt eine **Schnellansicht**: Entität + passender Regler (Zahl/Temperatur, Auswahl, an/aus, Helligkeit …) aus den HA-Selektoren.
    - Volle Aktionsbearbeitung über `ha-selector` / Aktions-Editor von HA.
 4. **Overrides**: Liste mit Priorität (ziehen zum Sortieren), Bedingungen über HA-Bedingungseditor, Umschalter „alle / mindestens eine“, Anzeige „gerade aktiv“.

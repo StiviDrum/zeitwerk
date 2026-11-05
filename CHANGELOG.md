@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-05
+
+### Added
+- Profile editor in the card (gear next to „Profile“): name, icon, colour,
+  default profile, 1–5 profiles, and what they switch – one entity for all
+  profiles or own „entity → value“ lines per profile (e.g. light A in the
+  morning, light B in the evening); HA action editor for anything else.
+- Undo („Gespeichert · Rückgängig“, 10 s) after every change made in the
+  card; refused when the plan changed elsewhere meanwhile.
+- Duplicate a plan (rules page, wizard template, service
+  `zeitwerk.duplicate_plan`, websocket `zeitwerk/plans/duplicate`); the copy
+  starts switched off.
+- Services `zeitwerk.enable` / `zeitwerk.disable`; `zeitwerk.apply` takes one,
+  several or no plan (= all) and skips disabled plans.
+
+### Changed
+- Block labels adapt to the measured width: full span, start time, or none
+  (hover/title shows the span).
+- The „Jetzt … · nächster Wechsel …“ line below the week grid is gone (the
+  header already shows it).
+- A plan has at most 5 profiles. Removing a profile (card or `update_plan`)
+  drops its blocks and points rules at the default profile.
+
 ## [0.7.0] - 2026-11-04
 
 ### Added
