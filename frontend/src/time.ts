@@ -19,35 +19,6 @@ export function formatTime(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** Short label for block captions: "16–22", "6:30–8". */
-export function shortTime(minutes: number): string {
-  const h = Math.floor(minutes / 60) % 24 || (minutes === MINUTES_PER_DAY ? 24 : 0);
-  const m = minutes % 60;
-  return m ? `${h}:${String(m).padStart(2, "0")}` : String(h);
-}
-
-/** Round to the nearest multiple of `step` minutes. */
-export function snap(minutes: number, step: number): number {
-  return Math.round(minutes / step) * step;
-}
-
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-/** Positive modulo onto the 24 h circle. */
-export function wrap(minutes: number): number {
-  return ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-}
-
-/** Human duration "2 h 15 min" / "45 min". */
-export function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (!h) return `${m} min`;
-  return m ? `${h} h ${m} min` : `${h} h`;
-}
-
 export interface ZonedNow {
   weekday: Weekday;
   /** Index 0 = Monday. */
@@ -86,10 +57,7 @@ export function zonedClock(iso: string, timeZone: string | undefined): string {
 }
 
 /** Day number (days since epoch of the local calendar date) and minute of day in a time zone. */
-export function zonedDay(
-  date: Date,
-  timeZone: string | undefined,
-): { day: number; minutes: number } {
+function zonedDay(date: Date, timeZone: string | undefined): { day: number; minutes: number } {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone,

@@ -137,7 +137,6 @@ const en = {
   ed_sliders: "Show profile sliders",
   ed_compact: "Compact",
   ed_step: "Time step (minutes)",
-  rules_title: "Rules",
   help: "Explanation",
   help_overrides:
     "Overrides replace the week plan while their conditions apply, e.g. “vacation on → Away”. Order is priority: the top matching rule wins; when none applies, the week plan is back.",
@@ -357,7 +356,6 @@ const de: Strings = {
   ed_sliders: "Profil-Regler anzeigen",
   ed_compact: "Kompakt",
   ed_step: "Zeitraster (Minuten)",
-  rules_title: "Regeln",
   help: "Erklärung",
   help_overrides:
     "Vorrang-Regeln ersetzen den Wochenplan, solange ihre Bedingungen zutreffen – z. B. „Urlaub an → Abwesend“. Die Reihenfolge ist die Priorität: Die oberste zutreffende Regel gewinnt; trifft keine zu, gilt wieder der Wochenplan.",

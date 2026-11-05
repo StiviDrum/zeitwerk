@@ -5,7 +5,7 @@
  * per-weekday view and regroups weekdays with identical blocks into day types
  * when saving, so the stored format stays unchanged.
  */
-import { normalize, toInterval } from "./blocks";
+import { dayTypeFor, normalize, subtract, toInterval } from "./blocks";
 import { daysLabel, type Localizer } from "./localize";
 import { MINUTES_PER_DAY, formatTime, parseTime } from "./time";
 import { WEEKDAYS, type Block, type DayType, type Plan, type Weekday } from "./types";
@@ -39,20 +39,6 @@ export function fromDayBlocks(blocks: DayBlock[]): Block[] {
   }));
 }
 
-function subtract(pieces: [number, number][], cut: [number, number][]): [number, number][] {
-  let rest = pieces;
-  for (const [cs, ce] of cut) {
-    rest = rest.flatMap(([s, e]): [number, number][] => {
-      if (ce <= s || cs >= e) return [[s, e]];
-      const out: [number, number][] = [];
-      if (cs > s) out.push([s, cs]);
-      if (ce < e) out.push([ce, e]);
-      return out;
-    });
-  }
-  return rest;
-}
-
 /**
  * The effective blocks of every weekday without midnight crossing: own blocks
  * clipped at 24:00 plus the morning part of yesterday's crossing blocks
@@ -60,11 +46,10 @@ function subtract(pieces: [number, number][], cut: [number, number][]): [number,
  * clipped only.
  */
 export function weekToDays(plan: Plan): Record<DayKey, Block[]> {
-  const byDay = (wd: Weekday) => plan.week.day_types.find((d) => d.days.includes(wd));
   const out = {} as Record<DayKey, Block[]>;
   WEEKDAYS.forEach((wd, i) => {
-    const own = (byDay(wd)?.blocks ?? []).map(toInterval);
-    const prev = (byDay(WEEKDAYS[(i + 6) % 7])?.blocks ?? []).map(toInterval);
+    const own = (dayTypeFor(plan, wd)?.blocks ?? []).map(toInterval);
+    const prev = (dayTypeFor(plan, WEEKDAYS[(i + 6) % 7])?.blocks ?? []).map(toInterval);
     const day: DayBlock[] = own.map((iv) => ({
       start: iv.start,
       end: Math.min(iv.end, MINUTES_PER_DAY),

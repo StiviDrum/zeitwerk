@@ -1510,10 +1510,6 @@ export class ZeitwerkCard extends LitElement {
         /* darker in light themes for contrast */
         color: color-mix(in srgb, var(--zw-ok) 70%, var(--zw-text));
       }
-      .chip.bad {
-        background: color-mix(in srgb, var(--zw-danger) 14%, transparent);
-        color: var(--zw-danger);
-      }
       .chip .dot {
         width: 7px;
         height: 7px;
@@ -1622,36 +1618,6 @@ export class ZeitwerkCard extends LitElement {
       }
 
       /* Day type tabs */
-      .tabs {
-        display: flex;
-        gap: 4px;
-        padding: 4px;
-        border-radius: 24px;
-        background: var(--zw-surface);
-      }
-      .tabs button {
-        flex: 1;
-        min-width: 0;
-        height: 44px;
-        border-radius: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1px;
-      }
-      .tabs button[aria-selected="true"] {
-        background: var(--zw-accent);
-        color: var(--zw-on-accent);
-      }
-      .tname {
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .tsub {
-        font-size: 11px;
-        opacity: 0.65;
-      }
 
       /* Week grid */
       .grid {
@@ -1709,9 +1675,6 @@ export class ZeitwerkCard extends LitElement {
       .row.today .track {
         outline: 1.5px solid color-mix(in srgb, var(--zw-text) 60%, transparent);
         outline-offset: 1px;
-      }
-      .row.dim {
-        opacity: 0.32;
       }
       .day {
         width: 26px;
@@ -1913,59 +1876,8 @@ export class ZeitwerkCard extends LitElement {
         border-radius: 1px;
         background: var(--zw-text);
       }
-      .edge {
-        position: absolute;
-        top: -7px;
-        bottom: -7px;
-        width: 22px;
-        touch-action: none;
-        cursor: ew-resize;
-      }
-      .block .edge {
-        pointer-events: auto;
-      }
-      .edge.start {
-        left: -11px;
-      }
-      .edge.end {
-        right: -11px;
-      }
-      .edge::after {
-        content: "";
-        position: absolute;
-        top: 13px;
-        bottom: 13px;
-        left: 9px;
-        width: 4px;
-        border-radius: 2px;
-        background: currentColor;
-        opacity: 0;
-      }
-      .block:hover .edge::after,
-      .block:focus-visible .edge::after,
-      .block.dragging .edge::after {
-        opacity: 0.55;
-      }
-      .block.dragging {
-        z-index: 2;
-        outline: 2px solid var(--zw-text);
-      }
       .block {
         overflow: visible;
-      }
-      .tip {
-        position: absolute;
-        bottom: calc(100% + 6px);
-        transform: translateX(-50%);
-        padding: 3px 8px;
-        border-radius: 8px;
-        background: var(--zw-text);
-        color: var(--zw-bg);
-        font-size: 12px;
-        font-weight: 700;
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 3;
       }
       .textbtn {
         align-self: flex-start;
@@ -1984,44 +1896,6 @@ export class ZeitwerkCard extends LitElement {
         border-radius: 18px;
         background: var(--zw-surface);
       }
-      .copy-title {
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .copy-hint {
-        font-size: 12px;
-        color: var(--zw-text-2);
-      }
-      .pick {
-        height: 36px;
-        padding: 0 14px;
-        border-radius: 18px;
-        border: 1px solid color-mix(in srgb, var(--zw-text) 18%, transparent);
-        font-size: 13px;
-      }
-      .pick[aria-pressed="true"] {
-        background: var(--zw-accent);
-        color: var(--zw-on-accent);
-        border-color: var(--zw-accent);
-      }
-      .copy-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        align-items: center;
-      }
-      .accent {
-        height: 36px;
-        padding: 0 18px;
-        border-radius: 18px;
-        background: var(--zw-accent);
-        color: var(--zw-on-accent);
-        font-weight: 700;
-        font-size: 13px;
-      }
-      .accent:disabled {
-        opacity: 0.5;
-      }
       .hatch {
         position: absolute;
         top: 0;
@@ -2034,12 +1908,6 @@ export class ZeitwerkCard extends LitElement {
           transparent 2px 7px
         );
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--zw-text) 40%, transparent);
-      }
-      .links {
-        border-radius: 22px;
-        background: var(--zw-surface);
-        border: 1px solid var(--zw-border);
-        overflow: hidden;
       }
       .link {
         width: 100%;
