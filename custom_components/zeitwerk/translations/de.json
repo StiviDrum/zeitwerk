@@ -28,11 +28,31 @@
   "services": {
     "apply": {
       "name": "Aktuelles Profil anwenden",
-      "description": "Führt die Aktionen des aktuellen Profils sofort aus.",
+      "description": "Führt die Aktionen des aktuellen Profils erneut aus und beendet eine manuelle Übersteuerung, z. B. um nach einer Handänderung wieder die geplante Temperatur zu setzen. Ausgeschaltete Pläne werden übersprungen.",
       "fields": {
         "plan": {
-          "name": "Plan",
-          "description": "Plan-ID, z. B. wohnzimmer_heizung."
+          "name": "Pläne",
+          "description": "Eine oder mehrere Plan-IDs, z. B. wohnzimmer_heizung. Leer: alle Pläne."
+        }
+      }
+    },
+    "enable": {
+      "name": "Pläne einschalten",
+      "description": "Schaltet Pläne ein (wie switch.zeitwerk_… an). Das aktuelle Profil wird sofort angewendet.",
+      "fields": {
+        "plan": {
+          "name": "Pläne",
+          "description": "Eine oder mehrere Plan-IDs. Leer: alle Pläne."
+        }
+      }
+    },
+    "disable": {
+      "name": "Pläne ausschalten",
+      "description": "Schaltet Pläne aus (wie switch.zeitwerk_… aus). Ausgeschaltete Pläne führen keine Aktionen aus, bis sie wieder eingeschaltet werden.",
+      "fields": {
+        "plan": {
+          "name": "Pläne",
+          "description": "Eine oder mehrere Plan-IDs. Leer: alle Pläne."
         }
       }
     },
@@ -178,7 +198,7 @@
     },
     "update_plan": {
       "name": "Plan ändern",
-      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. activation = Objekt mit match (all oder any), conditions (Liste von HA-Bedingungen), when_inactive (none oder profile:ID) und reevaluate (true/false) – ist die Aktivierung nicht erfüllt, ist der Plan pausiert. holidays = Objekt mit source (calendar.* oder binary_sensor.* der Workday-Integration), mode (off, like_day oder own_day_type), like_day (mon…sun) und day_type (ID). options = Objekt mit reapply_on_start, reapply_on_profile_change und manual_override (until_next, ignore oder minutes:N). Ein Profil = Objekt mit id, name, color, icon und actions (Liste von HA-Aktionen). Erfordert Admin.",
+      "description": "Ändert einzelne Teile eines Plans; nur angegebene Felder werden geändert. activation, holidays und options werden mit den bestehenden Werten zusammengeführt, profiles ersetzt die Profilliste vollständig. activation = Objekt mit match (all oder any), conditions (Liste von HA-Bedingungen), when_inactive (none oder profile:ID) und reevaluate (true/false) – ist die Aktivierung nicht erfüllt, ist der Plan pausiert. holidays = Objekt mit source (calendar.* oder binary_sensor.* der Workday-Integration), mode (off, like_day oder own_day_type), like_day (mon…sun) und day_type (ID). options = Objekt mit reapply_on_start, reapply_on_profile_change und manual_override (until_next, ignore oder minutes:N). Ein Profil = Objekt mit id, name, color, icon und actions (Liste von HA-Aktionen). Erfordert Admin. Höchstens 5 Profile. Wird ein Profil entfernt, fallen seine Blöcke weg (dort gilt das Standardprofil) und Regeln, die es nutzten, wechseln auf das Standardprofil.",
       "fields": {
         "plan": {
           "name": "Plan",
@@ -239,6 +259,24 @@
         "plan": {
           "name": "Plan",
           "description": "Plan-ID, z. B. wohnzimmer_heizung (siehe Attribut plan_id am Sensor sensor.zeitwerk_…_profile)."
+        }
+      }
+    },
+    "duplicate_plan": {
+      "name": "Plan duplizieren",
+      "description": "Kopiert einen Plan mit allen Profilen, Tagesplänen und Regeln. Die Kopie startet ausgeschaltet, damit nie zwei Pläne gleichzeitig dieselben Entitäten steuern; erst Profile anpassen, dann einschalten. Erfordert Admin. Gibt plan_id zurück.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan-ID, die kopiert wird."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Name der Kopie (Standard: Name plus Kopie)."
+        },
+        "new_plan": {
+          "name": "Neue Plan-ID",
+          "description": "ID der Kopie (Standard: aus dem Namen abgeleitet)."
         }
       }
     }

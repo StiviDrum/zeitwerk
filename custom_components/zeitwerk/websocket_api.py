@@ -157,6 +157,27 @@ async def ws_update(
 
 
 @websocket_api.websocket_command(
+    {
+        vol.Required("type"): "zeitwerk/plans/duplicate",
+        vol.Required("plan_id"): cv.string,
+        vol.Optional("name"): cv.string,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+@_with_manager
+async def ws_duplicate(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    manager: ZeitwerkManager,
+) -> None:
+    """Copy a plan; the copy starts switched off (admin)."""
+    plan = await manager.async_duplicate_plan(msg["plan_id"], msg.get("name"))
+    connection.send_result(msg["id"], _plan_payload(manager, plan))
+
+
+@websocket_api.websocket_command(
     {vol.Required("type"): "zeitwerk/plans/delete", vol.Required("plan_id"): cv.string}
 )
 @websocket_api.require_admin
@@ -316,6 +337,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_get,
         ws_create,
         ws_update,
+        ws_duplicate,
         ws_delete,
         ws_subscribe,
         ws_preview,

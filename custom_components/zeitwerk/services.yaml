@@ -1,10 +1,29 @@
 apply:
   fields:
     plan:
-      required: true
+      required: false
       example: wohnzimmer_heizung
       selector:
         text:
+          multiple: true
+
+enable:
+  fields:
+    plan:
+      required: false
+      example: wohnzimmer_heizung
+      selector:
+        text:
+          multiple: true
+
+disable:
+  fields:
+    plan:
+      required: false
+      example: wohnzimmer_heizung
+      selector:
+        text:
+          multiple: true
 
 set_profile_value:
   fields:
@@ -220,5 +239,23 @@ delete_plan:
     plan:
       required: true
       example: wohnzimmer_heizung
+      selector:
+        text:
+
+duplicate_plan:
+  fields:
+    plan:
+      required: true
+      example: wohnzimmer_heizung
+      selector:
+        text:
+    name:
+      required: false
+      example: Kinderzimmer Heizung
+      selector:
+        text:
+    new_plan:
+      required: false
+      example: kinderzimmer_heizung
       selector:
         text:

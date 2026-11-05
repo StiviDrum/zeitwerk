@@ -119,6 +119,19 @@ async def test_ws_crud_and_subscribe(
     assert [s["profile"] for s in segments] == ["eco", "comfort", "eco"]
 
     await client.send_json_auto_id(
+        {
+            "type": "zeitwerk/plans/duplicate",
+            "plan_id": "heizung_wohnzimmer",
+            "name": "Bad",
+        }
+    )
+    msg = await _result(client)
+    assert msg["result"]["id"] == "bad"
+    assert msg["result"]["enabled"] is False
+    await client.send_json_auto_id({"type": "zeitwerk/plans/delete", "plan_id": "bad"})
+    assert (await _result(client))["success"]
+
+    await client.send_json_auto_id(
         {"type": "zeitwerk/plans/delete", "plan_id": "heizung_wohnzimmer"}
     )
     msg = await _result(client)

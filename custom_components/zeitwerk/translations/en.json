@@ -28,11 +28,31 @@
   "services": {
     "apply": {
       "name": "Apply current profile",
-      "description": "Runs the actions of the plan's current profile now.",
+      "description": "Runs the actions of the current profile again and ends a manual override, e.g. to restore the scheduled temperature after someone changed it by hand. Disabled plans are skipped.",
       "fields": {
         "plan": {
-          "name": "Plan",
-          "description": "Plan id, e.g. wohnzimmer_heizung."
+          "name": "Plans",
+          "description": "One or more plan ids, e.g. wohnzimmer_heizung. Empty: all plans."
+        }
+      }
+    },
+    "enable": {
+      "name": "Enable plans",
+      "description": "Switches plans on (same as switch.zeitwerk_… on). The current profile is applied right away.",
+      "fields": {
+        "plan": {
+          "name": "Plans",
+          "description": "One or more plan ids. Empty: all plans."
+        }
+      }
+    },
+    "disable": {
+      "name": "Disable plans",
+      "description": "Switches plans off (same as switch.zeitwerk_… off). Disabled plans run no actions until enabled again.",
+      "fields": {
+        "plan": {
+          "name": "Plans",
+          "description": "One or more plan ids. Empty: all plans."
         }
       }
     },
@@ -178,7 +198,7 @@
     },
     "update_plan": {
       "name": "Update plan",
-      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. activation = object with match (all or any), conditions (list of HA conditions), when_inactive (none or profile:ID) and reevaluate (true/false) – if the activation is not met the plan is paused. holidays = object with source (calendar.* or binary_sensor.* of the Workday integration), mode (off, like_day or own_day_type), like_day (mon…sun) and day_type (ID). options = object with reapply_on_start, reapply_on_profile_change and manual_override (until_next, ignore or minutes:N). A profile = object with id, name, color, icon and actions (list of HA actions). Requires admin.",
+      "description": "Changes parts of a plan; only given fields change. activation, holidays and options are merged with the existing values, profiles replaces the profile list. activation = object with match (all or any), conditions (list of HA conditions), when_inactive (none or profile:ID) and reevaluate (true/false) – if the activation is not met the plan is paused. holidays = object with source (calendar.* or binary_sensor.* of the Workday integration), mode (off, like_day or own_day_type), like_day (mon…sun) and day_type (ID). options = object with reapply_on_start, reapply_on_profile_change and manual_override (until_next, ignore or minutes:N). A profile = object with id, name, color, icon and actions (list of HA actions). Requires admin. At most 5 profiles. Removing a profile: its blocks are dropped (the default profile fills the gap) and rules that used it switch to the default profile.",
       "fields": {
         "plan": {
           "name": "Plan",
@@ -239,6 +259,24 @@
         "plan": {
           "name": "Plan",
           "description": "Plan id, e.g. wohnzimmer_heizung (see attribute plan_id of sensor.zeitwerk_…_profile)."
+        }
+      }
+    },
+    "duplicate_plan": {
+      "name": "Duplicate plan",
+      "description": "Copies a plan with all profiles, day plans and rules. The copy starts switched off so two plans never control the same entities at once; change its profiles first, then enable it. Requires admin. Returns plan_id.",
+      "fields": {
+        "plan": {
+          "name": "Plan",
+          "description": "Plan id to copy."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Name of the copy (default: name plus copy)."
+        },
+        "new_plan": {
+          "name": "New plan id",
+          "description": "Id of the copy (default: derived from the name)."
         }
       }
     }

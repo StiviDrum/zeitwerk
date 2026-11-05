@@ -14,3 +14,6 @@ CARD_FILENAME: Final = "zeitwerk-card.js"
 CARD_URL_BASE: Final = "/zeitwerk_static"
 
 SIGNAL_PLAN_STATUS: Final = "zeitwerk_plan_status_{}"
+
+# A plan has 1 to MAX_PROFILES profiles.
+MAX_PROFILES: Final = 5

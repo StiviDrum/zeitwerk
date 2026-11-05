@@ -31,7 +31,7 @@ from .days import DAY_KEYS, apply_day_plan, week_to_days
 from .engine import PlanRunner
 from .manager import PlanNotFoundError, ZeitwerkManager
 from .model import MATCH_ALL, MATCH_ANY
-from .schema import make_plan_id
+from .schema import make_plan_id, replace_missing_profiles
 from .websocket_api import status_dict
 
 SERVICE_APPLY = "apply"
@@ -46,6 +46,9 @@ SERVICE_REMOVE_OVERRIDE = "remove_override"
 SERVICE_UPDATE_PLAN = "update_plan"
 SERVICE_CREATE_PLAN = "create_plan"
 SERVICE_DELETE_PLAN = "delete_plan"
+SERVICE_DUPLICATE_PLAN = "duplicate_plan"
+SERVICE_ENABLE = "enable"
+SERVICE_DISABLE = "disable"
 
 # Top-level plan keys update_plan may replace; dict values are merged.
 UPDATABLE_KEYS = (
@@ -65,6 +68,10 @@ ATTR_PLAN = "plan"
 ATTR_PROFILE = "profile"
 
 _PLAN_SCHEMA = vol.Schema({vol.Required(ATTR_PLAN): cv.string})
+# One plan id, a list of ids, or nothing (= all plans).
+_PLANS_SCHEMA = vol.Schema(
+    {vol.Optional(ATTR_PLAN): vol.All(cv.ensure_list, [cv.string])}
+)
 
 
 def get_manager(hass: HomeAssistant) -> ZeitwerkManager:
@@ -97,6 +104,15 @@ def _plan(manager: ZeitwerkManager, plan_id: str) -> dict[str, Any]:
             translation_key="unknown_plan",
             translation_placeholders={"plan": plan_id},
         ) from err
+
+
+def _plan_ids(hass: HomeAssistant, call: ServiceCall) -> list[str]:
+    """Plan ids of a call with an optional plan / plan list (default: all)."""
+    manager = get_manager(hass)
+    ids: list[str] = call.data.get(ATTR_PLAN) or list(manager.plans)
+    for plan_id in ids:
+        _plan(manager, plan_id)  # validates the id
+    return ids
 
 
 async def _require_admin(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -139,7 +155,20 @@ def async_setup_services(hass: HomeAssistant) -> None:
     """Register Zeitwerk services."""
 
     async def apply(call: ServiceCall) -> None:
-        await _runner(hass, call.data[ATTR_PLAN]).async_apply_current()
+        manager = get_manager(hass)
+        for plan_id in _plan_ids(hass, call):
+            if manager.plans[plan_id].enabled:
+                await _runner(hass, plan_id).async_apply_current()
+
+    async def enable(call: ServiceCall) -> None:
+        manager = get_manager(hass)
+        for plan_id in _plan_ids(hass, call):
+            await manager.async_set_enabled(plan_id, True)
+
+    async def disable(call: ServiceCall) -> None:
+        manager = get_manager(hass)
+        for plan_id in _plan_ids(hass, call):
+            await manager.async_set_enabled(plan_id, False)
 
     async def set_profile_value(call: ServiceCall) -> None:
         _runner(hass, call.data[ATTR_PLAN])  # validates the plan id
@@ -251,6 +280,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 data[key] = {**(data.get(key) or {}), **value}
             else:
                 data[key] = value
+        if "profiles" in call.data or "default_profile" in call.data:
+            data = replace_missing_profiles(data)
         await _save(manager, call.data[ATTR_PLAN], data)
 
     async def create_plan(call: ServiceCall) -> ServiceResponse:
@@ -258,6 +289,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
         manager = get_manager(hass)
         try:
             plan = await manager.async_create_plan(dict(call.data["plan"]))
+        except (vol.Invalid, ValueError, HomeAssistantError) as err:
+            raise ServiceValidationError(str(err)) from err
+        return {"plan_id": plan.id}
+
+    async def duplicate_plan(call: ServiceCall) -> ServiceResponse:
+        await _require_admin(hass, call)
+        manager = get_manager(hass)
+        _plan(manager, call.data[ATTR_PLAN])
+        try:
+            plan = await manager.async_duplicate_plan(
+                call.data[ATTR_PLAN], call.data.get("name"), call.data.get("new_plan")
+            )
         except (vol.Invalid, ValueError, HomeAssistantError) as err:
             raise ServiceValidationError(str(err)) from err
         return {"plan_id": plan.id}
@@ -336,7 +379,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(DOMAIN, SERVICE_DELETE_PLAN, delete_plan, _PLAN_SCHEMA)
 
-    hass.services.async_register(DOMAIN, SERVICE_APPLY, apply, _PLAN_SCHEMA)
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DUPLICATE_PLAN,
+        duplicate_plan,
+        _PLAN_SCHEMA.extend(
+            {vol.Optional("name"): cv.string, vol.Optional("new_plan"): cv.string}
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(DOMAIN, SERVICE_APPLY, apply, _PLANS_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_ENABLE, enable, _PLANS_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_DISABLE, disable, _PLANS_SCHEMA)
     hass.services.async_register(
         DOMAIN,
         SERVICE_SET_PROFILE_VALUE,

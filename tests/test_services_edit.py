@@ -15,7 +15,7 @@ from custom_components.zeitwerk.days import (
 )
 
 from .common import living_room_plan
-from .test_engine import WED, at, start, temp, tick
+from .test_engine import WED, at, set_temp, start, temp, tick
 
 PLAN = "wohnzimmer_heizung"
 
@@ -288,3 +288,89 @@ async def test_editing_requires_admin(
     )
     assert result["plans"][0]["id"] == PLAN
     await tick(hass, freezer, at(WED, 17, 41))
+
+
+async def test_enable_disable_apply_all(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    _entry, manager = await start(hass, freezer, at(WED, 17, 40))
+    second = living_room_plan(id="bad", name="Bad")
+    await manager.async_create_plan(second)
+    await hass.async_block_till_done()
+
+    await call(hass, "disable")
+    assert hass.states.get("switch.zeitwerk_wohnzimmer_heizung").state == "off"
+    assert hass.states.get("switch.zeitwerk_bad").state == "off"
+    await call(hass, "enable", plan="bad")
+    assert hass.states.get("switch.zeitwerk_bad").state == "on"
+    assert hass.states.get("switch.zeitwerk_wohnzimmer_heizung").state == "off"
+    await call(hass, "enable", plan=["bad", PLAN])
+    assert hass.states.get("switch.zeitwerk_wohnzimmer_heizung").state == "on"
+    with pytest.raises(ServiceValidationError):
+        await call(hass, "disable", plan="nope")
+
+    # apply restores the scheduled value after a manual change
+    await set_temp(hass, 25)
+    await hass.async_block_till_done()
+    assert temp(hass) == 25
+    await call(hass, "apply")
+    assert temp(hass) == 22
+
+
+async def test_duplicate_plan(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await start(hass, freezer, at(WED, 17, 40))
+    result = await call(hass, "duplicate_plan", True, plan=PLAN)
+    assert result == {"plan_id": "heizung_wohnzimmer_copy"}
+    copy_state = hass.states.get("switch.zeitwerk_heizung_wohnzimmer_copy")
+    assert copy_state is not None
+    assert copy_state.state == "off"
+    plans = (await call(hass, "get_plan", True))["plans"]
+    copied = next(p for p in plans if p["id"] == "heizung_wohnzimmer_copy")
+    assert copied["name"] == "Heizung Wohnzimmer (copy)"
+    assert copied["overrides"] == plans[0]["overrides"]
+
+    named = await call(
+        hass, "duplicate_plan", True, plan=PLAN, name="Bad", new_plan="bad"
+    )
+    assert named == {"plan_id": "bad"}
+    with pytest.raises(ServiceValidationError):
+        await call(hass, "duplicate_plan", plan=PLAN, new_plan="bad")
+
+
+async def test_removing_a_profile_falls_back_to_default(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await start(hass, freezer, at(WED, 17, 40))
+    plan = (await call(hass, "get_plan", True, plan=PLAN))["plans"][0]
+    profiles = [p for p in plan["profiles"] if p["id"] != "away"]
+    await call(
+        hass,
+        "update_plan",
+        plan=PLAN,
+        profiles=profiles,
+        activation={"when_inactive": "profile:away"},
+    )
+    # when_inactive is set in the same call, so it still names 'away' -> remapped
+    result = (await call(hass, "get_plan", True, plan=PLAN))["plans"][0]
+    assert [p["id"] for p in result["profiles"]] == ["comfort", "eco"]
+    assert {o["profile"] for o in result["overrides"]} == {"eco"}
+    assert result["activation"]["when_inactive"] == "profile:eco"
+
+    await call(
+        hass, "update_plan", plan=PLAN, profiles=[profiles[1]], default_profile="eco"
+    )
+    result = (await call(hass, "get_plan", True, plan=PLAN))["plans"][0]
+    assert all(not d["blocks"] for d in result["week"]["day_types"])
+    assert result["status"]["profile"] == "eco"
+
+
+async def test_at_most_five_profiles(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await start(hass, freezer, at(WED, 17, 40))
+    plan = (await call(hass, "get_plan", True, plan=PLAN))["plans"][0]
+    extra = [{**plan["profiles"][0], "id": f"p{i}", "name": f"P{i}"} for i in range(3)]
+    with pytest.raises(ServiceValidationError, match="1 to 5 profiles"):
+        await call(hass, "update_plan", plan=PLAN, profiles=plan["profiles"] + extra)

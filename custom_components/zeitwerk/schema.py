@@ -14,6 +14,7 @@ from homeassistant.helpers import (
 from homeassistant.util import slugify
 
 from .compat import vol
+from .const import MAX_PROFILES
 from .model import (
     HOLIDAY_MODE_LIKE_DAY,
     HOLIDAY_MODE_OFF,
@@ -162,7 +163,12 @@ PLAN_SCHEMA = vol.Schema(
         vol.Optional("enabled", default=True): cv.boolean,
         vol.Optional("icon", default=None): vol.Any(None, cv.icon),
         vol.Optional("tags", default=list): vol.All(cv.ensure_list, [cv.string]),
-        vol.Required("profiles"): vol.All([PROFILE_SCHEMA], vol.Length(min=1)),
+        vol.Required("profiles"): vol.All(
+            [PROFILE_SCHEMA],
+            vol.Length(
+                min=1, max=MAX_PROFILES, msg=f"a plan has 1 to {MAX_PROFILES} profiles"
+            ),
+        ),
         vol.Required("default_profile"): _id,
         vol.Optional("activation", default=dict): ACTIVATION_SCHEMA,
         vol.Optional("holidays", default=dict): HOLIDAYS_SCHEMA,
@@ -300,6 +306,33 @@ async def async_validate_plan(
             )
         except vol.Invalid as err:
             raise vol.Invalid(f"{where} conditions: {err}") from err
+    return plan
+
+
+def replace_missing_profiles(plan: dict[str, Any]) -> dict[str, Any]:
+    """Point references to removed profiles at the default profile.
+
+    Blocks of a removed profile are dropped (gaps run the default profile),
+    overrides and ``when_inactive`` switch to the default profile.
+    """
+    profiles = {p["id"] for p in plan.get("profiles", [])}
+    default = plan.get("default_profile")
+    if default not in profiles:
+        return plan
+    for day_type in plan.get("week", {}).get("day_types", []):
+        day_type["blocks"] = [
+            b for b in day_type.get("blocks", []) if b.get("profile") in profiles
+        ]
+    for override in plan.get("overrides", []):
+        if override.get("profile") not in profiles:
+            override["profile"] = default
+    activation = plan.get("activation") or {}
+    when = activation.get("when_inactive", WHEN_INACTIVE_NONE)
+    if (
+        when.startswith(WHEN_INACTIVE_PROFILE_PREFIX)
+        and when.removeprefix(WHEN_INACTIVE_PROFILE_PREFIX) not in profiles
+    ):
+        activation["when_inactive"] = f"{WHEN_INACTIVE_PROFILE_PREFIX}{default}"
     return plan
 
 

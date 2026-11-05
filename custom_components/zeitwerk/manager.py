@@ -177,6 +177,17 @@ class ZeitwerkManager:
             await self._async_start_runner(plan, reapply=True)
         return plan
 
+    async def async_duplicate_plan(
+        self, plan_id: str, name: str | None = None, new_id: str | None = None
+    ) -> Plan:
+        """Copy a plan under a new id; the copy starts switched off."""
+        data = copy.deepcopy(self.get_plan(plan_id).to_dict())
+        copy_word = "Kopie" if self.hass.config.language.startswith("de") else "copy"
+        data["name"] = name or f"{data['name']} ({copy_word})"
+        data["id"] = new_id
+        data["enabled"] = False
+        return await self.async_create_plan(data)
+
     async def async_update_plan(self, plan_id: str, data: dict[str, Any]) -> Plan:
         """Replace a plan (full update)."""
         old = self.get_plan(plan_id)
