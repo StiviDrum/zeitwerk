@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - 2026-11-05
+
+First public release candidate for 1.0 (no longer marked as pre-release on
+GitHub, so HACS offers it without the beta switch).
+
+### Added
+- Diagnostics download for the integration (all plans) and per plan device.
+- GitHub issue forms for bug reports and feature requests.
+- Profiles can be reordered by dragging (or ↑/↓); the order is the slider
+  order in the card.
+- README screenshots (light and dark).
+
+### Changed
+- Rows lifted while dragging (profiles, overrides) are opaque.
+
 ## [0.8.3] - 2026-11-05
 
 ### Changed

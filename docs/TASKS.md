@@ -170,9 +170,14 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Card: cached localizers, Intl formatters and watched entity ids; CSS minified at build time (197.7 → 174.8 KB). All 44 page screenshots (dark/light) pixel-identical before/after.
 - [x] Engine: lazy boundary search (equivalence test incl. DST), unchanged timer kept.
 
+## 1.0.0-rc.1 – Release candidate
+
+- [x] Diagnostics (config entry + device), issue forms, sort profiles by dragging, README screenshots.
+- [x] Released as `v1.0.0-rc.1`, not marked as pre-release (Steven, 2026-11-05).
+
 ## 1.0 – Publish
 
-- [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
+- [x] README with screenshots (light + dark, rendered from the dev instance with demo plans), full docs of services, entities, websocket API
 - [x] Brand assets: shipped locally in `brand/` (brands repo closed for custom integrations since HA 2026.3)
   - 2026-11-04: Steven's icon/logo (SVG) in `docs/brand/`; PNGs (icon 256/512, logo 360×128/720×256, light + dark lettering) rendered with Inter and shipped in `custom_components/zeitwerk/brand/` – HA 2026.10 serves local branding of custom integrations (verified: icon on the integrations page). Not yet submitted to home-assistant/brands (HACS list icon) – needs Steven's OK.
 - [ ] HACS default repository submission checklist (ask Steven before submitting)

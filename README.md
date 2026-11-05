@@ -7,9 +7,20 @@
 Weekly schedules for Home Assistant built on **profiles** – like a thermostat
 week program, but for any entity.
 
-> **Status:** pre-release (0.x), feature complete for 1.0: backend, week view,
-> timeline, rules page, holidays, manual override, plan wizard and visual card
-> editor.
+> **Status:** release candidate for 1.0 – feature complete, being tested in
+> real installations. Please report problems via
+> [GitHub issues](https://github.com/StiviDrum/zeitwerk/issues) (with diagnostics).
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/screenshots/week-dark.png" alt="Week plan (dark theme)" width="260">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/screenshots/week-light.png" alt="Week plan (light theme)" width="260">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/screenshots/timeline-dark.png" alt="Timeline of several plans" width="260">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/screenshots/day-editor-dark.png" alt="Day editor" width="260">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/screenshots/profiles-dark.png" alt="Profiles editor" width="260">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/screenshots/configuration-dark.png" alt="Configuration: rules and plan" width="260">
+</p>
 
 A plan says *when* a profile applies (week grid with day types such as
 "workday" / "weekend" / "holiday"); a profile says *what* happens (any Home
@@ -90,7 +101,8 @@ What the week view does:
   via the websocket API (admin).
 - **Profiles** (gear next to the „Profile“ heading, admin): name, icon,
   colour, default profile (exactly one; it applies wherever no block is
-  planned) and 1–5 profiles. What the profiles switch: either **one entity
+  planned) and 1–5 profiles; drag the handle (or ↑/↓) to change their order
+  (= slider order). What the profiles switch: either **one entity
   for all** (each profile sets its own value – temperature, option, on/off,
   brightness …) or **own entities per profile**, each profile with one or
   more „entity → value“ lines (e.g. Morning: light A on – Evening: light B on
@@ -139,7 +151,7 @@ What the week view does:
   the default profile and a start layout (workday/weekend or every day). A
   card configured with an unknown `plan:` id creates the plan under that id.
 
-Bundle size (0.8.3, minified): 174.8 KB, 45.9 KB gzip.
+Bundle size (1.0.0-rc.1, minified): 177.5 KB, 46.9 KB gzip.
 
 ## Repairs
 
@@ -147,6 +159,14 @@ If a plan refers to entities that do not exist (profile targets, conditions,
 holiday source), Zeitwerk raises a warning under *Settings → Repairs* naming
 the plan and the missing entities. It disappears when the entities exist again
 (checked on start, on plan changes and when the entity registry changes).
+
+## Diagnostics and bug reports
+
+*Settings → Devices & services → Zeitwerk → ⋮ → Download diagnostics* (all
+plans) or the same on a plan's device page (one plan) gives a JSON file with
+the plan, its current status, the stored runtime state and the versions.
+Please attach it to [bug reports](https://github.com/StiviDrum/zeitwerk/issues/new/choose).
+It contains your plan, profile and rule names and the entity ids used in them.
 
 ## Manual changes
 
@@ -332,7 +352,7 @@ Zeitwerk ist eine Home-Assistant-Integration für Wochenpläne mit **Profilen**
 niemand zu Hause). Die Karte bringt sie selbst mit und registriert sie
 automatisch.
 
-**Status:** Vorabversion, Funktionsumfang für 1.0 komplett.
+**Status:** Release Candidate für 1.0 – vollständig, wird im Alltag getestet.
 
 Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
 `type: custom:zeitwerk-card` mit `plan: <id>`. Tag im Wochenplan antippen
@@ -346,7 +366,10 @@ Profil (z. B. morgens Licht A, abends Licht B). Nach jeder Änderung gibt es
 löschen und duplizieren (dort oder als
 Vorlage im Assistenten); die Kopie startet ausgeschaltet. Neue Pläne legt man in der
 Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
-Start mit Werktag/Wochenende oder jeden Tag gleich). Fehlende Entitäten in
+Start mit Werktag/Wochenende oder jeden Tag gleich). Fehler bitte als [GitHub-Issue](https://github.com/StiviDrum/zeitwerk/issues/new/choose)
+melden, mit Diagnose-Datei (*Geräte & Dienste → Zeitwerk → ⋮ → Diagnose
+herunterladen*). Profile lassen sich in der Profilverwaltung per Griff
+sortieren (Reihenfolge der Regler). Fehlende Entitäten in
 einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Konfiguration“ → Regeln: Vorrang-Regeln
 (ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
 Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
