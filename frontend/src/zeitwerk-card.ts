@@ -412,6 +412,12 @@ export class ZeitwerkCard extends LitElement {
     </div>`;
   }
 
+  private _removePlan = async (): Promise<void> => {
+    if (!this.hass || !this._plan) return;
+    await this.hass.callWS({ type: "zeitwerk/plans/delete", plan_id: this._plan.id });
+    this._page = "week";
+  };
+
   private _duplicate = async (name: string): Promise<void> => {
     if (!this.hass || !this._plan) return;
     const copy = await this.hass.callWS<Plan>({
@@ -889,6 +895,7 @@ export class ZeitwerkCard extends LitElement {
           .localize=${l}
           .save=${(m: PlanMutator) => this._updatePlan(m)}
           .duplicate=${this._duplicate}
+          .deletePlan=${this._removePlan}
           @zw-back=${() => (this._page = "week")}
         ></zeitwerk-rules>
         ${this._renderUndo()}
@@ -1091,7 +1098,7 @@ export class ZeitwerkCard extends LitElement {
     return html`<button class="link settings" @click=${() => (this._page = "rules")}>
       <span class="licon"><ha-icon .icon=${"mdi:tune-variant"}></ha-icon></span>
       <span class="ltext">
-        <span class="ltitle">${l.t("rules_title")}</span>
+        <span class="ltitle">${l.t("config_title")}</span>
         ${summary.map((line) => html`<span class="lsub">${line}</span>`)}
       </span>
       <svg

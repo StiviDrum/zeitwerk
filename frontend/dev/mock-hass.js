@@ -214,6 +214,10 @@ const hass = {
         ],
       };
     }
+    if (msg.type === "zeitwerk/plans/delete") {
+      for (const cb of subscribers) cb({ event: "removed", plan_id: plan.id, plan: null });
+      return null;
+    }
     if (msg.type === "zeitwerk/plans/duplicate") {
       return { ...plan, id: msg.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), name: msg.name, enabled: false };
     }

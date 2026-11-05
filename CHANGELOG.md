@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-05
+
+### Added
+- Edit plan in the card: name, icon and tags (the plan id stays), delete plan
+  with confirmation.
+
+### Changed
+- „Regeln“ is now „Konfiguration“ with the sections *Regeln* (overrides,
+  activation, holidays; „?“ help next to the heading) and *Plan* (edit,
+  duplicate).
+
 ## [0.8.1] - 2026-11-05
 
 ### Changed

@@ -30,6 +30,7 @@ type SubPage =
   | { kind: "activation" }
   | { kind: "holidays" }
   | { kind: "duplicate"; name: string }
+  | { kind: "plan-edit"; name: string; icon: string; tags: string; confirmDelete: boolean }
   | { kind: "override"; index: number; draft: Override }
   | { kind: "activation-edit"; match: "all" | "any"; conditions: Condition[] };
 
@@ -47,6 +48,8 @@ export class ZeitwerkRules extends LitElement {
   @property({ attribute: false }) public save!: (mutate: PlanMutator) => Promise<void>;
   /** Copy the plan under a new name (the copy starts switched off). */
   @property({ attribute: false }) public duplicate?: (name: string) => Promise<void>;
+  /** Delete the whole plan. */
+  @property({ attribute: false }) public deletePlan?: () => Promise<void>;
 
   @state() private _page: SubPage = { kind: "menu" };
   @state() private _error?: string;
@@ -306,6 +309,8 @@ export class ZeitwerkRules extends LitElement {
         return this._renderHolidayPage();
       case "duplicate":
         return this._renderDuplicate(this._page);
+      case "plan-edit":
+        return this._renderPlanEdit(this._page);
       default:
         return this._renderMenu();
     }
@@ -358,12 +363,13 @@ export class ZeitwerkRules extends LitElement {
       ${help ? this._helpText(help) : nothing}`;
   }
 
-  private _separator(title: string, hint?: string) {
+  private _separator(title: string, hint?: string, help?: HelpKey[]) {
     return html`<div class="separator">
-      <span>${title}</span>${hint ? html`<span class="shint">${hint}</span>` : nothing}<span
-        class="line"
-      ></span>
-    </div>`;
+        <span>${title}</span>${hint ? html`<span class="shint">${hint}</span>` : nothing}${
+          help ? this._helpButton(help) : nothing
+        }<span class="line"></span>
+      </div>
+      ${help ? this._helpText(help) : nothing}`;
   }
 
   private _segmented(
@@ -438,7 +444,8 @@ export class ZeitwerkRules extends LitElement {
         </svg>
       </button>`;
     return html`
-      ${this._head(t("rules_title"), plan.name, () => this._fire("zw-back"), [
+      ${this._head(t("config_title"), plan.name, () => this._fire("zw-back"))}
+      ${this._separator(t("section_rules"), undefined, [
         "help_overrides",
         "help_activation",
         "help_holidays",
@@ -448,20 +455,138 @@ export class ZeitwerkRules extends LitElement {
         ${row("mdi:flash-outline", t("rules_activation"), activation, () => this._open({ kind: "activation" }))}
         ${row("mdi:flag-outline", t("rules_holidays"), holidays, () => this._open({ kind: "holidays" }))}
       </div>
-      ${
-        this.duplicate
-          ? html`<div class="menu">
-              ${row("mdi:content-copy", t("duplicate_plan"), t("duplicate_sub"), () => {
+      ${this._separator(t("section_plan"))}
+      <div class="menu">
+        ${row("mdi:pencil-outline", t("edit_plan"), t("edit_plan_sub"), () => {
+          if (!this._admin) {
+            this._error = t("admin_only");
+            return;
+          }
+          this._open({
+            kind: "plan-edit",
+            name: plan.name,
+            icon: plan.icon ?? "",
+            tags: plan.tags.join(", "),
+            confirmDelete: false,
+          });
+        })}
+        ${
+          this.duplicate
+            ? row("mdi:content-copy", t("duplicate_plan"), t("duplicate_sub"), () => {
                 if (!this._admin) {
                   this._error = t("admin_only");
                   return;
                 }
                 this._open({ kind: "duplicate", name: `${plan.name} (${t("copy_suffix")})` });
-              })}
-            </div>`
+              })
+            : nothing
+        }
+      </div>
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+    `;
+  }
+
+  private _renderPlanEdit(page: Extract<SubPage, { kind: "plan-edit" }>) {
+    const t = this.localize.t.bind(this.localize);
+    const set = (changes: Partial<typeof page>) => {
+      Object.assign(page, changes);
+      this._error = undefined;
+      this.requestUpdate();
+    };
+    const save = () => {
+      if (!page.name.trim()) {
+        this._error = t("name_required");
+        return;
+      }
+      this._run(
+        (p) => {
+          p.name = page.name.trim();
+          p.icon = page.icon.trim() || null;
+          p.tags = page.tags
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+        },
+        () => this._open({ kind: "menu" }),
+      );
+    };
+    const remove = async () => {
+      if (!this.deletePlan) return;
+      this._busy = true;
+      this._error = undefined;
+      try {
+        await this.deletePlan();
+      } catch (err) {
+        this._error = t("save_failed", { error: errorText(err) });
+      } finally {
+        this._busy = false;
+      }
+    };
+    return html`
+      ${this._head(t("edit_plan"), this.plan.name, () => this._open({ kind: "menu" }))}
+      <div class="panel">
+        <label class="field">
+          <span class="label">${t("name")}</span>
+          <input
+            type="text"
+            .value=${page.name}
+            @input=${(ev: Event) => set({ name: (ev.target as HTMLInputElement).value })}
+          />
+        </label>
+        <label class="field">
+          <span class="label">${t("icon")}</span>
+          ${
+            customElements.get("ha-icon-picker") && this.hass
+              ? html`<ha-icon-picker
+                  .hass=${this.hass}
+                  .value=${page.icon}
+                  @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
+                    ev.stopPropagation();
+                    set({ icon: ev.detail.value ?? "" });
+                  }}
+                ></ha-icon-picker>`
+              : html`<input
+                  type="text"
+                  placeholder="mdi:…"
+                  .value=${page.icon}
+                  @input=${(ev: Event) => set({ icon: (ev.target as HTMLInputElement).value })}
+                />`
+          }
+        </label>
+        <label class="field">
+          <span class="label">${t("tags")}</span>
+          <input
+            type="text"
+            .value=${page.tags}
+            @input=${(ev: Event) => set({ tags: (ev.target as HTMLInputElement).value })}
+          />
+        </label>
+        <span class="muted">${t("plan_id_hint", { id: this.plan.id })}</span>
+      </div>
+      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
+      <div class="actions">
+        <button class="danger" @click=${() => this._open({ kind: "menu" })}>${t("cancel")}</button>
+        <button class="primary" ?disabled=${this._busy} @click=${save}>${t("save")}</button>
+      </div>
+      ${
+        this.deletePlan
+          ? page.confirmDelete
+            ? html`<div class="confirm-box" role="alert">
+                <span>${t("delete_plan_confirm", { name: this.plan.name })}</span>
+                <div class="actions">
+                  <button class="secondary grow" @click=${() => set({ confirmDelete: false })}>
+                    ${t("cancel")}
+                  </button>
+                  <button class="danger-fill grow" ?disabled=${this._busy} @click=${remove}>
+                    ${t("delete_plan")}
+                  </button>
+                </div>
+              </div>`
+            : html`<button class="text-danger" @click=${() => set({ confirmDelete: true })}>
+                ${t("delete_plan")}
+              </button>`
           : nothing
       }
-      ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
     `;
   }
 
@@ -1229,6 +1354,33 @@ export class ZeitwerkRules extends LitElement {
         width: 10px;
         height: 10px;
         border-radius: 5px;
+      }
+      .confirm-box {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 16px;
+        font-size: 14px;
+        background: color-mix(in srgb, var(--zw-danger) 10%, transparent);
+      }
+      .confirm-box .actions button {
+        height: 44px;
+      }
+      .grow {
+        flex: 1;
+      }
+      .danger-fill {
+        background: var(--zw-danger) !important;
+        color: #fff;
+        font-weight: 700;
+      }
+      .text-danger {
+        align-self: flex-start;
+        min-height: 40px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--zw-danger);
       }
       .error {
         font-size: 13px;

@@ -109,7 +109,8 @@ What the week view does:
   Internally weekdays with the same plan are grouped into day types
   automatically (so `day_type` attributes show names like „Mo–Fr“). Editing
   needs an admin user.
-- **Rules** (one entry below the grid with a summary; „?“ explains them) → *Overrides*,
+- **Konfiguration** (one entry below the grid with a summary). Section
+  *Regeln* („?“ explains them) → *Overrides*,
   *Activation*, *Holidays*, each on its own page.
 - **Overrides / Activation**: overrides in
   priority order with a live *active* badge – drag the handle (or focus it and
@@ -118,13 +119,15 @@ What the week view does:
   loaded). Activation: all/any, live ✓ per condition, "otherwise" behaviour
   (`when_inactive`) and immediate re-evaluation (`reevaluate`). A paused plan
   shows the reason in the header, e.g. „pausiert – Heizperiode: Aus“.
-- **Holidays** (rules page): source (Holiday calendar or Workday sensor), mode
+- **Holidays** (configuration page): source (Holiday calendar or Workday sensor), mode
   off / like a weekday / own day (creates a „Feiertag“ day type with its own
   row and tab) and the next three holidays.
 - **Undo**: after every change made in the card (day, rules, profiles,
   slider) „Gespeichert · Rückgängig“ is shown for 10 s. Undo is refused if the
   plan was changed elsewhere in the meantime.
-- **Duplicate plan** (rules page, or „Vorlage“ in the new-plan wizard): copies
+- **Plan** section of the configuration page: **edit plan** (name, icon,
+  tags; the plan id stays, so cards and automations keep working) with
+  **delete plan** (confirmation), and **duplicate plan** ( or „Vorlage“ in the new-plan wizard): copies
   everything; the copy starts switched off so two plans never control the
   same entities.
 - A **manual override** shows in the header („manuell bis 22:00“) and as a
@@ -339,11 +342,12 @@ Wert im Profil (z. B. Komfort 22 → 21,5 °C). Das Zahnrad neben „Profile“ 
 Name, Symbol, Farbe, Standardprofil, 1–5 Profile und was sie schalten – eine
 Entität für alle (jedes Profil mit eigenem Wert) oder eigene Entitäten je
 Profil (z. B. morgens Licht A, abends Licht B). Nach jeder Änderung gibt es
-10 s lang „Rückgängig“. Pläne lassen sich duplizieren (Regeln-Seite oder
+10 s lang „Rückgängig“. Unter „Konfiguration“ → Plan: Plan umbenennen (Name, Symbol, Tags),
+löschen und duplizieren (dort oder als
 Vorlage im Assistenten); die Kopie startet ausgeschaltet. Neue Pläne legt man in der
 Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
 Start mit Werktag/Wochenende oder jeden Tag gleich). Fehlende Entitäten in
-einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Regeln“: Vorrang-Regeln
+einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Konfiguration“ → Regeln: Vorrang-Regeln
 (ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
 Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
 aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste aller Pläne: `view: timeline`

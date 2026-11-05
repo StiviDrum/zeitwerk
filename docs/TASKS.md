@@ -160,6 +160,10 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Today's grid row outlined; chip row removed; reason line in the header only for override / forced / manual / holiday.
 - [x] README header without `<picture>` and relative paths (HACS renders README text otherwise).
 
+## 0.8.2 – Configuration page
+
+- [x] „Regeln“ → „Konfiguration“ with sections Regeln / Plan; edit plan (name, icon, tags) and delete plan (confirmation) in the card.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
