@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-logo-dark.png">
-    <img src="docs/brand/readme-logo-light.png" alt="Zeitwerk" width="420">
-  </picture>
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/custom_components/zeitwerk/brand/icon.png" alt="Zeitwerk" width="128">
 </p>
 
 # Zeitwerk
@@ -200,7 +197,7 @@ overrides:
 options: { reapply_on_start: true, reapply_on_profile_change: true }
 ```
 
-Full model: [docs/SPEC.md](docs/SPEC.md) §3.
+Full model: [docs/SPEC.md](https://github.com/StiviDrum/zeitwerk/blob/main/docs/SPEC.md) §3.
 
 ## Entities (per plan, one device per plan)
 
