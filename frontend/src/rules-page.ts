@@ -17,7 +17,7 @@ import {
   type Condition,
 } from "./conditions";
 import type { Localizer } from "./localize";
-import { tokens } from "./styles";
+import { pageStyles, tokens } from "./styles";
 import { WEEKDAYS, type HomeAssistant, type Override, type Plan, type Weekday } from "./types";
 
 export type PlanMutator = (plan: Plan) => void;
@@ -973,6 +973,7 @@ export class ZeitwerkRules extends LitElement {
 
   static styles = [
     tokens,
+    pageStyles,
     css`
       :host {
         display: flex;
@@ -1028,25 +1029,6 @@ export class ZeitwerkRules extends LitElement {
       }
       .small {
         font-size: 11px;
-      }
-      .separator {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        height: 24px;
-        margin-top: 6px;
-        font-size: 15px;
-        font-weight: 600;
-      }
-      .separator .line {
-        flex: 1;
-        height: 1px;
-        background: var(--zw-border);
-      }
-      .list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
       }
       .rule {
         display: flex;
@@ -1135,12 +1117,6 @@ export class ZeitwerkRules extends LitElement {
         background: var(--zw-surface);
         border: 1px solid var(--zw-border);
       }
-      .between {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
       .label {
         font-size: 14px;
         font-weight: 500;
@@ -1158,13 +1134,6 @@ export class ZeitwerkRules extends LitElement {
         font-size: 13px;
         font-weight: 600;
         color: var(--zw-text-2);
-      }
-      .segmented {
-        display: flex;
-        gap: 4px;
-        padding: 3px;
-        border-radius: 18px;
-        background: var(--zw-surface);
       }
       .segmented button {
         height: 32px;
@@ -1265,13 +1234,6 @@ export class ZeitwerkRules extends LitElement {
         background: var(--zw-text-2);
         display: block;
       }
-      .switch[aria-checked="true"] {
-        background: var(--zw-accent);
-        justify-content: flex-end;
-      }
-      .switch[aria-checked="true"] span {
-        background: var(--zw-on-accent);
-      }
       .title {
         display: inline-flex;
         align-items: center;
@@ -1370,11 +1332,6 @@ export class ZeitwerkRules extends LitElement {
       .grow {
         flex: 1;
       }
-      .danger-fill {
-        background: var(--zw-danger) !important;
-        color: #fff;
-        font-weight: 700;
-      }
       .text-danger {
         align-self: flex-start;
         min-height: 40px;
@@ -1382,33 +1339,10 @@ export class ZeitwerkRules extends LitElement {
         font-weight: 600;
         color: var(--zw-danger);
       }
-      .error {
-        font-size: 13px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--zw-danger) 14%, transparent);
-        color: var(--zw-danger);
-      }
-      .actions {
-        display: flex;
-        gap: 10px;
-      }
       .actions button {
         height: 52px;
         border-radius: 26px;
         font-size: 15px;
-      }
-      .danger {
-        flex: 1;
-        border: 1px solid color-mix(in srgb, var(--zw-danger) 55%, transparent) !important;
-        color: var(--zw-danger);
-        font-weight: 600;
-      }
-      .primary {
-        flex: 2;
-        background: var(--zw-accent) !important;
-        color: var(--zw-on-accent);
-        font-weight: 700;
       }
     `,
   ];

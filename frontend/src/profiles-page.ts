@@ -27,7 +27,7 @@ import {
 } from "./profile-actions";
 import { stepDecimals } from "./quickview";
 import type { PlanMutator } from "./rules-page";
-import { tokens } from "./styles";
+import { pageStyles, tokens } from "./styles";
 import type { HomeAssistant, Plan, ProfileAction } from "./types";
 
 /** Extra colours beyond the profile palette. */
@@ -703,6 +703,7 @@ export class ZeitwerkProfiles extends LitElement {
 
   static styles = [
     tokens,
+    pageStyles,
     css`
       :host {
         display: flex;
@@ -777,13 +778,6 @@ export class ZeitwerkProfiles extends LitElement {
         font-size: 14px;
         font-weight: 500;
       }
-      .segmented {
-        display: flex;
-        gap: 4px;
-        padding: 3px;
-        border-radius: 18px;
-        background: var(--zw-surface);
-      }
       .segmented button {
         flex: 1;
         min-height: 36px;
@@ -795,25 +789,6 @@ export class ZeitwerkProfiles extends LitElement {
       .segmented button[aria-checked="true"] {
         background: var(--zw-accent);
         color: var(--zw-on-accent);
-      }
-      .separator {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        height: 24px;
-        margin-top: 6px;
-        font-size: 15px;
-        font-weight: 600;
-      }
-      .separator .line {
-        flex: 1;
-        height: 1px;
-        background: var(--zw-border);
-      }
-      .list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
       }
       .prof {
         border-radius: 22px;
@@ -889,12 +864,6 @@ export class ZeitwerkProfiles extends LitElement {
         gap: 8px;
         min-width: 0;
       }
-      .between {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
       .ltext {
         display: flex;
         flex-direction: column;
@@ -926,10 +895,6 @@ export class ZeitwerkProfiles extends LitElement {
       }
       .value input {
         width: 84px;
-      }
-      .unit {
-        font-size: 12px;
-        color: var(--zw-text-2);
       }
       .swatches {
         display: flex;
@@ -975,14 +940,6 @@ export class ZeitwerkProfiles extends LitElement {
         gap: 10px;
         flex-wrap: wrap;
       }
-      .mini {
-        width: 32px;
-        height: 32px;
-        flex-shrink: 0;
-        border-radius: 16px;
-        background: var(--zw-surface-2);
-        font-size: 18px;
-      }
       .add {
         height: 48px;
         border-radius: 22px;
@@ -1027,26 +984,12 @@ export class ZeitwerkProfiles extends LitElement {
         background: var(--zw-text-2);
         display: block;
       }
-      .switch[aria-checked="true"] {
-        background: var(--zw-accent);
-        justify-content: flex-end;
-      }
-      .switch[aria-checked="true"] span {
-        background: var(--zw-on-accent);
-      }
       .note {
         font-size: 13px;
         padding: 10px 12px;
         border-radius: 12px;
         background: var(--zw-surface);
         border: 1px solid var(--zw-border);
-      }
-      .error {
-        font-size: 13px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--zw-danger) 14%, transparent);
-        color: var(--zw-danger);
       }
       .confirm {
         display: flex;
@@ -1055,10 +998,6 @@ export class ZeitwerkProfiles extends LitElement {
         padding: 12px;
         border-radius: 16px;
         background: color-mix(in srgb, var(--zw-danger) 10%, transparent);
-      }
-      .actions {
-        display: flex;
-        gap: 10px;
       }
       .actions button {
         height: 52px;
@@ -1072,23 +1011,6 @@ export class ZeitwerkProfiles extends LitElement {
       .secondary {
         background: var(--zw-surface-2) !important;
         font-weight: 600;
-      }
-      .danger {
-        flex: 1;
-        border: 1px solid color-mix(in srgb, var(--zw-danger) 55%, transparent) !important;
-        color: var(--zw-danger);
-        font-weight: 600;
-      }
-      .danger-fill {
-        background: var(--zw-danger) !important;
-        color: #fff;
-        font-weight: 700;
-      }
-      .primary {
-        flex: 2;
-        background: var(--zw-accent) !important;
-        color: var(--zw-on-accent);
-        font-weight: 700;
       }
     `,
   ];

@@ -17,7 +17,7 @@ import {
 } from "./day-plan";
 import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
 import type { Localizer } from "./localize";
-import { tokens } from "./styles";
+import { pageStyles, tokens } from "./styles";
 import { MINUTES_PER_DAY, formatTime } from "./time";
 import { WEEKDAYS, type Block, type Plan } from "./types";
 
@@ -424,6 +424,7 @@ export class ZeitwerkDayEditor extends LitElement {
 
   static styles = [
     tokens,
+    pageStyles,
     css`
       :host {
         display: block;
@@ -678,33 +679,10 @@ export class ZeitwerkDayEditor extends LitElement {
         text-decoration: underline;
         text-underline-offset: 3px;
       }
-      .error {
-        font-size: 13px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--zw-danger) 14%, transparent);
-        color: var(--zw-danger);
-      }
-      .actions {
-        display: flex;
-        gap: 10px;
-      }
       .actions button {
         height: 52px;
         border-radius: 26px;
         font-size: 15px;
-      }
-      .danger {
-        flex: 1;
-        border: 1px solid color-mix(in srgb, var(--zw-danger) 55%, transparent) !important;
-        color: var(--zw-danger);
-        font-weight: 600;
-      }
-      .primary {
-        flex: 2;
-        background: var(--zw-accent) !important;
-        color: var(--zw-on-accent);
-        font-weight: 700;
       }
       .actions button:disabled {
         opacity: 0.5;
