@@ -9,9 +9,9 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 import pytest
-from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from .common import living_room_plan
+from .ha_testing import WebSocketGenerator
 from .test_engine import WED, at, setup_helpers, setup_zeitwerk, start, temp, tick
 
 PLAN = "wohnzimmer_heizung"

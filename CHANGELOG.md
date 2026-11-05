@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Verified with Home Assistant 2026.11.0 (tests, real instance incl. the new
+  frontend, diagnostics, brand icon); no deprecation reported for Zeitwerk.
+- Manifest declares the integration category `helpers` (used by the new
+  Marketplace; the HACS validation warns without it).
+- Tests use the official `pytest-homeassistant` package on HA 2026.11; CI also
+  keeps testing HA 2026.10.
+- README header shows the social preview image.
+
 ## [1.0.0-rc.1] - 2026-11-05
 
 First public release candidate for 1.0 (no longer marked as pre-release on

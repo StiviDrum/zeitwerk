@@ -175,6 +175,15 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Diagnostics (config entry + device), issue forms, sort profiles by dragging, README screenshots.
 - [x] Released as `v1.0.0-rc.1`, not marked as pre-release (Steven, 2026-11-05).
 
+## HA 2026.11 compatibility (2026-11-05)
+
+- [x] Dev/test environment on HA 2026.11.0 + frontend 20261028.4; official `pytest-homeassistant` (beta b6, installed `--no-deps`) replaces `pytest-homeassistant-custom-component` (broken on 2026.11: httpx alias). Test imports via `tests/ha_testing.py` work with both packages.
+- [x] CI: main job on 2026.11, compatibility job on 2026.10.4.
+- [x] Checked the 2026.10/11 developer changes: DeviceInfo dataclass (we only use keyword construction), config entry functions may keep returning bools (custom integrations), `step_id` already passed, no `ha-md-list`, no UNDEFINED, no `DeviceEntry.config_entries`. Added manifest `categories: ["helpers"]`.
+- [x] Real instance on 2026.11.0: week/day editor/undo, profiles (entity/icon/action editors), override condition editor, holidays, plan edit, timeline, wizard, card picker/editor, diagnostics download, brand icon via `/api/brands`. No console errors, no deprecation reports.
+- [ ] Switch to the final `pytest-homeassistant` 2026.11.x release when published (drop `requirements_test_plugin.txt` / `--no-deps`).
+- Note: HACS is now the built-in Marketplace (existing installs migrate automatically; categories are used for browsing).
+
 ## 1.0 – Publish
 
 - [x] README with screenshots (light + dark, rendered from the dev instance with demo plans), full docs of services, entities, websocket API

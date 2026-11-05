@@ -5,7 +5,8 @@
 set -e
 source "$(dirname "$0")/_venv"
 
-python -m pip install -q -r requirements_test.txt colorlog
+python -m pip install -q -r requirements_test.txt
+python -m pip install -q --no-deps -r requirements_test_plugin.txt
 (cd frontend && npm run build)
 mkdir -p config/custom_components
 rm -rf config/custom_components/zeitwerk

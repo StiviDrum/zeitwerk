@@ -1,0 +1,6 @@
+# Compatibility tests against Home Assistant 2026.10 (CI job "python (HA 2026.10)")
+# with the community test package, which matches HA up to 2026.10.
+pytest-homeassistant-custom-component==0.13.375
+# Required by the "frontend" dependency of the integration (matches HA 2026.10.4)
+home-assistant-frontend==20260930.5
+ruff

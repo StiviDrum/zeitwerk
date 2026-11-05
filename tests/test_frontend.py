@@ -7,10 +7,11 @@ from pathlib import Path
 from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
 from homeassistant.core import HomeAssistant
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components import zeitwerk
 from custom_components.zeitwerk.const import CARD_URL_BASE, DOMAIN
+
+from .ha_testing import MockConfigEntry
 
 
 @pytest.fixture

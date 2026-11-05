@@ -11,15 +11,12 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
 
 from custom_components.zeitwerk.const import DOMAIN
 from custom_components.zeitwerk.manager import ZeitwerkManager
 
 from .common import living_room_plan
+from .ha_testing import MockConfigEntry, async_fire_time_changed
 
 TZ = ZoneInfo("Europe/Berlin")
 TEMP = "input_number.temperaturspeicher_wohnzimmer"

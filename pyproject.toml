@@ -29,3 +29,5 @@ combine-as-imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# HA >= 2026.11 installs an httpx alias; respx' pytest plugin must not import httpx first.
+addopts = "-p no:respx"

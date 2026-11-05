@@ -1,5 +1,22 @@
-# Pins a matching Home Assistant version
-pytest-homeassistant-custom-component==0.13.375
-# Required by the "frontend" dependency of the integration (matches HA 2026.10.4)
-home-assistant-frontend==20260930.5
+# Main test + dev environment: Home Assistant 2026.11 with its official test
+# package "pytest-homeassistant" (replaces pytest-homeassistant-custom-component).
+# Only a beta of that package exists so far and it pins the matching HA beta,
+# so scripts/setup and CI install it separately with --no-deps:
+#   pip install --no-deps -r requirements_test_plugin.txt
+# Drop that step once a final 2026.11 release of the package is published.
+homeassistant==2026.11.0
+home-assistant-frontend==20261028.4
+bleak-retry-connector==4.7.1
+freezegun==1.5.5
+paho-mqtt==2.1.0
+pytest==9.0.3
+pytest-aiohttp==1.1.1
+pytest-asyncio==1.4.0
+pytest-freezer==0.4.9
+pytest-socket==0.8.1
+pytest-xdist==3.8.0
+requests-mock==1.12.1
+respx==0.23.1
+syrupy==6.1.1
+colorlog
 ruff

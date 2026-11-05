@@ -5,9 +5,10 @@ from __future__ import annotations
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zeitwerk.const import DOMAIN
+
+from .ha_testing import MockConfigEntry
 
 
 async def test_user_flow_creates_entry(hass: HomeAssistant) -> None:

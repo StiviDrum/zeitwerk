@@ -1,6 +1,9 @@
 {
   "domain": "zeitwerk",
   "name": "Zeitwerk",
+  "categories": [
+    "helpers"
+  ],
   "codeowners": [
     "@StiviDrum"
   ],

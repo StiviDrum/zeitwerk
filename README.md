@@ -334,6 +334,13 @@ python scripts/seed_reference_plans.py --token <token>   # creates the 5 heating
 cd frontend && npm run watch   # rebuilds the card into custom_components/zeitwerk/frontend/
 ```
 
+Tests run against Home Assistant 2026.11 with its official test package
+`pytest-homeassistant` (`requirements_test.txt`; the plugin itself comes from
+`requirements_test_plugin.txt` and is installed with `--no-deps` until a final
+2026.11 release of it exists). CI additionally runs the test suite against
+2026.10 with `pytest-homeassistant-custom-component`
+(`requirements_test_ha2026_10.txt`).
+
 Card preview without Home Assistant (mocked `hass`): build the card, run
 `python3 -m http.server 8000` in the repo root and open
 `http://localhost:8000/frontend/dev/preview.html` (`?theme=light`, `?lang=en`,
