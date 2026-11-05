@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-05
+
 ### Changed
 - Code cleanup without functional or visual changes (verified by pixel
   comparison of all card pages): removed dead code from the old block dialog,

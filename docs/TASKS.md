@@ -164,6 +164,12 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 - [x] „Regeln“ → „Konfiguration“ with sections Regeln / Plan; edit plan (name, icon, tags) and delete plan (confirmation) in the card.
 
+## 0.8.3 – Cleanup and performance
+
+- [x] Dead code removed (old block dialog helpers, tabs/copy CSS, unused strings), shared page styles, one `action_targets` helper.
+- [x] Card: cached localizers, Intl formatters and watched entity ids; CSS minified at build time (197.7 → 174.8 KB). All 44 page screenshots (dark/light) pixel-identical before/after.
+- [x] Engine: lazy boundary search (equivalence test incl. DST), unchanged timer kept.
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API
