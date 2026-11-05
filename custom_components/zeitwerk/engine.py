@@ -110,6 +110,7 @@ class PlanRunner:
         self._watch = TargetWatch()
         self._unsubs: list[CALLBACK_TYPE] = []
         self._unsub_timer: CALLBACK_TYPE | None = None
+        self._timer_point: datetime | None = None
         self._lock = asyncio.Lock()
         self._stopped = False
 
@@ -448,13 +449,16 @@ class PlanRunner:
         self._on_runtime_changed()
 
     def _schedule_timer(self, now: datetime, earlier: datetime | None) -> None:
-        if self._unsub_timer:
-            self._unsub_timer()
         point = next_evaluation(
             self.plan, now, dt_util.get_default_time_zone(), self.is_holiday
         )
         if earlier is not None and earlier < point:
             point = earlier
+        if self._unsub_timer:
+            if point == self._timer_point:
+                return  # already scheduled (e.g. re-evaluation after a state change)
+            self._unsub_timer()
+        self._timer_point = point
         self._unsub_timer = async_track_point_in_utc_time(
             self.hass, self._async_timer_fired, point
         )

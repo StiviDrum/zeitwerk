@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from custom_components.zeitwerk.model import Plan
+from custom_components.zeitwerk.model import WEEKDAYS, Plan
 from custom_components.zeitwerk.schedule import (
     boundaries,
     local_instant,
@@ -311,3 +311,40 @@ def test_boundaries_strictly_increasing_on_dst_days(day: date) -> None:
     for point in points:
         assert previous is None or point > previous
         previous = point
+
+
+def _b(start: str, end: str, profile: str = "comfort") -> dict[str, str]:
+    return {"start": start, "end": end, "profile": profile}
+
+
+def _eager_boundaries(p: Plan, start: datetime, end: datetime) -> list[datetime]:
+    """Reference: all points of all days at once (the original algorithm)."""
+    start, end = start.astimezone(UTC), end.astimezone(UTC)
+    points: set[datetime] = set()
+    day = start.astimezone(TZ).date() - timedelta(days=1)
+    while day <= end.astimezone(TZ).date():
+        points.add(local_instant(day, 0, TZ))
+        d = p.day_type_for_weekday(WEEKDAYS[day.weekday()])
+        for b in d.blocks if d else []:
+            points.add(local_instant(day, b.start_min, TZ))
+            points.add(
+                local_instant(day, b.end_min + (1440 if b.crosses_midnight else 0), TZ)
+            )
+        day += timedelta(days=1)
+    return sorted(x for x in points if start < x <= end)
+
+
+@pytest.mark.parametrize("start_day", [SPRING - timedelta(days=3), AUTUMN, WED])
+def test_lazy_boundaries_match_eager(start_day: date) -> None:
+    p = plan(
+        week=week(
+            [_b("22:00", "01:30"), _b("02:00", "03:00", "away"), _b("06:00", "08:00")],
+            [_b("02:00", "03:00", "away"), _b("23:00", "24:00")],
+        )
+    )
+    for hour in (0, 1, 2, 3, 12, 23):
+        start = at(start_day, hour)
+        end = start + timedelta(days=9)
+        assert boundaries(p, start, end, TZ, no_holidays) == _eager_boundaries(
+            p, start, end
+        )

@@ -16,9 +16,10 @@ Rules (docs/SPEC.md §3):
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
+import heapq
 
 from .model import (
     HOLIDAY_MODE_LIKE_DAY,
@@ -161,28 +162,48 @@ def wall_minute(local: datetime) -> int:
     return first.hour * 60 + first.minute + repeated - 1
 
 
+def iter_boundaries(
+    plan: Plan, start: datetime, end: datetime, tz: tzinfo, is_holiday: HolidayFn
+) -> Iterator[datetime]:
+    """Instants (UTC) in (start, end] where the scheduled profile may change.
+
+    Yields in order and computes day by day, so callers that only need the
+    first change (the usual case) never look further ahead than necessary.
+    """
+    # Compare in UTC: aware datetimes sharing a tzinfo compare by wall time.
+    start, end = start.astimezone(UTC), end.astimezone(UTC)
+    day = start.astimezone(tz).date() - timedelta(days=1)
+    last = end.astimezone(tz).date()
+    pending: list[datetime] = []
+    seen: set[datetime] = set()
+    while day <= last:
+        points = [local_instant(day, 0, tz)]
+        day_type, _ = day_type_for_date(plan, day, is_holiday)
+        if day_type is not None:
+            for block in day_type.blocks:
+                points.append(local_instant(day, block.start_min, tz))
+                end_min = block.end_min + (
+                    MINUTES_PER_DAY if block.crosses_midnight else 0
+                )
+                points.append(local_instant(day, end_min, tz))
+        for point in points:
+            if start < point <= end and point not in seen:
+                seen.add(point)
+                heapq.heappush(pending, point)
+        # Later days only add points from their own midnight on.
+        day += timedelta(days=1)
+        horizon = local_instant(day, 0, tz)
+        while pending and pending[0] < horizon:
+            yield heapq.heappop(pending)
+    while pending:
+        yield heapq.heappop(pending)
+
+
 def boundaries(
     plan: Plan, start: datetime, end: datetime, tz: tzinfo, is_holiday: HolidayFn
 ) -> list[datetime]:
     """All instants (UTC) in (start, end] where the scheduled profile may change."""
-    # Compare in UTC: aware datetimes sharing a tzinfo compare by wall time.
-    start, end = start.astimezone(UTC), end.astimezone(UTC)
-    first = start.astimezone(tz).date() - timedelta(days=1)
-    last = end.astimezone(tz).date()
-    points: set[datetime] = set()
-    day = first
-    while day <= last:
-        points.add(local_instant(day, 0, tz))
-        day_type, _ = day_type_for_date(plan, day, is_holiday)
-        if day_type is not None:
-            for block in day_type.blocks:
-                points.add(local_instant(day, block.start_min, tz))
-                end_min = block.end_min + (
-                    MINUTES_PER_DAY if block.crosses_midnight else 0
-                )
-                points.add(local_instant(day, end_min, tz))
-        day += timedelta(days=1)
-    return sorted(p for p in points if start < p <= end)
+    return list(iter_boundaries(plan, start, end, tz, is_holiday))
 
 
 def next_evaluation(
@@ -191,12 +212,10 @@ def next_evaluation(
     """Next instant (UTC) the plan has to be re-evaluated (boundary or midnight)."""
     now = now.astimezone(UTC)
     horizon = now + timedelta(days=2)
-    points = boundaries(plan, now, horizon, tz, is_holiday)
-    return (
-        points[0]
-        if points
-        else local_instant(now.astimezone(tz).date(), MINUTES_PER_DAY, tz)
-    )
+    first = next(iter_boundaries(plan, now, horizon, tz, is_holiday), None)
+    if first is not None:
+        return first
+    return local_instant(now.astimezone(tz).date(), MINUTES_PER_DAY, tz)
 
 
 def next_change(
@@ -204,7 +223,7 @@ def next_change(
 ) -> tuple[datetime, str] | None:
     """First future instant (UTC) where the scheduled profile changes + new profile."""
     current = scheduled_at(plan, now, tz, is_holiday).profile
-    for point in boundaries(
+    for point in iter_boundaries(
         plan, now, now + timedelta(days=SEARCH_DAYS), tz, is_holiday
     ):
         profile = scheduled_at(plan, point, tz, is_holiday).profile
@@ -221,7 +240,7 @@ def preview(
     segments: list[Segment] = []
     seg_start = start
     profile = scheduled_at(plan, start, tz, is_holiday).profile
-    for point in boundaries(plan, start, end, tz, is_holiday):
+    for point in iter_boundaries(plan, start, end, tz, is_holiday):
         if point >= end:
             break
         new = scheduled_at(plan, point, tz, is_holiday).profile

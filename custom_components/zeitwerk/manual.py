@@ -49,7 +49,8 @@ class TargetWatch:
         return sorted(self.watched)
 
 
-def _targets(action: dict[str, Any]) -> list[str]:
+def action_targets(action: dict[str, Any]) -> list[str]:
+    """Literal target entity ids of an action (templates / 'all' are skipped)."""
     target = action.get("target") or {}
     ids = target.get("entity_id", action.get("entity_id", []))
     if isinstance(ids, str):
@@ -71,7 +72,7 @@ def build_watch(plan: Plan) -> TargetWatch:
                 continue
             data = action.get("data") or {}
             key = next((k for k in _VALUE_KEYS if k in data), None)
-            for entity_id in _targets(action):
+            for entity_id in action_targets(action):
                 if key is not None:
                     attr = _KEY_ATTRIBUTES[key]
                     watch.watched.setdefault(entity_id, attr or STATE)

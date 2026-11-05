@@ -18,6 +18,7 @@ from .const import DOMAIN, SIGNAL_PLAN_STATUS
 from .engine import PlanRunner
 from .holidays import HolidayRegistry
 from .issues import async_check_plan, async_clear_plan
+from .manual import action_targets
 from .model import Plan
 from .schema import async_validate_plan, make_plan_id, validate_plan
 from .store import StoredData, ZeitwerkStore
@@ -276,12 +277,6 @@ VALUE_KEYS = (
 )
 
 
-def _targets(action: dict[str, Any]) -> list[str]:
-    target = action.get("target") or {}
-    entity_ids = target.get("entity_id", action.get("entity_id", []))
-    return [entity_ids] if isinstance(entity_ids, str) else list(entity_ids)
-
-
 def _find_value_action(
     actions: list[dict[str, Any]], entity_id: str | None
 ) -> dict[str, Any]:
@@ -289,7 +284,7 @@ def _find_value_action(
         a for a in actions if isinstance(a, dict) and ("action" in a or "service" in a)
     ]
     if entity_id is not None:
-        candidates = [a for a in candidates if entity_id in _targets(a)]
+        candidates = [a for a in candidates if entity_id in action_targets(a)]
     if len(candidates) != 1:
         raise HomeAssistantError(
             "Cannot find exactly one action to change"
