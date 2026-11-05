@@ -1,7 +1,6 @@
 /** Plan creation wizard: build a complete plan from a few answers. */
-import { uniqueId } from "./conditions";
 import { PALETTE } from "./colors";
-import type { HassEntity, ProfileAction, Weekday } from "./types";
+import type { HassEntity, Profile, Weekday } from "./types";
 
 export type TargetKind =
   | {
@@ -16,21 +15,12 @@ export type TargetKind =
   | { kind: "select"; service: string; key: string; options: string[] }
   | { kind: "toggle"; domain: string };
 
-export interface WizardProfile {
-  name: string;
-  color: string;
-  icon: string;
-  value: number | string | boolean;
-}
-
+/** Plan basics of the wizard; profiles come from the embedded profiles editor. */
 export interface WizardDraft {
   name: string;
   id?: string;
   icon: string;
   tags: string[];
-  entityId: string;
-  profiles: WizardProfile[];
-  defaultIndex: number;
   layout: "week" | "daily";
 }
 
@@ -112,51 +102,17 @@ export function targetKind(
   }
 }
 
-const TOGGLE_DOMAINS = new Set([
-  "switch",
-  "input_boolean",
-  "light",
-  "fan",
-  "automation",
-  "script",
-  "siren",
-  "humidifier",
-  "climate",
-  "media_player",
-]);
-
-/** Three starting profiles (Komfort / Absenkung / Abwesend style). */
-export function defaultProfiles(
-  target: TargetKind,
-  names: [string, string, string],
-): WizardProfile[] {
+/** Starting profiles (Komfort / Absenkung / Abwesend style), nothing switched yet. */
+export function seedProfiles(names: [string, string, string]): Profile[] {
   const icons = ["mdi:sun-thermometer-outline", "mdi:weather-night", "mdi:home-export-outline"];
-  let values: (number | string | boolean)[];
-  if (target.kind === "number") {
-    const isTemp = target.key === "temperature" || target.unit.includes("°");
-    values = isTemp
-      ? [22, 18, 16].map((v) => Math.min(target.max, Math.max(target.min, v)))
-      : [target.max, Math.round((target.min + target.max) / 2), target.min];
-  } else if (target.kind === "select") {
-    const o = target.options;
-    values = [o[0] ?? "", o[1] ?? o[0] ?? "", o[2] ?? o[0] ?? ""];
-  } else {
-    values = [true, false, false];
-  }
-  return names.map((name, i) => ({ name, color: PALETTE[i], icon: icons[i], value: values[i] }));
-}
-
-export function profileActions(
-  entityId: string,
-  target: TargetKind,
-  value: WizardProfile["value"],
-): ProfileAction[] {
-  const t = { entity_id: entityId };
-  if (target.kind === "toggle") {
-    const domain = TOGGLE_DOMAINS.has(target.domain) ? target.domain : "homeassistant";
-    return [{ action: `${domain}.${value ? "turn_on" : "turn_off"}`, target: t }];
-  }
-  return [{ action: target.service, target: t, data: { [target.key]: value } }];
+  const ids = ["comfort", "eco", "away"];
+  return names.map((name, i) => ({
+    id: ids[i],
+    name,
+    color: PALETTE[i],
+    icon: icons[i],
+    actions: [],
+  }));
 }
 
 const WORKDAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri"];
@@ -165,23 +121,10 @@ const WEEKEND: Weekday[] = ["sat", "sun"];
 /** Complete plan dict for `zeitwerk/plans/create`. */
 export function buildPlan(
   draft: WizardDraft,
-  target: TargetKind,
+  profiles: Profile[],
+  defaultId: string,
   labels: { workday: string; weekend: string; daily: string },
 ): Record<string, unknown> {
-  const ids: string[] = [];
-  const profiles = draft.profiles.map((p) => {
-    const id = uniqueId(p.name, ids);
-    ids.push(id);
-    return {
-      id,
-      name: p.name.trim(),
-      color: p.color,
-      icon: p.icon || null,
-      actions: profileActions(draft.entityId, target, p.value),
-    };
-  });
-  const defaultIndex = Math.min(Math.max(0, draft.defaultIndex), profiles.length - 1);
-  const defaultId = profiles[defaultIndex].id;
   const main = profiles.find((p) => p.id !== defaultId)?.id;
   const block = (start: string, end: string) => (main ? [{ start, end, profile: main }] : []);
   const dayTypes =
@@ -199,12 +142,7 @@ export function buildPlan(
             id: "workday",
             name: labels.workday,
             days: WORKDAYS,
-            blocks: main
-              ? [
-                  { start: "06:00", end: "08:00", profile: main },
-                  { start: "16:00", end: "22:00", profile: main },
-                ]
-              : [],
+            blocks: [...block("06:00", "08:00"), ...block("16:00", "22:00")],
           },
           { id: "weekend", name: labels.weekend, days: WEEKEND, blocks: block("08:00", "22:00") },
         ];
@@ -220,14 +158,7 @@ export function buildPlan(
   return plan;
 }
 
-/** Problems that block creating the plan (keys into the localizer). */
-export function draftErrors(
-  draft: WizardDraft,
-): ("name_required" | "entity_required" | "profiles_required")[] {
-  const errors: ("name_required" | "entity_required" | "profiles_required")[] = [];
-  if (!draft.name.trim()) errors.push("name_required");
-  if (!/^[a-z_]+\.[a-z0-9_]+$/.test(draft.entityId)) errors.push("entity_required");
-  if (draft.profiles.length < 2 || draft.profiles.some((p) => !p.name.trim()))
-    errors.push("profiles_required");
-  return errors;
+/** Problems with the plan basics (keys into the localizer). */
+export function draftErrors(draft: WizardDraft): "name_required"[] {
+  return draft.name.trim() ? [] : ["name_required"];
 }

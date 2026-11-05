@@ -154,7 +154,7 @@ const states = {
   "input_number.temperaturspeicher_wohnzimmer": {
     entity_id: "input_number.temperaturspeicher_wohnzimmer",
     state: "18",
-    attributes: { min: 12, max: 26, step: 0.5, unit_of_measurement: "°C" },
+    attributes: { friendly_name: "Temperatur Wohnzimmer", min: 12, max: 26, step: 0.5, unit_of_measurement: "°C" },
   },
 };
 

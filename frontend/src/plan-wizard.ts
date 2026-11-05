@@ -1,38 +1,16 @@
 /**
- * Plan creation wizard (in-card page): name, icon, target entity, profiles
- * with values, initial day types. Creates the plan via zeitwerk/plans/create.
+ * Plan creation wizard (in-card page): name, icon, tags, the profiles (same
+ * editor as the profiles page: one entity for all or own entities per
+ * profile) and the initial day types. Creates the plan via
+ * zeitwerk/plans/create – or copies an existing plan as template.
  */
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
-import { ensureHaSelector } from "./conditions-editor";
 import type { Localizer } from "./localize";
-import { stepDecimals } from "./quickview";
+import type { ZeitwerkProfiles } from "./profiles-page";
 import { pageStyles, tokens } from "./styles";
-import type { HomeAssistant } from "./types";
-import { PALETTE } from "./colors";
-import { MAX_PROFILES } from "./profile-actions";
-import {
-  buildPlan,
-  defaultProfiles,
-  draftErrors,
-  targetKind,
-  type TargetKind,
-  type WizardDraft,
-  type WizardProfile,
-} from "./wizard";
-
-const TARGET_DOMAINS = [
-  "input_number",
-  "number",
-  "climate",
-  "input_select",
-  "select",
-  "light",
-  "cover",
-  "fan",
-  "switch",
-  "input_boolean",
-];
+import type { HomeAssistant, Plan } from "./types";
+import { buildPlan, draftErrors, seedProfiles, type WizardDraft } from "./wizard";
 
 export class ZeitwerkPlanWizard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
@@ -43,7 +21,7 @@ export class ZeitwerkPlanWizard extends LitElement {
   @state() private _draft?: WizardDraft;
   @state() private _error?: string;
   @state() private _busy = false;
-  @state() private _native = false;
+  @state() private _seed?: Plan;
   /** Existing plans that can be copied instead of starting empty. */
   @state() private _templates: { id: string; name: string }[] = [];
   @state() private _template = "";
@@ -51,7 +29,6 @@ export class ZeitwerkPlanWizard extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
-    ensureHaSelector().then((ok) => (this._native = ok));
     this.hass
       ?.callWS<{ plans: { id: string; name: string }[] }>({ type: "zeitwerk/plans/list" })
       .then((r) => (this._templates = r.plans.map((p) => ({ id: p.id, name: p.name }))))
@@ -113,98 +90,49 @@ export class ZeitwerkPlanWizard extends LitElement {
   protected willUpdate(changed: PropertyValues): void {
     if (!this._draft && this.localize) {
       const t = this.localize.t.bind(this.localize);
-      this._draft = {
+      this._draft = { name: "", id: this.presetId, icon: "mdi:radiator", tags: [], layout: "week" };
+      // Seed for the embedded profiles editor (nothing switched yet).
+      const profiles = seedProfiles([t("profile_comfort"), t("profile_eco"), t("profile_away")]);
+      this._seed = {
+        id: "",
         name: "",
-        id: this.presetId,
-        icon: "mdi:radiator",
+        enabled: true,
+        icon: null,
         tags: [],
-        entityId: "",
-        profiles: defaultProfiles({ kind: "toggle", domain: "switch" }, [
-          t("profile_comfort"),
-          t("profile_eco"),
-          t("profile_away"),
-        ]),
-        defaultIndex: 1,
-        layout: "week",
+        profiles,
+        default_profile: profiles[1].id,
+        activation: { match: "all", conditions: [], when_inactive: "none", reevaluate: true },
+        holidays: { source: null, mode: "off", like_day: null, day_type: null },
+        week: { day_types: [] },
+        overrides: [],
+        options: {},
       };
     }
     void changed;
   }
 
-  private get _target(): TargetKind {
-    const id = this._draft?.entityId ?? "";
-    return targetKind(id, this.hass?.states[id], this.hass?.config?.unit_system?.temperature);
-  }
+  /** Suggest the entity's name as plan name while the name is still empty. */
+  private _onEntity = (ev: CustomEvent<{ entityId: string }>): void => {
+    const friendly = this.hass?.states[ev.detail.entityId]?.attributes.friendly_name;
+    if (!this._draft!.name && typeof friendly === "string") this._update({ name: friendly });
+  };
 
   private _update(changes: Partial<WizardDraft>): void {
     this._draft = { ...this._draft!, ...changes };
     this._error = undefined;
   }
 
-  private _setEntity(entityId: string): void {
-    const t = this.localize.t.bind(this.localize);
-    const target = targetKind(
-      entityId,
-      this.hass?.states[entityId],
-      this.hass?.config?.unit_system?.temperature,
-    );
-    const names = this._draft!.profiles.map((p) => p.name);
-    const fresh = defaultProfiles(target, [
-      names[0] ?? t("profile_comfort"),
-      names[1] ?? t("profile_eco"),
-      names[2] ?? t("profile_away"),
-    ]);
-    const profiles = this._draft!.profiles.map((p, i) => ({
-      ...p,
-      value: fresh[i]?.value ?? fresh[fresh.length - 1].value,
-    }));
-    const friendly = this.hass?.states[entityId]?.attributes.friendly_name;
-    this._update({
-      entityId,
-      profiles,
-      name: this._draft!.name || (typeof friendly === "string" ? friendly : ""),
-    });
-  }
-
-  private _setProfile(index: number, changes: Partial<WizardProfile>): void {
-    const profiles = this._draft!.profiles.map((p, i) => (i === index ? { ...p, ...changes } : p));
-    this._update({ profiles });
-  }
-
-  private _addProfile(): void {
-    const d = this._draft!;
-    if (d.profiles.length >= MAX_PROFILES) return;
-    const last = d.profiles[d.profiles.length - 1];
-    this._update({
-      profiles: [
-        ...d.profiles,
-        {
-          name: "",
-          color: PALETTE[d.profiles.length % PALETTE.length],
-          icon: "",
-          value: last?.value ?? 0,
-        },
-      ],
-    });
-  }
-
-  private _removeProfile(index: number): void {
-    const d = this._draft!;
-    const profiles = d.profiles.filter((_, i) => i !== index);
-    const defaultIndex =
-      index < d.defaultIndex ? d.defaultIndex - 1 : Math.min(d.defaultIndex, profiles.length - 1);
-    this._update({ profiles, defaultIndex });
-  }
-
   private async _create(): Promise<void> {
     const t = this.localize.t.bind(this.localize);
     const d = this._draft!;
-    const errors = draftErrors(d);
-    if (errors.length) {
-      this._error = errors.map((e) => t(e)).join(" ");
+    const editor = this.renderRoot.querySelector<ZeitwerkProfiles>("zeitwerk-profiles");
+    const result = editor?.result();
+    const errors = [...draftErrors(d).map((e) => t(e)), ...(result?.error ? [result.error] : [])];
+    if (errors.length || !result) {
+      this._error = errors.join(" ");
       return;
     }
-    const plan = buildPlan(d, this._target, {
+    const plan = buildPlan(d, result.profiles, result.defaultId, {
       workday: t("workday"),
       weekend: t("weekend"),
       daily: t("daily"),
@@ -229,72 +157,6 @@ export class ZeitwerkPlanWizard extends LitElement {
     } finally {
       this._busy = false;
     }
-  }
-
-  private _entityField() {
-    const d = this._draft!;
-    if (this._native && this.hass) {
-      return html`<ha-selector
-        .hass=${this.hass}
-        .selector=${{ entity: { domain: TARGET_DOMAINS } }}
-        .value=${d.entityId}
-        @value-changed=${(ev: CustomEvent<{ value?: string }>) => {
-          ev.stopPropagation();
-          this._setEntity(ev.detail.value ?? "");
-        }}
-      ></ha-selector>`;
-    }
-    const options = Object.keys(this.hass?.states ?? {})
-      .filter((id) => TARGET_DOMAINS.includes(id.split(".")[0]))
-      .sort();
-    return html`<input
-        type="text"
-        list="zw-entities"
-        placeholder="input_number.…"
-        .value=${d.entityId}
-        @change=${(ev: Event) => this._setEntity((ev.target as HTMLInputElement).value.trim())}
-      />
-      <datalist id="zw-entities">
-        ${options.map((id) => html`<option value=${id}></option>`)}
-      </datalist>`;
-  }
-
-  private _valueField(p: WizardProfile, index: number) {
-    const target = this._target;
-    const t = this.localize.t.bind(this.localize);
-    if (target.kind === "number") {
-      return html`<span class="value">
-        <input
-          type="number"
-          aria-label=${`${p.name} ${t("value")}`}
-          min=${target.min}
-          max=${target.max}
-          step=${target.step}
-          .value=${String(p.value)}
-          @change=${(ev: Event) => {
-            const n = Number((ev.target as HTMLInputElement).value);
-            this._setProfile(index, { value: Number(n.toFixed(stepDecimals(target.step))) });
-          }}
-        />${target.unit ? html`<span class="unit">${target.unit}</span>` : nothing}
-      </span>`;
-    }
-    if (target.kind === "select") {
-      return html`<select
-        aria-label=${`${p.name} ${t("value")}`}
-        @change=${(ev: Event) => this._setProfile(index, { value: (ev.target as HTMLSelectElement).value })}
-      >
-        ${target.options.map((o) => html`<option value=${o} ?selected=${o === p.value}>${o}</option>`)}
-      </select>`;
-    }
-    return html`<button
-      class="switch"
-      role="switch"
-      aria-label=${`${p.name} ${t("value")}`}
-      aria-checked=${p.value ? "true" : "false"}
-      @click=${() => this._setProfile(index, { value: !p.value })}
-    >
-      <span></span>
-    </button>`;
   }
 
   protected render() {
@@ -354,11 +216,6 @@ export class ZeitwerkPlanWizard extends LitElement {
       <div class="panel">
         ${this._templateField()}
         <label class="field">
-          <span class="label">${t("wizard_target")}</span>
-          ${this._entityField()}
-          <span class="muted">${t("wizard_target_hint")}</span>
-        </label>
-        <label class="field">
           <span class="label">${t("name")}</span>
           <input
             type="text"
@@ -409,50 +266,16 @@ export class ZeitwerkPlanWizard extends LitElement {
         </div>
       </div>
 
+      <zeitwerk-profiles
+        embedded
+        ?dark=${this.hasAttribute("dark")}
+        .hass=${this.hass}
+        .plan=${this._seed}
+        .localize=${this.localize}
+        @zw-entity-changed=${this._onEntity}
+      ></zeitwerk-profiles>
+
       <div class="panel">
-        <span class="label">${t("section_profiles")}</span>
-        ${d.profiles.map(
-          (p, i) =>
-            html`<div class="prow">
-              <input
-                type="color"
-                aria-label=${`${p.name} ${t("color")}`}
-                .value=${p.color}
-                @input=${(ev: Event) => this._setProfile(i, { color: (ev.target as HTMLInputElement).value })}
-              />
-              <input
-                class="pname"
-                type="text"
-                aria-label=${t("name")}
-                .value=${p.name}
-                @input=${(ev: Event) => this._setProfile(i, { name: (ev.target as HTMLInputElement).value })}
-              />
-              ${this._valueField(p, i)}
-              <button
-                class="mini"
-                aria-label=${t("remove_profile", { name: p.name })}
-                ?disabled=${d.profiles.length <= 2}
-                @click=${() => this._removeProfile(i)}
-              >
-                ×
-              </button>
-            </div>`,
-        )}
-        <button
-          class="add"
-          ?disabled=${d.profiles.length >= MAX_PROFILES}
-          @click=${this._addProfile}
-        >
-          ${t("add_profile")}
-        </button>
-        <label class="between">
-          <span class="label">${t("default_profile")}</span>
-          <select
-            @change=${(ev: Event) => this._update({ defaultIndex: Number((ev.target as HTMLSelectElement).value) })}
-          >
-            ${d.profiles.map((p, i) => html`<option value=${i} ?selected=${i === d.defaultIndex}>${p.name || "…"}</option>`)}
-          </select>
-        </label>
         <div class="field">
           <span class="label">${t("wizard_layout")}</span>
           <div class="segmented" role="radiogroup" aria-label=${t("wizard_layout")}>
@@ -553,7 +376,6 @@ export class ZeitwerkPlanWizard extends LitElement {
         color: var(--zw-text-2);
       }
       input[type="text"],
-      input[type="number"],
       select {
         font: inherit;
         font-size: 14px;
@@ -571,38 +393,6 @@ export class ZeitwerkPlanWizard extends LitElement {
       select option {
         color: initial;
       }
-      .prow {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      input[type="color"] {
-        width: 36px;
-        height: 36px;
-        flex-shrink: 0;
-        border: 0;
-        border-radius: 18px;
-        padding: 0;
-        background: none;
-        cursor: pointer;
-      }
-      .pname {
-        flex: 1;
-      }
-      .value {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-      .value input {
-        width: 76px;
-      }
-      .add {
-        height: 40px;
-        border-radius: 20px;
-        border: 1px dashed color-mix(in srgb, var(--zw-text) 22%, transparent);
-        font-size: 13px;
-      }
       .segmented button {
         flex: 1;
         height: 36px;
@@ -613,22 +403,6 @@ export class ZeitwerkPlanWizard extends LitElement {
       .segmented button[aria-checked="true"] {
         background: var(--zw-accent);
         color: var(--zw-on-accent);
-      }
-      .switch {
-        width: 52px;
-        height: 32px;
-        flex-shrink: 0;
-        border-radius: 16px;
-        background: var(--zw-surface-2);
-        padding: 3px;
-        display: flex;
-        justify-content: flex-start;
-      }
-      .switch span {
-        width: 26px;
-        height: 26px;
-        border-radius: 13px;
-        background: var(--zw-text-2);
       }
       .actions button {
         height: 52px;

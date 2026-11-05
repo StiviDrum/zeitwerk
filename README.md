@@ -150,10 +150,13 @@ What the week view does:
   hatched range in today's row.
 
 - **New plan** (admins): „+ Neuer Plan“ in the timeline, or when the card has
-  no/an unknown plan. Pick the target entity (number, climate, select, light,
-  cover, fan, switch …), name, icon, tags, profiles with values and colours,
-  the default profile and a start layout (workday/weekend or every day). A
-  card configured with an unknown `plan:` id creates the plan under that id.
+  no/an unknown plan. Name, icon, tags and the profiles with the same editor
+  as the profiles page – one entity for all profiles or own entities per
+  profile (several per profile, HA action editor), icons, colours, default
+  profile, 1–5 profiles – plus a start layout (workday/weekend or every day).
+  The plan name is suggested from the chosen entity. Or start from an existing
+  plan („Vorlage“, the copy starts switched off). A card configured with an
+  unknown `plan:` id creates the plan under that id.
 
 Bundle size (1.0.0-rc.2, minified): 177.5 KB, 46.9 KB gzip.
 
@@ -376,8 +379,9 @@ Profil (z. B. morgens Licht A, abends Licht B). Nach jeder Änderung gibt es
 10 s lang „Rückgängig“. Unter „Konfiguration“ → Plan: Plan umbenennen (Name, Symbol, Tags),
 löschen und duplizieren (dort oder als
 Vorlage im Assistenten); die Kopie startet ausgeschaltet. Neue Pläne legt man in der
-Karte mit „+ Neuer Plan“ an (Ziel-Entität, Profile mit Werten, Standardprofil,
-Start mit Werktag/Wochenende oder jeden Tag gleich). Fehler bitte als [GitHub-Issue](https://github.com/StiviDrum/zeitwerk/issues/new/choose)
+Karte mit „+ Neuer Plan“ an – mit derselben Profilbearbeitung wie unter
+„Profile“ (eine Entität für alle oder eigene, auch mehrere, je Profil), dazu
+Start mit Werktag/Wochenende oder jeden Tag gleich. Fehler bitte als [GitHub-Issue](https://github.com/StiviDrum/zeitwerk/issues/new/choose)
 melden, mit Diagnose-Datei (*Geräte & Dienste → Zeitwerk → ⋮ → Diagnose
 herunterladen*). Profile lassen sich in der Profilverwaltung per Griff
 sortieren (Reihenfolge der Regler). Fehlende Entitäten in

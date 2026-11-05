@@ -190,6 +190,12 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Tap a timeline plan → full week view in the same card (back button); detail plan kept in sync via the all-plans subscription.
   - Verified: mock preview (detail, day editor, profiles, back, keyboard, filter, fallback editor) and dev instance on HA 2026.11 (detail, HA form editor with plan checkboxes). Other pages pixel-identical.
 
+## Wizard with the full profiles editor (2026-11-05)
+
+- [x] `zeitwerk-profiles` can be embedded (`embedded`, `result()`); the wizard uses it instead of the single target entity, so new plans get the full profile model right away. Name suggested from the shared entity.
+- [x] Wizard logic reduced to plan basics (`buildPlan(draft, profiles, defaultId)`); unused strings/CSS removed.
+  - Verified: preview (validation, shared entity, per-profile light row, create payload) and dev instance on HA 2026.11 (HA entity picker, plan created and running). Profiles page unchanged (pixel diff only from mock data).
+
 ## 1.0 – Publish
 
 - [x] README with screenshots (light + dark, rendered from the dev instance with demo plans), full docs of services, entities, websocket API

@@ -12,6 +12,12 @@ All notable changes to this project are documented here. The format follows
 - Timeline card: tapping a plan opens its full week view (profiles, day editor,
   configuration) in the same card, with „‹ Zeitpläne“ back to the timeline.
 
+### Changed
+- New-plan wizard uses the profiles editor: one entity for all profiles or
+  own entities per profile (several per profile, HA action editor), icons,
+  colours, default profile, sorting, 1–5 profiles. The plan name is suggested
+  from the chosen entity.
+
 ## [1.0.0-rc.2] - 2026-11-05
 
 ### Changed

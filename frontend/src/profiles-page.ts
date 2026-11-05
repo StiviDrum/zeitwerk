@@ -29,7 +29,7 @@ import {
 import { stepDecimals } from "./quickview";
 import type { PlanMutator } from "./rules-page";
 import { pageStyles, tokens } from "./styles";
-import type { HomeAssistant, Plan, ProfileAction } from "./types";
+import type { HomeAssistant, Plan, Profile, ProfileAction } from "./types";
 
 /** Extra colours beyond the profile palette. */
 const COLORS = [...PALETTE, "#5ed1e0", "#ff5f5f", "#b5e061"];
@@ -57,7 +57,12 @@ export class ZeitwerkProfiles extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public plan!: Plan;
   @property({ attribute: false }) public localize!: Localizer;
-  @property({ attribute: false }) public save!: (mutate: PlanMutator) => Promise<void>;
+  @property({ attribute: false }) public save?: (mutate: PlanMutator) => Promise<void>;
+  /**
+   * Embedded in the new-plan wizard: no head, no save buttons; the wizard
+   * reads the result with `result()`. Profile ids are derived from the names.
+   */
+  @property({ type: Boolean }) public embedded = false;
 
   @state() private _profiles: DraftProfile[] = [];
   @state() private _defaultKey = 0;
@@ -104,6 +109,7 @@ export class ZeitwerkProfiles extends LitElement {
     });
     const def = this._profiles.find((p) => p.id === plan.default_profile);
     this._defaultKey = def?.key ?? this._profiles[0]?.key ?? 0;
+    if (this.embedded) this._profiles = this._profiles.map((p) => ({ ...p, id: "" }));
     const shared = sharedEntity(plan.profiles);
     const empty = plan.profiles.every((p) => !p.actions.length);
     this._shared = shared !== null || empty;
@@ -150,6 +156,7 @@ export class ZeitwerkProfiles extends LitElement {
 
   private _setEntity(entityId: string): void {
     this._entity = entityId;
+    this._fire("zw-entity-changed", { entityId });
     this._dirty = true;
     this._error = undefined;
     if (!entityId) return;
@@ -274,21 +281,25 @@ export class ZeitwerkProfiles extends LitElement {
     return undefined;
   }
 
-  private async _save(): Promise<void> {
+  /** The edited profiles as stored in a plan (ids assigned), or the first problem. */
+  public result(): { error?: string; profiles: Profile[]; defaultId: string } {
     const error = this._validate();
-    if (error) {
-      this._error = error;
-      return;
-    }
     const drafts = assignIds(this._profiles.map((p) => ({ ...p, name: p.name.trim() })));
-    const profiles = drafts.map((p) => ({
+    const profiles: Profile[] = drafts.map((p) => ({
       id: p.id,
       name: p.name,
       color: p.color || null,
       icon: p.icon || null,
       actions: p.advanced ? p.actions : p.rows.map((r) => buildAction(r, this._kind(r.entityId))),
     }));
-    const defaultId = drafts.find((p) => p.key === this._defaultKey)?.id ?? profiles[0].id;
+    const defaultId = drafts.find((p) => p.key === this._defaultKey)?.id ?? profiles[0]?.id ?? "";
+    this._error = error;
+    return { error, profiles, defaultId };
+  }
+
+  private async _save(): Promise<void> {
+    const { error, profiles, defaultId } = this.result();
+    if (error || !this.save) return;
     this._busy = true;
     this._error = undefined;
     try {
@@ -620,10 +631,18 @@ export class ZeitwerkProfiles extends LitElement {
 
   protected render() {
     if (!this.plan || !this.localize) return nothing;
-    const t = this._t;
     const lossy = !this._shared && this._profiles.some((p) => p.advanced || p.rows.length > 1);
     const def = this._profiles.find((p) => p.key === this._defaultKey);
-    const defaultChanged = def && def.id !== this.plan.default_profile;
+    const defaultChanged = !this.embedded && def && def.id !== this.plan.default_profile;
+    return html`
+      ${this.embedded ? nothing : this._renderHead()}
+      ${this._renderEditor(lossy, defaultChanged ? def : undefined)}
+      ${this.embedded ? nothing : this._renderFooter()}
+    `;
+  }
+
+  private _renderHead() {
+    const t = this._t;
     return html`
       <div class="head">
         <button class="round" aria-label=${t("back")} @click=${this._back}>
@@ -646,7 +665,12 @@ export class ZeitwerkProfiles extends LitElement {
           <span class="sub">${this.plan.name}</span>
         </div>
       </div>
+    `;
+  }
 
+  private _renderEditor(lossy: boolean, changedDefault: DraftProfile | undefined) {
+    const t = this._t;
+    return html`
       <div class="panel">
         <span class="label">${t("controls")}</span>
         <div class="segmented" role="radiogroup" aria-label=${t("controls")}>
@@ -751,7 +775,17 @@ export class ZeitwerkProfiles extends LitElement {
           ${t("add_profile")}
         </button>
       </div>
-      ${defaultChanged ? html`<div class="note">${t("default_changed", { name: def!.name })}</div>` : nothing}
+      ${
+        changedDefault
+          ? html`<div class="note">${t("default_changed", { name: changedDefault.name })}</div>`
+          : nothing
+      }
+    `;
+  }
+
+  private _renderFooter() {
+    const t = this._t;
+    return html`
       ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
       ${
         this._confirmDiscard
