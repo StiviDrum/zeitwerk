@@ -209,7 +209,9 @@ def apply_day_plan(
         day_types.append(
             {
                 "id": holiday_id,
-                "name": old["name"] if old else "Feiertag",
+                "name": old["name"]
+                if old
+                else ("Feiertag" if language.startswith("de") else "Holiday"),
                 "days": [],
                 "blocks": days.get(HOLIDAY, []),
             }
