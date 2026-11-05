@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-11-05
+
 ### Changed
 - Verified with Home Assistant 2026.11.0 (tests, real instance incl. the new
   frontend, diagnostics, brand icon); no deprecation reported for Zeitwerk.
