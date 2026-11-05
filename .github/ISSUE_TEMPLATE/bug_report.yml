@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Zeitwerk does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please fill in the versions and attach the
+        diagnostics file – it contains the plan and its status, which makes
+        most problems reproducible.
+        Deutsch ist auch in Ordnung.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: zeitwerk
+    attributes:
+      label: Zeitwerk version
+      description: HACS → Zeitwerk, or Settings → Devices & services → Zeitwerk
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      description: Settings → About
+      placeholder: "2026.11.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      options:
+        - Card (week plan, day editor, profiles, configuration)
+        - Schedule / switching (wrong profile, wrong time)
+        - Services / automations
+        - Installation / setup
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: >
+        Settings → Devices & services → Zeitwerk → ⋮ → Download diagnostics
+        (or on the plan's device page). Drag the file in here.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: Relevant lines from Settings → System → Logs (filter "zeitwerk").
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: For card problems, a screenshot helps a lot (also mention the browser / app).

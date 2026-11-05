@@ -1042,7 +1042,9 @@ export class ZeitwerkRules extends LitElement {
       .rule.dragging {
         position: relative;
         z-index: 1;
-        background: var(--zw-surface-2);
+        /* opaque while lifted, so the rows below do not shine through */
+        background: linear-gradient(var(--zw-surface-2), var(--zw-surface-2)), var(--zw-bg);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
       }
       .handle {
         width: 32px;

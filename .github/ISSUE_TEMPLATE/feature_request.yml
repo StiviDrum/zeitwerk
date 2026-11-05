@@ -1,0 +1,21 @@
+name: Feature request
+description: An idea for Zeitwerk
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to achieve?
+      description: Describe the use case (e.g. "heat the bathroom earlier on cold mornings"), not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it work?
+      description: Your idea for the card, a service or an option.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround
+      description: How do you solve it today (automation, helper …)?

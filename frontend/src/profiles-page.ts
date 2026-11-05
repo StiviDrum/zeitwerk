@@ -8,6 +8,7 @@
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import { PALETTE, tint } from "./colors";
+import { moveItem } from "./conditions";
 import { ensureHaSelector } from "./conditions-editor";
 import type { Localizer } from "./localize";
 import {
@@ -69,6 +70,7 @@ export class ZeitwerkProfiles extends LitElement {
   @state() private _error?: string;
   @state() private _busy = false;
   @state() private _native = false;
+  @state() private _drag?: { key: number; startY: number; dy: number; centers: number[] };
   private _nextKey = 1;
   private _loaded = false;
 
@@ -215,6 +217,48 @@ export class ZeitwerkProfiles extends LitElement {
     }
     const rows = parseProfile({ actions: profile.actions });
     if (rows) this._change(profile.key, { advanced: false, rows });
+  }
+
+  // --- Sort (drag the handle or use the arrow keys) -------------------------------
+
+  private _onHandleDown(key: number, ev: PointerEvent): void {
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    this._open = undefined;
+    this._confirmDelete = undefined;
+    const centers = [...this.renderRoot.querySelectorAll<HTMLElement>(".prof")].map((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top + r.height / 2;
+    });
+    this._drag = { key, startY: ev.clientY, dy: 0, centers };
+    ev.preventDefault();
+  }
+
+  private _onHandleMove = (ev: PointerEvent): void => {
+    if (this._drag) this._drag = { ...this._drag, dy: ev.clientY - this._drag.startY };
+  };
+
+  private _onHandleUp = (): void => {
+    const drag = this._drag;
+    this._drag = undefined;
+    if (!drag) return;
+    const from = this._profiles.findIndex((p) => p.key === drag.key);
+    const center = drag.centers[from] + drag.dy;
+    const to = drag.centers.filter((c, i) => i !== from && c < center).length;
+    this._move(from, to);
+  };
+
+  private _onHandleKey(key: number, ev: KeyboardEvent): void {
+    if (ev.key !== "ArrowUp" && ev.key !== "ArrowDown") return;
+    ev.preventDefault();
+    const from = this._profiles.findIndex((p) => p.key === key);
+    this._move(from, from + (ev.key === "ArrowUp" ? -1 : 1));
+  }
+
+  private _move(from: number, to: number): void {
+    const target = Math.max(0, Math.min(this._profiles.length - 1, to));
+    if (from < 0 || target === from) return;
+    this._profiles = moveItem(this._profiles, from, target);
+    this._dirty = true;
   }
 
   // --- Save -----------------------------------------------------------------------
@@ -637,38 +681,69 @@ export class ZeitwerkProfiles extends LitElement {
         ${this._profiles.map((p) => {
           const open = this._open === p.key;
           const color = p.color || "#aeaeb8";
-          return html`<div class="prof ${open ? "open" : ""}">
-            <button
-              class="phead"
-              aria-expanded=${open ? "true" : "false"}
-              @click=${() => {
-                this._open = open ? undefined : p.key;
-                this._confirmDelete = undefined;
-              }}
-            >
-              <span class="picon" style="background:${tint(color, 22)};color:${color}">
-                <ha-icon .icon=${p.icon || "mdi:circle-medium"}></ha-icon>
-              </span>
-              <span class="ptext">
-                <span class="pname">${p.name || "…"}</span>
-                <span class="psub">${this._summary(p)}</span>
-              </span>
-              ${p.key === this._defaultKey ? html`<span class="badge">${t("default_suffix")}</span>` : nothing}
-              <svg
-                class="chev"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
+          const drag = this._drag?.key === p.key ? this._drag : undefined;
+          return html`<div
+            class="prof ${open ? "open" : ""} ${drag ? "dragging" : ""}"
+            style=${drag ? `transform:translateY(${drag.dy}px)` : ""}
+          >
+            <div class="prow">
+              <button
+                class="handle"
+                aria-label=${t("drag_handle", { name: p.name })}
+                title=${`${t("move_up", { name: p.name })} / ${t("move_down", { name: p.name })}`}
+                @pointerdown=${(ev: PointerEvent) => this._onHandleDown(p.key, ev)}
+                @pointermove=${this._onHandleMove}
+                @pointerup=${this._onHandleUp}
+                @pointercancel=${() => (this._drag = undefined)}
+                @keydown=${(ev: KeyboardEvent) => this._onHandleKey(p.key, ev)}
               >
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <circle cx="9" cy="6" r="1.6" />
+                  <circle cx="15" cy="6" r="1.6" />
+                  <circle cx="9" cy="12" r="1.6" />
+                  <circle cx="15" cy="12" r="1.6" />
+                  <circle cx="9" cy="18" r="1.6" />
+                  <circle cx="15" cy="18" r="1.6" />
+                </svg>
+              </button>
+              <button
+                class="phead"
+                aria-expanded=${open ? "true" : "false"}
+                @click=${() => {
+                  this._open = open ? undefined : p.key;
+                  this._confirmDelete = undefined;
+                }}
+              >
+                <span class="picon" style="background:${tint(color, 22)};color:${color}">
+                  <ha-icon .icon=${p.icon || "mdi:circle-medium"}></ha-icon>
+                </span>
+                <span class="ptext">
+                  <span class="pname">${p.name || "…"}</span>
+                  <span class="psub">${this._summary(p)}</span>
+                </span>
+                ${p.key === this._defaultKey ? html`<span class="badge">${t("default_suffix")}</span>` : nothing}
+                <svg
+                  class="chev"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </div>
             ${open ? this._renderBody(p) : nothing}
           </div>`;
         })}
@@ -796,13 +871,35 @@ export class ZeitwerkProfiles extends LitElement {
         border: 1px solid var(--zw-border);
         overflow: hidden;
       }
+      .prow {
+        display: flex;
+        align-items: stretch;
+      }
+      .handle {
+        width: 32px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--zw-text-2);
+        touch-action: none;
+        cursor: grab;
+      }
+      .prof.dragging {
+        position: relative;
+        z-index: 1;
+        /* opaque while lifted, so the rows below do not shine through */
+        background: linear-gradient(var(--zw-surface-2), var(--zw-surface-2)), var(--zw-bg);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+      }
       .phead {
-        width: 100%;
+        flex: 1;
+        min-width: 0;
         display: flex;
         align-items: center;
         gap: 10px;
         min-height: 60px;
-        padding: 8px 14px 8px 10px;
+        padding: 8px 14px 8px 0;
         text-align: left;
       }
       .picon {
