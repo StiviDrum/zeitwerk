@@ -95,6 +95,8 @@ export interface ZeitwerkCardConfig {
   type: string;
   view?: "week" | "timeline" | "profiles";
   plan?: string;
+  /** Timeline: plan ids to show (in this order); empty = all. */
+  plans?: string[];
   tags?: string[];
   title?: string;
   show_profile_sliders?: boolean;

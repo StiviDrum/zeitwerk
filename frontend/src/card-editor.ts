@@ -55,6 +55,16 @@ export class ZeitwerkCardEditor extends LitElement {
       return [
         { name: "view", selector: viewSel },
         {
+          name: "plans",
+          selector: {
+            select: {
+              multiple: true,
+              mode: "list",
+              options: plans.map((p) => ({ value: p.id, label: p.name })),
+            },
+          },
+        },
+        {
           name: "tags",
           selector: { select: { multiple: true, custom_value: true, options: tags } },
         },
@@ -83,6 +93,7 @@ export class ZeitwerkCardEditor extends LitElement {
     const keys: Record<string, Parameters<ReturnType<typeof localizer>["t"]>[0]> = {
       view: "ed_view",
       plan: "ed_plan",
+      plans: "ed_plans",
       tags: "ed_tags",
       title: "ed_title",
       show_profile_sliders: "ed_sliders",
@@ -101,7 +112,7 @@ export class ZeitwerkCardEditor extends LitElement {
     if (clean.view === "timeline") {
       for (const k of ["plan", "show_profile_sliders", "compact", "time_step"]) delete clean[k];
     } else {
-      for (const k of ["tags", "title"]) delete clean[k];
+      for (const k of ["plans", "tags", "title"]) delete clean[k];
     }
     clean.type = config.type ?? "custom:zeitwerk-card";
     this._config = clean as unknown as ZeitwerkCardConfig;
@@ -150,18 +161,35 @@ export class ZeitwerkCardEditor extends LitElement {
       </label>
       ${
         data.view === "timeline"
-          ? html`<label
-              >${l.t("ed_tags")}
-              <input
-                .value=${(data.tags ?? []).join(", ")}
-                @change=${(ev: Event) =>
-                  set({
-                    tags: (ev.target as HTMLInputElement).value
-                      .split(",")
-                      .map((t) => t.trim())
-                      .filter(Boolean),
-                  })}
-            /></label>`
+          ? html`<fieldset>
+                <legend>${l.t("ed_plans")}</legend>
+                ${(this._plans ?? []).map(
+                  (p) =>
+                    html`<label class="check"
+                      ><input
+                        type="checkbox"
+                        .checked=${(data.plans ?? []).includes(p.id)}
+                        @change=${(ev: Event) => {
+                          const on = (ev.target as HTMLInputElement).checked;
+                          const current = (data.plans ?? []).filter((id) => id !== p.id);
+                          set({ plans: on ? [...current, p.id] : current });
+                        }}
+                      />${p.name}</label
+                    >`,
+                )}
+              </fieldset>
+              <label
+                >${l.t("ed_tags")}
+                <input
+                  .value=${(data.tags ?? []).join(", ")}
+                  @change=${(ev: Event) =>
+                    set({
+                      tags: (ev.target as HTMLInputElement).value
+                        .split(",")
+                        .map((t) => t.trim())
+                        .filter(Boolean),
+                    })}
+              /></label>`
           : html`<label
               >${l.t("ed_plan")}
               <select
@@ -189,6 +217,20 @@ export class ZeitwerkCardEditor extends LitElement {
       flex-direction: column;
       gap: 4px;
       font-size: 13px;
+    }
+    fieldset {
+      border: 0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+    }
+    label.check {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
     }
   `;
 }

@@ -184,6 +184,12 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [ ] Switch to the final `pytest-homeassistant` 2026.11.x release when published (drop `requirements_test_plugin.txt` / `--no-deps`).
 - Note: HACS is now the built-in Marketplace (existing installs migrate automatically; categories are used for browsing).
 
+## Timeline card: plan selection and detail view (2026-11-05)
+
+- [x] `plans:` option (card editor checkboxes) – only these plans, in this order; tags still filter.
+- [x] Tap a timeline plan → full week view in the same card (back button); detail plan kept in sync via the all-plans subscription.
+  - Verified: mock preview (detail, day editor, profiles, back, keyboard, filter, fallback editor) and dev instance on HA 2026.11 (detail, HA form editor with plan checkboxes). Other pages pixel-identical.
+
 ## 1.0 – Publish
 
 - [x] README with screenshots (light + dark, rendered from the dev instance with demo plans), full docs of services, entities, websocket API

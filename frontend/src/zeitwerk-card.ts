@@ -96,6 +96,8 @@ export class ZeitwerkCard extends LitElement {
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
   @state() private _page: "week" | "rules" | "wizard" | "profiles" = "week";
+  /** Timeline view: id of the plan opened in the full week view. */
+  @state() private _detail?: string;
   /** Last change made in this card, offered for undo for a few seconds. */
   @state() private _undo?: { before: Plan; after: string };
   private _undoTimer?: number;
@@ -218,7 +220,7 @@ export class ZeitwerkCard extends LitElement {
   /** Entities whose state changes are relevant for rendering (DESIGN.md §3). */
   private _watchedEntities(): string[] {
     // Checked on every hass update: compute once per plan (list) object.
-    const source = this._config?.view === "timeline" ? this._plans : this._plan;
+    const source = this._config?.view === "timeline" && !this._detail ? this._plans : this._plan;
     const cached = this._watched;
     if (cached && cached.source === source) return cached.ids;
     const ids = [...new Set(this._computeWatched())];
@@ -227,7 +229,7 @@ export class ZeitwerkCard extends LitElement {
   }
 
   private _computeWatched(): string[] {
-    if (this._config?.view === "timeline") {
+    if (this._config?.view === "timeline" && !this._detail) {
       return (this._plans ?? []).flatMap((plan) =>
         plan.profiles.map((p) => quickValue(p)?.entityId).filter((x): x is string => !!x),
       );
@@ -262,6 +264,7 @@ export class ZeitwerkCard extends LitElement {
 
   private _resubscribe(): void {
     this._unsubscribe();
+    this._detail = undefined;
     this._plan = undefined;
     this._plans = undefined;
     this._error = undefined;
@@ -300,6 +303,11 @@ export class ZeitwerkCard extends LitElement {
           plans = i < 0 ? [...plans, plan] : plans.map((p, j) => (j === i ? plan : p));
         }
         this._plans = plans;
+        if (this._detail) {
+          this._plan = plans.find((p) => p.id === this._detail) ?? null;
+          if (this._plan) this._planUpdated();
+          else this._closeDetail();
+        }
         this._schedulePreview(msg.event === "init" ? 0 : 1000);
       },
       { type: "zeitwerk/plans/subscribe" },
@@ -312,11 +320,33 @@ export class ZeitwerkCard extends LitElement {
     });
   }
 
+  /** Plans of the timeline: the chosen ones (in that order) or all, then the tag filter. */
   private _timelinePlans(): Plan[] {
+    const ids = this._config?.plans ?? [];
     const tags = this._config?.tags ?? [];
-    const plans = this._plans ?? [];
+    const all = this._plans ?? [];
+    const plans = ids.length
+      ? ids.map((id) => all.find((p) => p.id === id)).filter((p): p is Plan => !!p)
+      : all;
     return tags.length ? plans.filter((p) => p.tags.some((t) => tags.includes(t))) : plans;
   }
+
+  /** Timeline: open one plan in the full week view (same card). */
+  private _openDetail(plan: Plan): void {
+    this._detail = plan.id;
+    this._plan = plan;
+    this._page = "week";
+    this._editDay = undefined;
+    this._pending = {};
+  }
+
+  private _closeDetail = (): void => {
+    this._detail = undefined;
+    this._plan = undefined;
+    this._page = "week";
+    this._editDay = undefined;
+    this._pending = {};
+  };
 
   /** Fetch today's scheduled segments (debounced; plan edits change them). */
   private _schedulePreview(delay: number): void {
@@ -341,6 +371,11 @@ export class ZeitwerkCard extends LitElement {
     } else if (msg.plan_id === planId) {
       this._plan = msg.event === "removed" ? null : (msg.plan ?? null);
     }
+    if (this._plan) this._planUpdated();
+  }
+
+  /** A new version of the shown plan arrived from the backend. */
+  private _planUpdated(): void {
     if (this._plan) {
       // Values confirmed by the backend replace the optimistic slider values.
       const pending = { ...this._pending };
@@ -691,6 +726,7 @@ export class ZeitwerkCard extends LitElement {
     if (this._config.view === "timeline") {
       if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
       if (!this.hass || this._plans === undefined) return this._message(l.t("loading"));
+      if (this._detail && this._plan) return this._renderWeek(this._plan);
       return this._renderTimeline();
     }
     if (this._config.view && this._config.view !== "week") {
@@ -799,7 +835,17 @@ export class ZeitwerkCard extends LitElement {
     const pct = (m: number) => (m / MINUTES_PER_DAY) * 100;
     return html`<div
       class="tl-plan"
+      role="button"
+      tabindex="0"
+      aria-label=${this._l.t("open_plan", { name: plan.name })}
       style=${!isDefault && plan.enabled ? `border-color:${tint(color, 45)}` : ""}
+      @click=${() => this._openDetail(plan)}
+      @keydown=${(ev: KeyboardEvent) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          this._openDetail(plan);
+        }
+      }}
     >
       <div class="tl-row">
         <span class="tl-icon" style="background:${tint(color, 18)};color:${color}">
@@ -926,6 +972,26 @@ export class ZeitwerkCard extends LitElement {
       </ha-card>`;
     }
     return html`<ha-card class=${this._config!.compact ? "compact" : ""}>
+      ${
+        this._detail
+          ? html`<button class="tl-back" @click=${this._closeDetail}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              ${this._config!.title ?? l.t("timeline_title")}
+            </button>`
+          : nothing
+      }
       ${this._renderHeader(plan)}
       ${this._config!.compact ? nothing : this._separator(l.t("section_profiles"), this._openProfiles)}
       ${
@@ -1820,6 +1886,31 @@ export class ZeitwerkCard extends LitElement {
         border-radius: 26px;
         background: var(--zw-surface);
         border: 1px solid var(--zw-border);
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .tl-plan:hover {
+        background: var(--zw-surface-2);
+      }
+      .tl-plan:focus-visible {
+        outline: 2px solid var(--zw-accent);
+        outline-offset: 2px;
+      }
+      .tl-back {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 32px;
+        margin: -4px 0 -2px -4px;
+        padding: 0 8px 0 4px;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--zw-text-2);
+      }
+      .tl-back:hover {
+        background: var(--zw-surface);
       }
       .tl-row {
         display: flex;

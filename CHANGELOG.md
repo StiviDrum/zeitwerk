@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Timeline card: choose which plans to show (`plans:`, checkboxes in the card
+  editor; empty = all, tags still filter).
+- Timeline card: tapping a plan opens its full week view (profiles, day editor,
+  configuration) in the same card, with „‹ Zeitpläne“ back to the timeline.
+
 ## [1.0.0-rc.2] - 2026-11-05
 
 ### Changed

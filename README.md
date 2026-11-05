@@ -78,9 +78,13 @@ Timeline of all plans (optionally filtered by tag):
 ```yaml
 type: custom:zeitwerk-card
 view: timeline
+plans: [heizung_wohnzimmer, heizung_bad]  # optional; only these plans, in this order
 tags: [heizung]   # optional; plans with any of these tags
 title: Heizung    # optional
 ```
+
+Tap a plan in the timeline to open its full week view (profiles, day editor,
+configuration) in the same card; „‹ Zeitpläne“ goes back.
 
 The timeline shows one band per plan for today (scheduled blocks, manual
 override hatched, now-line), the current profile and value and the next
@@ -380,8 +384,9 @@ sortieren (Reihenfolge der Regler). Fehlende Entitäten in
 einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Konfiguration“ → Regeln: Vorrang-Regeln
 (ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
 Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
-aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste aller Pläne: `view: timeline`
-(optional `tags: [heizung]`).
+aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste: `view: timeline`, optional nur bestimmte Pläne (`plans: [...]`,
+im Karten-Editor ankreuzen) oder `tags: [heizung]`; ein Plan antippen öffnet
+seine volle Wochenansicht in derselben Karte.
 
 Alles, was die Karte kann, gibt es auch als Dienst (`zeitwerk.get_plan`,
 `set_day_plan`, `set_override`, `remove_override`, `update_plan`,
