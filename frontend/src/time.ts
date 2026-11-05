@@ -19,6 +19,30 @@ export function formatTime(minutes: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+const FORMATS: Record<"clock" | "day", Intl.DateTimeFormatOptions> = {
+  clock: { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" },
+  day: {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  },
+};
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/** Cached formatter (creating Intl.DateTimeFormat is comparatively expensive). */
+function formatter(timeZone: string | undefined, kind: "clock" | "day"): Intl.DateTimeFormat {
+  const key = `${kind}|${timeZone ?? ""}`;
+  let f = formatters.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", { timeZone, ...FORMATS[kind] });
+    formatters.set(key, f);
+  }
+  return f;
+}
+
 export interface ZonedNow {
   weekday: Weekday;
   /** Index 0 = Monday. */
@@ -31,13 +55,7 @@ export function zonedNow(timeZone: string | undefined, date: Date = new Date()):
   let weekdayIndex: number;
   let minutes: number;
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
+    const parts = formatter(timeZone, "clock").formatToParts(date);
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
     weekdayIndex = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(get("weekday"));
     minutes = Number(get("hour")) * 60 + Number(get("minute"));
@@ -59,15 +77,7 @@ export function zonedClock(iso: string, timeZone: string | undefined): string {
 /** Day number (days since epoch of the local calendar date) and minute of day in a time zone. */
 function zonedDay(date: Date, timeZone: string | undefined): { day: number; minutes: number } {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
+    const parts = formatter(timeZone, "day").formatToParts(date);
     const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
     return {
       day: Math.round(Date.UTC(get("year"), get("month") - 1, get("day")) / 86_400_000),

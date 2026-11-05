@@ -110,6 +110,7 @@ export class ZeitwerkCard extends LitElement {
   /** Width of a week-grid track in px (staged block labels). */
   @state() private _trackPx = 0;
   private _trackObs?: { el: Element; stop: () => void };
+  private _watched?: { source: unknown; ids: string[] };
   private _measure?: TextMeasure;
 
   private _unsub?: Promise<() => Promise<void> | void>;
@@ -216,6 +217,16 @@ export class ZeitwerkCard extends LitElement {
 
   /** Entities whose state changes are relevant for rendering (DESIGN.md §3). */
   private _watchedEntities(): string[] {
+    // Checked on every hass update: compute once per plan (list) object.
+    const source = this._config?.view === "timeline" ? this._plans : this._plan;
+    const cached = this._watched;
+    if (cached && cached.source === source) return cached.ids;
+    const ids = [...new Set(this._computeWatched())];
+    this._watched = { source, ids };
+    return ids;
+  }
+
+  private _computeWatched(): string[] {
     if (this._config?.view === "timeline") {
       return (this._plans ?? []).flatMap((plan) =>
         plan.profiles.map((p) => quickValue(p)?.entityId).filter((x): x is string => !!x),

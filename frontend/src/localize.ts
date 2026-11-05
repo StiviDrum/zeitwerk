@@ -449,11 +449,24 @@ export interface Localizer {
   weekdayLong(index: number): string;
 }
 
+const localizers = new Map<string, Localizer>();
+
+/** Localizer for a HA language (cached: one stable object per language). */
 export function localizer(language: string | undefined): Localizer {
-  const lang = (language ?? "en").split("-")[0].toLowerCase();
+  const key = language ?? "en";
+  let l = localizers.get(key);
+  if (!l) {
+    l = createLocalizer(key);
+    localizers.set(key, l);
+  }
+  return l;
+}
+
+function createLocalizer(language: string): Localizer {
+  const lang = language.split("-")[0].toLowerCase();
   const strings = LANGUAGES[lang] ?? en;
   return {
-    lang: language ?? "en",
+    lang: language,
     t(key, vars) {
       let text = strings[key] ?? en[key];
       for (const [k, v] of Object.entries(vars ?? {})) text = text.replace(`{${k}}`, String(v));
