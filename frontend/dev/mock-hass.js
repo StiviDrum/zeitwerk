@@ -135,7 +135,7 @@ const states = {
   },
   "light.flur": { entity_id: "light.flur", state: "off", attributes: { friendly_name: "Flur" } },
   "light.kueche": { entity_id: "light.kueche", state: "off", attributes: { friendly_name: "Küche" } },
-  "input_boolean.urlaub": { entity_id: "input_boolean.urlaub", state: "off", attributes: { friendly_name: "Urlaub" } },
+  "input_boolean.urlaub": { entity_id: "input_boolean.urlaub", state: params.get("urlaub") === "1" ? "on" : "off", attributes: { friendly_name: "Urlaub" } },
   "input_boolean.heizperiode": {
     entity_id: "input_boolean.heizperiode",
     state: "on",

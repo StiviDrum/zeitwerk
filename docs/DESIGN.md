@@ -40,7 +40,7 @@ Default profile (the one valid outside all blocks) is drawn as the **track backg
 ## 2. Components (sizes from the mockup)
 
 - **Header**: 64 px pill (radius 32), 44 px icon circle tinted with the active profile colour, name 15/600, subline 13 px „<Profil> <Wert> · ab HH:MM → <nächster Wert>“, plan on/off switch on the right.
-- **Status chips**: 28 px, radius 14, 12 px text: day type, plan state (green dot), override state („Urlaub aktiv“, „pausiert – niemand zu Hause“).
+- **Status** (changed 0.8.1 on Steven's request, replaces the status chips): no chip row. Plan off / paused / error stay in the header subline; a third header line (12 px, icon 14 px, profile colour) appears only when the plan deviates from the week plan: „Vorrang: <name>“, „manuell bis HH:MM“, forced „<Profil> bis HH:MM“, „Feiertag“. Today's grid row: 1.5 px outline (text colour 60 %).
 - **Separator**: title 15/600 + 1 px line (Bubble separator look).
 - **Profile slider** (`show_profile_sliders`): 48 px pill, fill = value position in the entity's min/max at 30 % profile colour with a 2 px solid edge, 36 px icon circle in profile colour, name + value right. Only for the "quick view" case (one entity → one value); drag/tap changes the profile value via `zeitwerk.set_profile_value` (debounced, ~400 ms).
 - **Day-type tabs**: removed (2026-11-04). Every weekday is its own row; with `holidays.mode = own_day_type` a „Ft“ row follows Sunday.

@@ -79,7 +79,9 @@ border in the profile colour.
 What the week view does:
 
 - Header with the current profile and value, the next change and the plan
-  on/off switch; chips for day type, plan state and active override.
+  on/off switch. Only when the plan deviates from the week plan a quiet line
+  says why („Vorrang: Urlaub“, „manuell bis 22:00“, „Komfort bis 22:00“,
+  „Feiertag“). Today's row in the grid is outlined.
 - **Profile sliders** for profiles that set exactly one value on one entity
   (`input_number`/`number` value, climate temperature, select option,
   brightness, position, percentage, on/off). Dragging calls
@@ -125,8 +127,8 @@ What the week view does:
 - **Duplicate plan** (rules page, or „Vorlage“ in the new-plan wizard): copies
   everything; the copy starts switched off so two plans never control the
   same entities.
-- A **manual override** shows as a chip („manuell bis 22:00“) and as a hatched
-  range in today's row.
+- A **manual override** shows in the header („manuell bis 22:00“) and as a
+  hatched range in today's row.
 
 - **New plan** (admins): „+ Neuer Plan“ in the timeline, or when the card has
   no/an unknown plan. Pick the target entity (number, climate, select, light,

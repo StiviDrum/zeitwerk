@@ -155,6 +155,11 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - 2026-11-05: home-assistant/brands no longer accepts custom integrations (PR template, Brands Proxy API since HA 2026.3) – local `brand/` folder is the way; nothing to submit.
   - Verified in the dev instance: services via websocket call_service, profiles page with HA entity/icon pickers, save + undo.
 
+## 0.8.1 – Cleaner header
+
+- [x] Today's grid row outlined; chip row removed; reason line in the header only for override / forced / manual / holiday.
+- [x] README header without `<picture>` and relative paths (HACS renders README text otherwise).
+
 ## 1.0 – Publish
 
 - [ ] README with screenshots/GIF (light + dark), full docs of services, entities, websocket API

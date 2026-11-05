@@ -908,7 +908,7 @@ export class ZeitwerkCard extends LitElement {
       </ha-card>`;
     }
     return html`<ha-card class=${this._config!.compact ? "compact" : ""}>
-      ${this._renderHeader(plan)} ${this._renderChips(plan)}
+      ${this._renderHeader(plan)}
       ${this._config!.compact ? nothing : this._separator(l.t("section_profiles"), this._openProfiles)}
       ${
         this._config!.compact
@@ -990,6 +990,7 @@ export class ZeitwerkCard extends LitElement {
       <div class="titles">
         <div class="name">${plan.name}</div>
         <div class="sub">${subline}</div>
+        ${this._renderReason(plan)}
       </div>
       <button
         class="switch"
@@ -1003,51 +1004,53 @@ export class ZeitwerkCard extends LitElement {
     </div>`;
   }
 
-  private _renderChips(plan: Plan) {
+  /**
+   * Why the plan deviates from the week plan right now (override, forced
+   * profile, manual change, holiday) – one quiet line in the header, shown
+   * only when something applies.
+   */
+  private _renderReason(plan: Plan) {
     const l = this._l;
     const status = plan.status;
-    const now = zonedNow(this.hass?.config?.time_zone);
-    const dayText = [l.weekdayLong(now.weekdayIndex), status?.is_holiday ? l.t("holiday") : null]
-      .filter(Boolean)
-      .join(" · ");
-
-    let state: TemplateResult;
-    if (!plan.enabled) {
-      state = html`<span class="chip">${l.t("plan_off")}</span>`;
-    } else if (status?.error) {
-      state = html`<span class="chip bad">${l.t("plan_error")}</span>`;
-    } else if (status && !status.active) {
-      state = html`<span class="chip">${this._pausedText(plan)}</span>`;
-    } else {
-      state = html`<span class="chip ok"><span class="dot"></span>${l.t("plan_running")}</span>`;
-    }
-
-    let override: string = l.t("no_override");
-    const source = status?.source ?? "";
-    if (status?.forced_until) {
+    if (!status || !plan.enabled || status.error || !status.active) return nothing;
+    const tz = this.hass?.config?.time_zone;
+    const items: { icon: string; text: string; color?: string }[] = [];
+    const source = status.source ?? "";
+    if (status.manual_since) {
+      items.push({
+        icon: "mdi:hand-back-right-outline",
+        text: status.manual_until
+          ? l.t("manual_until", { time: zonedClock(status.manual_until, tz) })
+          : l.t("manual"),
+      });
+    } else if (status.forced_until) {
       const forced = this._profile(status.profile);
-      override = l.t("forced_until", {
-        profile: forced?.name ?? "",
-        time: zonedClock(status.forced_until, this.hass?.config?.time_zone),
+      items.push({
+        icon: "mdi:timer-outline",
+        text: l.t("forced_until", {
+          profile: forced?.name ?? "",
+          time: zonedClock(status.forced_until, tz),
+        }),
+        color: forced ? profileColor(plan, forced) : undefined,
       });
     } else if (source.startsWith("override:")) {
       const ov = plan.overrides.find((o) => o.id === source.slice(9));
-      override = l.t("override_active", { name: ov?.name ?? source.slice(9) });
+      const profile = this._profile(ov?.profile ?? status.profile);
+      items.push({
+        icon: "mdi:layers-outline",
+        text: l.t("override_reason", { name: ov?.name ?? source.slice(9) }),
+        color: profile ? profileColor(plan, profile) : undefined,
+      });
     }
-    const tz = this.hass?.config?.time_zone;
-    const manual = status?.manual_since
-      ? html`<span class="chip manual"
-          >${
-            status.manual_until
-              ? l.t("manual_until", { time: zonedClock(status.manual_until, tz) })
-              : l.t("manual")
-          }</span
-        >`
-      : nothing;
-    return html`<div class="chips">
-      <span class="chip"><ha-icon icon="mdi:calendar-blank-outline"></ha-icon>${dayText}</span>
-      ${state} ${manual}
-      <span class="chip muted">${override}</span>
+    if (status.is_holiday) items.push({ icon: "mdi:flag-outline", text: l.t("holiday") });
+    if (!items.length) return nothing;
+    return html`<div class="reason">
+      ${items.map(
+        (item) =>
+          html`<span class="ritem" style=${item.color ? `color:${item.color}` : ""}
+            ><ha-icon .icon=${item.icon}></ha-icon>${item.text}</span
+          >`,
+      )}
     </div>`;
   }
 
@@ -1261,7 +1264,7 @@ export class ZeitwerkCard extends LitElement {
         ${rows.map(
           (row) =>
             html`<button
-              class="row"
+              class="row ${row.today ? "today" : ""}"
               aria-label=${l.t("day_editor_title", { day: this._dayName(row.key) })}
               @click=${() => this._openDay(row.key)}
             >
@@ -1416,6 +1419,24 @@ export class ZeitwerkCard extends LitElement {
         -webkit-box-orient: vertical;
         -webkit-line-clamp: 2;
         overflow: hidden;
+      }
+      .reason {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 12px;
+        margin-top: 2px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--zw-text-2);
+      }
+      .ritem {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .ritem ha-icon {
+        --mdc-icon-size: 14px;
       }
       .current {
         font-weight: 600;
@@ -1677,6 +1698,10 @@ export class ZeitwerkCard extends LitElement {
       }
       .row:hover .track {
         outline: 1px solid color-mix(in srgb, var(--zw-text) 25%, transparent);
+      }
+      .row.today .track {
+        outline: 1.5px solid color-mix(in srgb, var(--zw-text) 60%, transparent);
+        outline-offset: 1px;
       }
       .row.dim {
         opacity: 0.32;
@@ -1960,11 +1985,6 @@ export class ZeitwerkCard extends LitElement {
         font-size: 12px;
         color: var(--zw-text-2);
       }
-      .chiprow {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
       .pick {
         height: 36px;
         padding: 0 14px;
@@ -2007,13 +2027,6 @@ export class ZeitwerkCard extends LitElement {
           transparent 2px 7px
         );
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--zw-text) 40%, transparent);
-      }
-      .chip.manual {
-        background: repeating-linear-gradient(
-          135deg,
-          var(--zw-surface-2) 0 4px,
-          var(--zw-surface) 4px 8px
-        );
       }
       .links {
         border-radius: 22px;

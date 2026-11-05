@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-05
+
+### Changed
+- Week grid: today's row is outlined.
+- The chip row below the header is gone (weekday, „Plan läuft“, „kein
+  Vorrang aktiv“). Only when the plan deviates from the week plan, one quiet
+  line in the header says why: „Vorrang: Urlaub“, „manuell bis 22:00“,
+  „Komfort bis 22:00“ (forced), „Feiertag“.
+- README header renders in HACS (plain image with an absolute URL).
+
 ## [0.8.0] - 2026-11-05
 
 ### Added
