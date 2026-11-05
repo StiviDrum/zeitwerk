@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] - 2026-11-05
+
 ### Added
 - Timeline card: choose which plans to show (`plans:`, checkboxes in the card
   editor; empty = all, tags still filter).
