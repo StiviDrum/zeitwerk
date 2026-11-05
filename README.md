@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/custom_components/zeitwerk/brand/icon.png" alt="Zeitwerk" width="128">
+  <img src="https://raw.githubusercontent.com/StiviDrum/zeitwerk/main/docs/brand/social-preview.png" alt="Zeitwerk – weekly schedules with profiles for Home Assistant" width="640">
 </p>
 
 # Zeitwerk
