@@ -55,6 +55,7 @@ let plan = {
         name: "Werktag",
         days: ["mon", "tue", "wed", "thu", "fri"],
         blocks: [{ start: "16:00", end: "22:00", profile: "comfort" }],
+        resume_points: ["13:00"],
       },
       {
         id: "weekend",
@@ -87,7 +88,7 @@ let plan = {
 };
 
 const today = (new Date().getDay() + 6) % 7;
-const manual = params.get("manual") === "1";
+let manual = params.get("manual") === "1";
 const status = () => {
   const actResults = plan.activation.conditions.map((c) => states[c.entity_id]?.state === c.state);
   const active = plan.activation.match === "any" ? actResults.some(Boolean) : actResults.every(Boolean);
@@ -234,6 +235,10 @@ const hass = {
     if (domain === "zeitwerk" && service === "set_profile_value") {
       const p = plan.profiles.find((x) => x.id === data.profile);
       p.actions[0].data.value = data.value;
+      setTimeout(emit, 30);
+    }
+    if (domain === "zeitwerk" && service === "resume") {
+      manual = false;
       setTimeout(emit, 30);
     }
     if (domain === "switch") {

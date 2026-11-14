@@ -14,6 +14,10 @@ export interface DayType {
   name: string;
   days: Weekday[];
   blocks: Block[];
+  /** Wall times (HH:MM) that end a manual change and resume the schedule. */
+  resume_points?: string[];
+  /** Whether the resume points also end a forced profile. */
+  resume_forced?: boolean;
 }
 
 export interface ProfileAction {

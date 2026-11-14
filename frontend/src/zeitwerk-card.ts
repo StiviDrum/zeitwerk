@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { ZeitwerkDayEditor, type DaySaveDetail } from "./day-editor";
-import { applyDayPlan, weekToDays, type DayKey } from "./day-plan";
+import { applyDayPlan, weekToDays, weekToResume, type DayKey, type DayResume } from "./day-plan";
 import { ZeitwerkRules } from "./rules-page";
 import { ZeitwerkProfiles } from "./profiles-page";
 import { ZeitwerkPlanWizard } from "./plan-wizard";
@@ -25,7 +25,14 @@ import {
 } from "./quickview";
 import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
 import { tokens } from "./styles";
-import { MINUTES_PER_DAY, formatTime, minutesFromToday, zonedClock, zonedNow } from "./time";
+import {
+  MINUTES_PER_DAY,
+  formatTime,
+  minutesFromToday,
+  parseTime,
+  zonedClock,
+  zonedNow,
+} from "./time";
 import {
   WEEKDAYS,
   type Block,
@@ -89,7 +96,7 @@ export class ZeitwerkCard extends LitElement {
     armed: boolean;
     timer?: number;
   };
-  @state() private _editDay?: { day: DayKey; blocks: Block[] };
+  @state() private _editDay?: { day: DayKey; blocks: Block[]; resume: DayResume };
   @state() private _saveError: string | null = null;
   @state() private _busy = false;
   @state() private _notice?: string;
@@ -552,16 +559,20 @@ export class ZeitwerkCard extends LitElement {
     }
     this._saveError = null;
     this._busy = false;
-    this._editDay = { day, blocks: weekToDays(this._plan)[day] };
+    this._editDay = {
+      day,
+      blocks: weekToDays(this._plan)[day],
+      resume: weekToResume(this._plan)[day],
+    };
   }
 
   private _onSaveDay = async (ev: CustomEvent<DaySaveDetail>): Promise<void> => {
-    const { blocks, targets } = ev.detail;
+    const { blocks, targets, resume } = ev.detail;
     const l = this._l;
     this._busy = true;
     this._saveError = null;
     try {
-      await this._updatePlan((plan) => applyDayPlan(plan, targets, blocks, l));
+      await this._updatePlan((plan) => applyDayPlan(plan, targets, blocks, l, resume));
       this._editDay = undefined;
     } catch (err) {
       this._saveError = l.t("save_failed", { error: errorMessage(err) });
@@ -569,6 +580,48 @@ export class ZeitwerkCard extends LitElement {
       this._busy = false;
     }
   };
+
+  /** Whether the plan deviates from its schedule in a way "resume" ends. */
+  private _canResume(plan: Plan): boolean {
+    const s = plan.status;
+    return !!(plan.enabled && s && (s.manual_since || s.forced_until));
+  }
+
+  private _resume(plan: Plan, ev?: Event): void {
+    ev?.stopPropagation();
+    if (!this.hass) return;
+    this.hass
+      .callService("zeitwerk", "resume", { plan: plan.id })
+      .then(() => this._notify(this._l.t("resumed")))
+      .catch((err) => this._notify(errorMessage(err)));
+  }
+
+  private _resumeButton(plan: Plan, compact = false) {
+    if (!this._canResume(plan)) return nothing;
+    const l = this._l;
+    return html`<button
+      class="resume-btn ${compact ? "compact" : ""}"
+      aria-label=${l.t("resume_plan", { name: plan.name })}
+      title=${l.t("resume")}
+      @click=${(ev: Event) => this._resume(plan, ev)}
+      @keydown=${(ev: KeyboardEvent) => ev.stopPropagation()}
+    >
+      <ha-icon .icon=${"mdi:play-circle-outline"}></ha-icon>${compact ? nothing : l.t("resume")}
+    </button>`;
+  }
+
+  /** Dotted markers for resume points (minutes of day) on a 24 h track. */
+  private _resumeMarks(points: string[] | undefined) {
+    if (!points?.length) return nothing;
+    return points.map(
+      (p) =>
+        html`<span
+          class="rp-mark"
+          style="left:${(parseTime(p) / MINUTES_PER_DAY) * 100}%"
+          title="${this._l.t("resume_point")} ${p}"
+        ></span>`,
+    );
+  }
 
   private _togglePlan(): void {
     if (!this.hass || !this._plan) return;
@@ -865,6 +918,7 @@ export class ZeitwerkCard extends LitElement {
               </span>`
             : nothing
         }
+        ${this._resumeButton(plan, true)}
       </div>
       <div class="band" style="background:${tint(def, 16)}">
         ${segs.map(
@@ -885,6 +939,9 @@ export class ZeitwerkCard extends LitElement {
               ></span>`
             : nothing
         }
+        ${this._resumeMarks(
+          plan.week.day_types.find((d) => d.id === status?.day_type)?.resume_points,
+        )}
         <span class="band-now" aria-hidden="true"></span>
       </div>
     </div>`;
@@ -932,6 +989,7 @@ export class ZeitwerkCard extends LitElement {
           .plan=${plan}
           .day=${this._editDay.day}
           .initial=${this._editDay.blocks}
+          .initialResume=${this._editDay.resume}
           .localize=${l}
           .valueLabels=${labels}
           .withHoliday=${plan.holidays.mode === "own_day_type" && !!plan.holidays.day_type}
@@ -1135,6 +1193,7 @@ export class ZeitwerkCard extends LitElement {
             ><ha-icon .icon=${item.icon}></ha-icon>${item.text}</span
           >`,
       )}
+      ${this._resumeButton(plan)}
     </div>`;
   }
 
@@ -1366,7 +1425,7 @@ export class ZeitwerkCard extends LitElement {
                     ></span
                   >`;
                 })}
-                ${this._renderManual(plan, row)}
+                ${this._renderManual(plan, row)} ${this._resumeMarks(row.dayType?.resume_points)}
               </span>
             </button>`,
         )}
@@ -1507,6 +1566,7 @@ export class ZeitwerkCard extends LitElement {
       .reason {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 2px 12px;
         margin-top: 2px;
         font-size: 12px;
@@ -1980,6 +2040,50 @@ export class ZeitwerkCard extends LitElement {
       }
       .block {
         overflow: visible;
+      }
+      .rp-mark {
+        position: absolute;
+        top: -3px;
+        bottom: -3px;
+        width: 0;
+        margin-left: -1px;
+        border-left: 2px dotted var(--zw-text);
+        pointer-events: none;
+        opacity: 0.75;
+      }
+      .resume-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 32px;
+        padding: 0 12px 0 8px;
+        border: 0;
+        border-radius: 16px;
+        background: var(--zw-surface-2);
+        color: var(--zw-text);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .resume-btn ha-icon {
+        --mdc-icon-size: 16px;
+      }
+      .resume-btn.compact {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        flex-shrink: 0;
+        justify-content: center;
+        border-radius: 22px;
+      }
+      .resume-btn.compact ha-icon {
+        --mdc-icon-size: 22px;
+      }
+      .resume-btn:focus-visible {
+        outline: 2px solid var(--zw-accent);
+        outline-offset: 2px;
       }
       .textbtn {
         align-self: flex-start;

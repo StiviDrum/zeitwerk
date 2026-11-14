@@ -12,6 +12,43 @@ import { WEEKDAYS, type Block, type DayType, type Plan, type Weekday } from "./t
 
 export type DayKey = Weekday | "holiday";
 
+/** Resume settings of one day (see docs/SPEC.md §3 "Rücksetzpunkte"). */
+export interface DayResume {
+  resume_points: string[];
+  resume_forced: boolean;
+}
+
+export const NO_RESUME: DayResume = { resume_points: [], resume_forced: false };
+
+/** Sorted, de-duplicated resume points of a day type. */
+export function resumeOf(dayType: DayType | undefined): DayResume {
+  return {
+    resume_points: [...new Set(dayType?.resume_points ?? [])].sort(),
+    resume_forced: !!dayType?.resume_forced,
+  };
+}
+
+/** Storage fields of resume settings (omitted when empty, like the backend). */
+function resumeFields(r: DayResume): Pick<DayType, "resume_points" | "resume_forced"> {
+  return {
+    ...(r.resume_points.length ? { resume_points: [...r.resume_points] } : {}),
+    ...(r.resume_forced ? { resume_forced: true } : {}),
+  };
+}
+
+function holidayDayType(plan: Plan): DayType | undefined {
+  const holidayId = plan.holidays.mode === "own_day_type" ? plan.holidays.day_type : null;
+  return plan.week.day_types.find((d) => d.id === holidayId);
+}
+
+/** Resume settings per weekday (and the own holiday day). */
+export function weekToResume(plan: Plan): Record<DayKey, DayResume> {
+  const out = {} as Record<DayKey, DayResume>;
+  for (const wd of WEEKDAYS) out[wd] = resumeOf(dayTypeFor(plan, wd));
+  out.holiday = resumeOf(holidayDayType(plan));
+  return out;
+}
+
 /** Blocks as [start, end) minutes, sorted, 0 <= start < end <= 1440. */
 export interface DayBlock {
   start: number;
@@ -70,17 +107,22 @@ export function weekToDays(plan: Plan): Record<DayKey, Block[]> {
   return out;
 }
 
-const key = (blocks: Block[]) => JSON.stringify(blocks);
+const key = (blocks: Block[], resume: DayResume) => JSON.stringify({ blocks, ...resume });
 
 /**
- * Regroup weekdays with identical blocks into day types. Existing day types
- * keep id and name when their weekday set is unchanged; new groups are named
- * after their days ("Mo–Fr", "Mi").
+ * Regroup weekdays with identical blocks and resume settings into day types.
+ * Existing day types keep id and name when their weekday set is unchanged;
+ * new groups are named after their days ("Mo–Fr", "Mi").
  */
-export function daysToWeek(plan: Plan, days: Record<DayKey, Block[]>, l: Localizer): DayType[] {
+export function daysToWeek(
+  plan: Plan,
+  days: Record<DayKey, Block[]>,
+  l: Localizer,
+  resume: Record<DayKey, DayResume> = weekToResume(plan),
+): DayType[] {
   const groups = new Map<string, Weekday[]>();
   for (const wd of WEEKDAYS) {
-    const k = key(days[wd] ?? []);
+    const k = key(days[wd] ?? [], resume[wd] ?? NO_RESUME);
     groups.set(k, [...(groups.get(k) ?? []), wd]);
   }
   const holidayId = plan.holidays.mode === "own_day_type" ? plan.holidays.day_type : null;
@@ -94,6 +136,7 @@ export function daysToWeek(plan: Plan, days: Record<DayKey, Block[]>, l: Localiz
     let id = same?.id ?? wds.join("_");
     for (let i = 2; taken.has(id); i++) id = `${wds.join("_")}_${i}`;
     taken.add(id);
+    const group = JSON.parse(k) as { blocks: Block[] } & DayResume;
     result.push({
       id,
       name:
@@ -103,7 +146,8 @@ export function daysToWeek(plan: Plan, days: Record<DayKey, Block[]>, l: Localiz
           l,
         ),
       days: wds,
-      blocks: JSON.parse(k) as Block[],
+      blocks: group.blocks,
+      ...resumeFields(group),
     });
   }
   if (holidayId) {
@@ -113,16 +157,30 @@ export function daysToWeek(plan: Plan, days: Record<DayKey, Block[]>, l: Localiz
       name: old?.name ?? l.t("holiday"),
       days: [],
       blocks: days.holiday ?? [],
+      ...resumeFields(resume.holiday ?? NO_RESUME),
     });
   }
   return result;
 }
 
-/** Set `blocks` on all `targets` and regroup (mutates `plan`). */
-export function applyDayPlan(plan: Plan, targets: DayKey[], blocks: Block[], l: Localizer): void {
+/**
+ * Set `blocks` (and `resume`, if given) on all `targets` and regroup
+ * (mutates `plan`). Without `resume` every target keeps its own settings.
+ */
+export function applyDayPlan(
+  plan: Plan,
+  targets: DayKey[],
+  blocks: Block[],
+  l: Localizer,
+  resume?: DayResume,
+): void {
   const days = weekToDays(plan);
-  for (const t of targets) days[t] = blocks.map((b) => ({ ...b }));
-  plan.week.day_types = daysToWeek(plan, days, l);
+  const resumes = weekToResume(plan);
+  for (const t of targets) {
+    days[t] = blocks.map((b) => ({ ...b }));
+    if (resume) resumes[t] = { ...resume, resume_points: [...resume.resume_points].sort() };
+  }
+  plan.week.day_types = daysToWeek(plan, days, l, resumes);
 }
 
 // --- Editing within one day ---------------------------------------------------

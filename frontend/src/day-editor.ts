@@ -1,7 +1,7 @@
 /**
  * Day editor (in-card page): all blocks of one day on a 24 h bar. Add, delete,
  * drag; changes stay local until "Speichern", which applies the day plan to
- * the selected days (their old blocks are replaced).
+ * the selected days (their old blocks and resume points are replaced).
  */
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
@@ -10,21 +10,56 @@ import {
   addBlock,
   dragDayBlock,
   fromDayBlocks,
+  NO_RESUME,
   toDayBlocks,
   type DayBlock,
   type DayKey,
+  type DayResume,
   type DragMode,
 } from "./day-plan";
 import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
 import type { Localizer } from "./localize";
 import { pageStyles, tokens } from "./styles";
-import { MINUTES_PER_DAY, formatTime } from "./time";
+import { MINUTES_PER_DAY, formatTime, parseTime } from "./time";
 import { WEEKDAYS, type Block, type Plan } from "./types";
 
 export interface DaySaveDetail {
   day: DayKey;
   blocks: Block[];
   targets: DayKey[];
+  resume: DayResume;
+}
+
+/** Next free resume point time: after the selected block, else 22:00. */
+export function suggestResumePoint(
+  points: number[],
+  preferred: number,
+  step: number,
+): number | null {
+  const taken = new Set(points);
+  for (let i = 0; i < MINUTES_PER_DAY / step; i++) {
+    const m = (Math.round(preferred / step) * step + i * step) % MINUTES_PER_DAY;
+    if (!taken.has(m)) return m;
+  }
+  return null;
+}
+
+/** Move one resume point by `delta` (wraps around midnight, skips taken times). */
+export function shiftResumePoint(
+  points: number[],
+  index: number,
+  delta: number,
+  step: number,
+): number[] {
+  const others = new Set(points.filter((_, i) => i !== index));
+  let m = points[index];
+  for (let i = 0; i < MINUTES_PER_DAY / step; i++) {
+    m =
+      (((Math.round((m + delta) / step) * step) % MINUTES_PER_DAY) + MINUTES_PER_DAY) %
+      MINUTES_PER_DAY;
+    if (!others.has(m)) break;
+  }
+  return points.map((p, i) => (i === index ? m : p));
 }
 
 const HANDLE_HIT_PX = 22;
@@ -33,6 +68,7 @@ export class ZeitwerkDayEditor extends LitElement {
   @property({ attribute: false }) public plan!: Plan;
   @property({ attribute: false }) public day!: DayKey;
   @property({ attribute: false }) public initial: Block[] = [];
+  @property({ attribute: false }) public initialResume: DayResume = NO_RESUME;
   @property({ attribute: false }) public localize!: Localizer;
   @property({ attribute: false }) public valueLabels: Record<string, string> = {};
   /** Whether the plan has its own holiday day ("Feiertag" can be a target). */
@@ -44,6 +80,9 @@ export class ZeitwerkDayEditor extends LitElement {
   @state() private _blocks: DayBlock[] = [];
   @state() private _selected = -1;
   @state() private _targets: DayKey[] = [];
+  /** Resume points in minutes (kept in insertion order while editing). */
+  @state() private _points: number[] = [];
+  @state() private _resumeForced = false;
   @state() private _dirty = false;
   @state() private _confirmDiscard = false;
   @state() private _tip?: { at: number; text: string };
@@ -76,8 +115,10 @@ export class ZeitwerkDayEditor extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues): void {
-    if (changed.has("day") || changed.has("initial")) {
+    if (changed.has("day") || changed.has("initial") || changed.has("initialResume")) {
       this._blocks = toDayBlocks(this.initial);
+      this._points = (this.initialResume?.resume_points ?? []).map(parseTime);
+      this._resumeForced = !!this.initialResume?.resume_forced;
       this._selected = this._blocks.length ? 0 : -1;
       this._targets = [this.day];
       this._dirty = false;
@@ -210,11 +251,29 @@ export class ZeitwerkDayEditor extends LitElement {
   }
 
   private _save(): void {
+    const points = [...new Set(this._points)].sort((a, b) => a - b).map(formatTime);
     this._fire("zw-save-day", {
       day: this.day,
       blocks: fromDayBlocks(this._blocks),
       targets: this._targets,
+      resume: { resume_points: points, resume_forced: points.length ? this._resumeForced : false },
     } satisfies DaySaveDetail);
+  }
+
+  // --- Resume points --------------------------------------------------------------
+
+  private _changeResume(points: number[], forced = this._resumeForced): void {
+    this._points = points;
+    this._resumeForced = forced;
+    this._dirty = true;
+    this._confirmDiscard = false;
+  }
+
+  private _addPoint(): void {
+    const sel = this._blocks[this._selected];
+    const preferred = sel && sel.end < MINUTES_PER_DAY ? sel.end : 22 * 60;
+    const m = suggestResumePoint(this._points, preferred, this.step);
+    if (m !== null) this._changeResume([...this._points, m]);
   }
 
   private _toggleTarget(day: DayKey): void {
@@ -271,6 +330,12 @@ export class ZeitwerkDayEditor extends LitElement {
             }
           </div>`;
         })}
+        ${this._points.map(
+          (m) =>
+            html`<div class="rp" style="left:${pct(m)}%" title=${formatTime(m)} aria-hidden="true">
+              <span class="rp-dot"></span>
+            </div>`,
+        )}
         ${
           this._tip
             ? html`<div class="tip" style="left:${pct(this._tip.at)}%">${this._tip.text}</div>`
@@ -339,6 +404,74 @@ export class ZeitwerkDayEditor extends LitElement {
     </div>`;
   }
 
+  private _resumePanel() {
+    const t = this.localize.t.bind(this.localize);
+    return html`<div class="field resume">
+      <div class="rhead">
+        <span class="label">${t("resume_points")}</span>
+        <button class="add small" @click=${this._addPoint}>${t("add_resume_point")}</button>
+      </div>
+      ${
+        this._points.length
+          ? html`<div class="rlist">
+              ${this._points.map((m, i) => {
+                const field = t("resume_point");
+                return html`<div class="rrow">
+                  <div class="stepper">
+                    <button
+                      aria-label=${t("earlier", { field, step: this.step })}
+                      @click=${() =>
+                        this._changeResume(
+                          shiftResumePoint(this._points, i, -this.step, this.step),
+                        )}
+                    >
+                      −
+                    </button>
+                    <span class="time">${formatTime(m)}</span>
+                    <button
+                      aria-label=${t("later", { field, step: this.step })}
+                      @click=${() =>
+                        this._changeResume(shiftResumePoint(this._points, i, this.step, this.step))}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    class="round"
+                    aria-label=${t("remove_resume_point", { time: formatTime(m) })}
+                    @click=${() => this._changeResume(this._points.filter((_, j) => j !== i))}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                </div>`;
+              })}
+              <label class="check">
+                <input
+                  type="checkbox"
+                  .checked=${this._resumeForced}
+                  @change=${(ev: Event) =>
+                    this._changeResume(this._points, (ev.target as HTMLInputElement).checked)}
+                />
+                <span>${t("resume_forced")}</span>
+              </label>
+            </div>`
+          : nothing
+      }
+      <span class="hint">${t("resume_hint")}</span>
+    </div>`;
+  }
+
   protected render() {
     if (!this.plan || !this.localize || !this.day) return nothing;
     const t = this.localize.t.bind(this.localize);
@@ -376,7 +509,7 @@ export class ZeitwerkDayEditor extends LitElement {
         <button class="add" @click=${() => this._add()}>${t("add_block")}</button>
       </div>
 
-      ${this._selectedPanel()}
+      ${this._selectedPanel()} ${this._resumePanel()}
 
       <div class="field">
         <span class="label">${t("apply_to")}</span>
@@ -545,6 +678,66 @@ export class ZeitwerkDayEditor extends LitElement {
       }
       .handle.end {
         right: -5px;
+      }
+      .rp {
+        position: absolute;
+        top: -6px;
+        bottom: -6px;
+        width: 0;
+        margin-left: -1px;
+        border-left: 2px dotted var(--zw-text);
+        pointer-events: none;
+        z-index: 1;
+      }
+      .rp-dot {
+        position: absolute;
+        top: -5px;
+        left: -5px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        border: 2px solid var(--zw-text);
+        background: var(--zw-bg);
+      }
+      .rhead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .add.small {
+        height: 36px;
+        padding: 0 14px;
+        border-radius: 18px;
+      }
+      .rlist {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .rrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rrow .stepper {
+        flex: 1;
+        max-width: 220px;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .check input {
+        width: 20px;
+        height: 20px;
+        margin: 0;
+        accent-color: var(--zw-accent);
+        cursor: pointer;
       }
       .tip {
         position: absolute;
