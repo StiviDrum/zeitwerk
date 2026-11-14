@@ -12,6 +12,27 @@ export function parseTime(value: string): number {
   return h * 60 + m;
 }
 
+/**
+ * Parse a typed time: "7", "07", "730", "0730", "7:30", "7.30", "07:30",
+ * "24:00". Returns minutes since midnight or null if invalid.
+ */
+export function parseTimeInput(text: string): number | null {
+  const t = text.trim().replace(/[.,h]/g, ":");
+  let h: number;
+  let m: number;
+  let match = /^(\d{1,2})(?::(\d{1,2}))?$/.exec(t);
+  if (match) {
+    h = Number(match[1]);
+    m = match[2] === undefined ? 0 : Number(match[2]);
+    if (match[2] !== undefined && match[2].length === 1) m *= 10; // "7:3" -> 07:30
+  } else if ((match = /^(\d{1,2})(\d{2})$/.exec(t))) {
+    h = Number(match[1]);
+    m = Number(match[2]);
+  } else return null;
+  if (h > 24 || m > 59 || (h === 24 && m !== 0)) return null;
+  return h * 60 + m;
+}
+
 /** Format minutes since midnight as "HH:MM" (1440 -> "24:00"). */
 export function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60);

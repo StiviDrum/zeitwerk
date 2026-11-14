@@ -249,3 +249,30 @@ export function dragDayBlock(
   }
   return blocks.map((x, i) => (i === index ? { ...x, start, end } : x));
 }
+
+/**
+ * Set a block's start or end to a typed minute, clamped between the
+ * neighbouring blocks (and 0:00 / 24:00); a block keeps at least one minute.
+ */
+export function setBlockTime(
+  blocks: DayBlock[],
+  index: number,
+  mode: "start" | "end",
+  minute: number,
+): DayBlock[] {
+  const b = blocks[index];
+  if (!b) return blocks;
+  const lo = index > 0 ? blocks[index - 1].end : 0;
+  const hi = index < blocks.length - 1 ? blocks[index + 1].start : MINUTES_PER_DAY;
+  let { start, end } = b;
+  if (mode === "start") start = Math.max(lo, Math.min(minute, b.end - 1));
+  else end = Math.min(hi, Math.max(minute, b.start + 1));
+  return blocks.map((x, i) => (i === index ? { ...x, start, end } : x));
+}
+
+/** Move a resume point to `minute` (0:00–23:59); null if that time is taken. */
+export function moveResumePoint(points: number[], index: number, minute: number): number[] | null {
+  const m = Math.max(0, Math.min(MINUTES_PER_DAY - 1, Math.round(minute)));
+  if (points.some((p, i) => i !== index && p === m)) return null;
+  return points.map((p, i) => (i === index ? m : p));
+}

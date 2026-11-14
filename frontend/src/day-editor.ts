@@ -5,11 +5,14 @@
  */
 import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
+import { live } from "lit/directives/live.js";
 import { profileColor, textOn, tint } from "./colors";
 import {
   addBlock,
   dragDayBlock,
   fromDayBlocks,
+  moveResumePoint,
+  setBlockTime,
   NO_RESUME,
   toDayBlocks,
   type DayBlock,
@@ -20,7 +23,7 @@ import {
 import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
 import type { Localizer } from "./localize";
 import { pageStyles, tokens } from "./styles";
-import { MINUTES_PER_DAY, formatTime, parseTime } from "./time";
+import { MINUTES_PER_DAY, formatTime, parseTime, parseTimeInput } from "./time";
 import { WEEKDAYS, type Block, type Plan } from "./types";
 
 export interface DaySaveDetail {
@@ -94,6 +97,7 @@ export class ZeitwerkDayEditor extends LitElement {
     original: DayBlock[];
   };
   private _tapStart?: { x: number; minute: number };
+  private _rpDrag?: { index: number; x0: number; width: number; original: number[] };
   @state() private _barPx = 0;
   private _barObs?: { el: Element; stop: () => void };
   private _measure?: TextMeasure;
@@ -240,6 +244,116 @@ export class ZeitwerkDayEditor extends LitElement {
     if (tap && Math.abs(ev.clientX - tap.x) < 8) this._add(tap.minute);
   }
 
+  // Resume point knobs sit above the bar, so they never compete with blocks.
+
+  private _onRpDown(index: number, ev: PointerEvent): void {
+    ev.stopPropagation();
+    ev.preventDefault();
+    const bar = this.renderRoot.querySelector(".bar");
+    if (!bar) return;
+    (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
+    this._rpDrag = {
+      index,
+      x0: ev.clientX,
+      width: bar.getBoundingClientRect().width,
+      original: this._points,
+    };
+    this._tip = { at: this._points[index], text: formatTime(this._points[index]) };
+  }
+
+  private _onRpMove(ev: PointerEvent): void {
+    const drag = this._rpDrag;
+    if (!drag) return;
+    ev.stopPropagation();
+    if (Math.abs(ev.clientX - drag.x0) < 3) return;
+    const delta = ((ev.clientX - drag.x0) / drag.width) * MINUTES_PER_DAY;
+    const target = Math.round((drag.original[drag.index] + delta) / this.step) * this.step;
+    const points = moveResumePoint(drag.original, drag.index, target);
+    if (!points) return; // another point already sits there
+    this._tip = { at: points[drag.index], text: formatTime(points[drag.index]) };
+    this._changeResume(points);
+  }
+
+  private _onRpUp(ev: PointerEvent): void {
+    if (!this._rpDrag) return;
+    ev.stopPropagation();
+    this._rpDrag = undefined;
+    this._tip = undefined;
+  }
+
+  private _onRpKey(index: number, ev: KeyboardEvent): void {
+    const delta = ev.key === "ArrowLeft" ? -this.step : ev.key === "ArrowRight" ? this.step : 0;
+    if (!delta) return;
+    ev.preventDefault();
+    this._changeResume(shiftResumePoint(this._points, index, delta, this.step));
+  }
+
+  // --- Typed times ------------------------------------------------------------------
+
+  /**
+   * Text field for a time. Accepts "7", "730", "7:30", "07:30" (and "24:00"
+   * where allowed); commits on Enter / blur, Escape or invalid input restores
+   * the current value.
+   */
+  private _timeInput(
+    minutes: number,
+    label: string,
+    commit: (minute: number) => boolean,
+    allow2400 = false,
+  ) {
+    const value = formatTime(minutes);
+    const apply = (input: HTMLInputElement) => {
+      const m = parseTimeInput(input.value);
+      const ok = m !== null && (allow2400 || m < MINUTES_PER_DAY) && commit(m);
+      if (!ok && input.value.trim() !== value) {
+        // Brief red underline, then back to normal.
+        input.setAttribute("aria-invalid", "true");
+        window.setTimeout(() => input.removeAttribute("aria-invalid"), 1500);
+      }
+      if (!ok) input.value = value;
+      this.requestUpdate();
+    };
+    return html`<input
+      class="time"
+      type="text"
+      inputmode="numeric"
+      autocomplete="off"
+      maxlength="5"
+      aria-label=${label}
+      .value=${live(value)}
+      @focus=${(ev: FocusEvent) => {
+        const input = ev.target as HTMLInputElement;
+        input.removeAttribute("aria-invalid");
+        input.select();
+      }}
+      @change=${(ev: Event) => apply(ev.target as HTMLInputElement)}
+      @keydown=${(ev: KeyboardEvent) => {
+        const input = ev.target as HTMLInputElement;
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          input.blur();
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          input.value = value;
+          input.blur();
+        }
+      }}
+    />`;
+  }
+
+  private _setBlockTime(which: "start" | "end", minute: number): boolean {
+    if (this._selected < 0) return false;
+    this._change(setBlockTime(this._blocks, this._selected, which, minute));
+    return true;
+  }
+
+  private _setPoint(index: number, minute: number): boolean {
+    const points = moveResumePoint(this._points, index, minute);
+    if (!points) return false;
+    this._changeResume(points);
+    return true;
+  }
+
   // --- Save / discard -------------------------------------------------------------
 
   private _close(): void {
@@ -331,9 +445,25 @@ export class ZeitwerkDayEditor extends LitElement {
           </div>`;
         })}
         ${this._points.map(
-          (m) =>
-            html`<div class="rp" style="left:${pct(m)}%" title=${formatTime(m)} aria-hidden="true">
-              <span class="rp-dot"></span>
+          (m, i) =>
+            html`<div class="rp" style="left:${pct(m)}%">
+              <span
+                class="rp-knob"
+                role="slider"
+                tabindex="0"
+                aria-label=${this.localize.t("resume_point")}
+                aria-valuemin="0"
+                aria-valuemax=${MINUTES_PER_DAY - 1}
+                aria-valuenow=${m}
+                aria-valuetext=${formatTime(m)}
+                title=${formatTime(m)}
+                @pointerdown=${(ev: PointerEvent) => this._onRpDown(i, ev)}
+                @pointermove=${this._onRpMove}
+                @pointerup=${this._onRpUp}
+                @pointercancel=${this._onRpUp}
+                @keydown=${(ev: KeyboardEvent) => this._onRpKey(i, ev)}
+                ><span class="rp-dot"></span
+              ></span>
             </div>`,
         )}
         ${
@@ -369,7 +499,12 @@ export class ZeitwerkDayEditor extends LitElement {
           >
             −
           </button>
-          <span class="time">${formatTime(which === "start" ? b.start : b.end)}</span>
+          ${this._timeInput(
+            which === "start" ? b.start : b.end,
+            field,
+            (m) => this._setBlockTime(which, m),
+            which === "end",
+          )}
           <button
             aria-label=${t("later", { field, step: this.step })}
             @click=${() => this._shift(which, this.step)}
@@ -427,7 +562,7 @@ export class ZeitwerkDayEditor extends LitElement {
                     >
                       −
                     </button>
-                    <span class="time">${formatTime(m)}</span>
+                    ${this._timeInput(m, `${field} ${i + 1}`, (v) => this._setPoint(i, v))}
                     <button
                       aria-label=${t("later", { field, step: this.step })}
                       @click=${() =>
@@ -631,7 +766,7 @@ export class ZeitwerkDayEditor extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 6px;
-        padding-top: 24px;
+        padding-top: 32px;
       }
       .bar {
         position: relative;
@@ -689,15 +824,33 @@ export class ZeitwerkDayEditor extends LitElement {
         pointer-events: none;
         z-index: 1;
       }
-      .rp-dot {
+      .rp-knob {
         position: absolute;
-        top: -5px;
-        left: -5px;
-        width: 8px;
-        height: 8px;
-        border-radius: 4px;
+        top: -22px;
+        left: -15px;
+        width: 30px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: auto;
+        cursor: ew-resize;
+        touch-action: none;
+        border-radius: 13px;
+      }
+      .rp-knob:focus-visible {
+        outline: 2px solid var(--zw-accent);
+      }
+      .rp-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 7px;
         border: 2px solid var(--zw-text);
         background: var(--zw-bg);
+      }
+      .rp-knob:hover .rp-dot,
+      .rp-knob:active .rp-dot {
+        background: var(--zw-text);
       }
       .rhead {
         display: flex;
@@ -820,6 +973,15 @@ export class ZeitwerkDayEditor extends LitElement {
         display: flex;
         gap: 10px;
       }
+      .row .field {
+        min-width: 0;
+      }
+      .row .stepper {
+        padding: 0 2px;
+      }
+      .row .time {
+        font-size: 16px;
+      }
       .stepper {
         display: flex;
         align-items: center;
@@ -830,9 +992,31 @@ export class ZeitwerkDayEditor extends LitElement {
         background: var(--zw-surface);
       }
       .time {
+        flex: 1;
+        width: 5.2ch;
+        min-width: 0;
+        padding: 6px 2px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
         font-size: 18px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
+        text-align: center;
+        cursor: text;
+      }
+      .time:hover {
+        border-bottom-color: color-mix(in srgb, var(--zw-text) 25%, transparent);
+      }
+      .time:focus {
+        outline: none;
+        border-bottom-color: var(--zw-accent);
+      }
+      .time[aria-invalid] {
+        border-bottom-color: var(--zw-danger);
       }
       .textdanger {
         align-self: flex-start;
