@@ -95,12 +95,10 @@ export function zonedClock(iso: string, timeZone: string | undefined): string {
   return formatTime(minutes);
 }
 
-export const DAY_MS = 86_400_000;
-
 /**
  * Clock time of an ISO timestamp for "from …" / "until …" texts: "05:15" when
- * it is less than 24 h ahead (unambiguous), otherwise with the short weekday
- * ("Mo 05:15").
+ * it is today (in the given time zone), otherwise with the short weekday
+ * ("Mo 05:15") – also for tomorrow, so a time after midnight is unambiguous.
  */
 export function zonedWhen(
   iso: string,
@@ -112,7 +110,9 @@ export function zonedWhen(
   if (Number.isNaN(date.getTime())) return "";
   const { minutes, weekdayIndex } = zonedNow(timeZone, date);
   const clock = formatTime(minutes);
-  return date.getTime() - now.getTime() < DAY_MS ? clock : `${weekdayShort(weekdayIndex)} ${clock}`;
+  return zonedDay(date, timeZone).day === zonedDay(now, timeZone).day
+    ? clock
+    : `${weekdayShort(weekdayIndex)} ${clock}`;
 }
 
 /** Day number (days since epoch of the local calendar date) and minute of day in a time zone. */

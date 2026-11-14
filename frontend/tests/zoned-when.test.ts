@@ -9,15 +9,14 @@ describe("zonedWhen", () => {
   // Friday 2026-11-13 18:00 CET
   const now = new Date("2026-11-13T17:00:00Z");
 
-  it("shows only the time less than 24 h ahead", () => {
+  it("shows only the time for today", () => {
     expect(zonedWhen("2026-11-13T21:00:00Z", TZ, short, now)).toBe("22:00");
-    // tomorrow 05:15 is still unambiguous
-    expect(zonedWhen("2026-11-14T04:15:00Z", TZ, short, now)).toBe("05:15");
-    expect(zonedWhen("2026-11-14T16:59:00Z", TZ, short, now)).toBe("17:59");
+    expect(zonedWhen("2026-11-13T22:59:00Z", TZ, short, now)).toBe("23:59");
   });
 
-  it("adds the short weekday from 24 h on", () => {
-    expect(zonedWhen("2026-11-14T17:00:00Z", TZ, short, now)).toBe("Sa 18:00");
+  it("adds the short weekday after midnight, also within 24 h", () => {
+    expect(zonedWhen("2026-11-13T23:00:00Z", TZ, short, now)).toBe("Sa 00:00");
+    expect(zonedWhen("2026-11-14T04:15:00Z", TZ, short, now)).toBe("Sa 05:15");
     expect(zonedWhen("2026-11-16T04:15:00Z", TZ, short, now)).toBe("Mo 05:15");
   });
 

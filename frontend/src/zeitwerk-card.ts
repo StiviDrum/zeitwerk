@@ -542,7 +542,7 @@ export class ZeitwerkCard extends LitElement {
     return formatValue(q.qv, q.control, l.lang, [l.t("on"), l.t("off")]);
   }
 
-  /** "05:15", or "Mo 05:15" when 24 h or more ahead. */
+  /** "05:15" today, otherwise "Mo 05:15". */
   private _when(iso: string): string {
     return zonedWhen(iso, this.hass?.config?.time_zone, (i) => this._l.weekdayShort(i));
   }
