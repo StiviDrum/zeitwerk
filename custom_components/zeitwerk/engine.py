@@ -31,7 +31,7 @@ from homeassistant.util import dt as dt_util
 from .compat import vol
 from .executor import ProfileExecutor
 from .holidays import HolidayRegistry, HolidaySource
-from .manual import TargetWatch, build_watch, is_manual_change
+from .manual import STATE, TargetWatch, build_watch, is_manual_change
 from .model import (
     MANUAL_IGNORE,
     MANUAL_MINUTES_PREFIX,
@@ -75,6 +75,8 @@ class PlanStatus:
     manual_since: datetime | None = None
     manual_until: datetime | None = None
     manual_entity: str | None = None
+    # Watched attribute of manual_entity (None = its state).
+    manual_attribute: str | None = None
     error: str | None = None
 
 
@@ -464,11 +466,14 @@ class PlanRunner:
 
         manual, expired = self._manual(now)
         status.manual_since = status.manual_until = status.manual_entity = None
+        status.manual_attribute = None
         if manual is not None:
             # Keep the manual value: no apply, not even a re-apply.
             status.manual_since = dt_util.parse_datetime(manual.get("since") or "")
             status.manual_until = dt_util.parse_datetime(manual.get("until") or "")
             status.manual_entity = manual.get("entity_id")
+            attribute = self._watch.watched.get(status.manual_entity or "")
+            status.manual_attribute = None if attribute in (None, STATE) else attribute
         else:
             self._apply(status.profile, force=force_apply or expired)
         earlier = [forced[1]] if forced else []

@@ -59,6 +59,8 @@ export interface PlanStatus {
   manual_since?: string | null;
   manual_until?: string | null;
   manual_entity?: string | null;
+  /** Watched attribute of manual_entity (null = its state). */
+  manual_attribute?: string | null;
   error: string | null;
 }
 
@@ -134,6 +136,7 @@ export interface HomeAssistant {
   connection: HassConnection;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   formatEntityState?(entity: HassEntity, state?: string): string;
+  formatEntityAttributeValue?(entity: HassEntity, attribute: string, value?: unknown): string;
   callService(
     domain: string,
     service: string,

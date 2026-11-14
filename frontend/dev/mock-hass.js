@@ -89,6 +89,8 @@ let plan = {
 
 const today = (new Date().getDay() + 6) % 7;
 let manual = params.get("manual") === "1";
+// ?far=1: next change ~2.5 days ahead (weekday shown)
+const nextIn = (params.get("far") === "1" ? 3600 : 47) * 60_000;
 const status = () => {
   const actResults = plan.activation.conditions.map((c) => states[c.entity_id]?.state === c.state);
   const active = plan.activation.match === "any" ? actResults.some(Boolean) : actResults.every(Boolean);
@@ -107,12 +109,13 @@ const status = () => {
     active,
     activation_results: actResults,
     override_results: ovResults,
-    next_change: ov || !active ? null : new Date(Date.now() + 47 * 60_000).toISOString(),
+    next_change: ov || !active ? null : new Date(Date.now() + nextIn).toISOString(),
     next_profile: ov || !active ? null : "comfort",
     forced_until: null,
     manual_since: manual ? new Date(Date.now() - 50 * 60_000).toISOString() : null,
-    manual_until: manual ? new Date(Date.now() + 47 * 60_000).toISOString() : null,
+    manual_until: manual ? new Date(Date.now() + nextIn).toISOString() : null,
     manual_entity: manual ? "input_number.temperaturspeicher_wohnzimmer" : null,
+    manual_attribute: null,
     error: null,
   };
 };
@@ -161,6 +164,9 @@ const states = {
 
 const log = (...args) => console.log("[mock-hass]", ...args);
 window.mockCalls = [];
+
+// Manually changed value differs from the scheduled one.
+if (manual) states["input_number.temperaturspeicher_wohnzimmer"].state = "21.5";
 
 const hass = {
   states,

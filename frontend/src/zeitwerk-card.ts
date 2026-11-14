@@ -30,7 +30,7 @@ import {
   formatTime,
   minutesFromToday,
   parseTime,
-  zonedClock,
+  zonedWhen,
   zonedNow,
 } from "./time";
 import {
@@ -40,6 +40,7 @@ import {
   type HomeAssistant,
   type Plan,
   type PlanEvent,
+  type PlanStatus,
   type Profile,
   type ZeitwerkCardConfig,
 } from "./types";
@@ -541,6 +542,27 @@ export class ZeitwerkCard extends LitElement {
     return formatValue(q.qv, q.control, l.lang, [l.t("on"), l.t("off")]);
   }
 
+  /** "05:15", or "Mo 05:15" when 24 h or more ahead. */
+  private _when(iso: string): string {
+    return zonedWhen(iso, this.hass?.config?.time_zone, (i) => this._l.weekdayShort(i));
+  }
+
+  /** Current value of the manually changed target (e.g. "21.5 °C"). */
+  private _manualValue(status: PlanStatus): string {
+    const entity = status.manual_entity ? this.hass?.states[status.manual_entity] : undefined;
+    if (!entity) return "";
+    const attr = status.manual_attribute;
+    if (attr) {
+      const raw = entity.attributes?.[attr];
+      if (raw === undefined || raw === null) return "";
+      return (
+        this.hass?.formatEntityAttributeValue?.(entity, attr) ??
+        `${raw}${attr.includes("temp") && this.hass?.config?.unit_system?.temperature ? ` ${this.hass.config.unit_system.temperature}` : ""}`
+      );
+    }
+    return this.hass?.formatEntityState?.(entity) ?? entity.state;
+  }
+
   private _profile(id: string | null | undefined): Profile | undefined {
     return this._plan?.profiles.find((p) => p.id === id);
   }
@@ -855,8 +877,7 @@ export class ZeitwerkCard extends LitElement {
     if (!plan.enabled) sub = l.t("plan_off");
     else if (status && !status.active && !current) sub = l.t("plan_paused");
     else if (status?.manual_since) {
-      const entity = status.manual_entity ? this.hass?.states[status.manual_entity] : undefined;
-      const value = entity ? (this.hass?.formatEntityState?.(entity) ?? entity.state) : "";
+      const value = this._manualValue(status);
       sub = value ? `${l.t("manual_cap")} · ${value}` : l.t("manual_cap");
     } else {
       const value = current ? this._valueLabel(current) : "";
@@ -864,17 +885,20 @@ export class ZeitwerkCard extends LitElement {
     }
     let whenText = "";
     if (status?.manual_since && status.manual_until) {
-      whenText = l.t("until_time", { time: zonedClock(status.manual_until, tz) });
+      whenText = l.t("until_time", { time: this._when(status.manual_until) });
     } else if (status?.next_change) {
       const mins = Math.round((new Date(status.next_change).getTime() - Date.now()) / 60_000);
       whenText =
         mins >= 0 && mins < 60
           ? l.t("in_minutes", { n: Math.max(1, mins) })
-          : l.t("from_time", { time: zonedClock(status.next_change, tz) });
+          : l.t("from_time", { time: this._when(status.next_change) });
     }
-    const next = status?.next_change
+    let next = status?.next_change
       ? plan.profiles.find((p) => p.id === status.next_profile)
       : undefined;
+    if (status?.manual_since && status.manual_until && status.manual_until !== status.next_change) {
+      next = current; // a resume point / manual window ends before the next block
+    }
     const nextValue = next ? this._valueLabel(next) || next.name : "";
     const nextColor = next && next.id !== plan.default_profile ? profileColor(plan, next) : "";
     const segs = (this._segments[plan.id] ?? [])
@@ -906,7 +930,9 @@ export class ZeitwerkCard extends LitElement {
         </span>
         <span class="tl-text">
           <span class="tl-name">${plan.name}</span>
-          <span class="tl-sub" style=${isDefault ? "" : `color:${color}`}>${sub}</span>
+          <span class="tl-sub" style=${isDefault || status?.manual_since ? "" : `color:${color}`}
+            >${sub}</span
+          >
         </span>
         ${
           whenText
@@ -1109,15 +1135,20 @@ export class ZeitwerkCard extends LitElement {
     } else if (!plan.enabled) {
       subline = l.t("plan_off");
     } else if (current) {
-      const value = this._valueLabel(current);
+      const manual = !!status?.manual_since;
+      const value = manual ? this._manualValue(status!) : this._valueLabel(current);
+      const name = manual ? l.t("manual_cap") : current.name;
       const next = this._profile(status?.next_profile);
-      const tz = this.hass?.config?.time_zone;
-      const nextText =
-        status?.next_change && next
-          ? ` · ${l.t("from_time", { time: zonedClock(status.next_change, tz) })} → ${this._valueLabel(next) || next.name}`
-          : "";
-      subline = html`<span class="current" style="color:${color}"
-          >${current.name}${value ? ` ${value}` : ""}</span
+      let nextText = "";
+      if (manual && status?.manual_until) {
+        // Resume point or end of the manual window may come before the next block.
+        const target = status.next_change === status.manual_until ? next : current;
+        nextText = ` · ${l.t("until_time", { time: this._when(status.manual_until) })}${target ? ` → ${this._valueLabel(target) || target.name}` : ""}`;
+      } else if (status?.next_change && next) {
+        nextText = ` · ${l.t("from_time", { time: this._when(status.next_change) })} → ${this._valueLabel(next) || next.name}`;
+      }
+      subline = html`<span class="current" style="color:${manual ? "var(--zw-text)" : color}"
+          >${name}${value ? ` ${value}` : ""}</span
         >${nextText}`;
     } else if (status?.source === "inactive") {
       subline = this._pausedText(plan);
@@ -1155,15 +1186,12 @@ export class ZeitwerkCard extends LitElement {
     const l = this._l;
     const status = plan.status;
     if (!status || !plan.enabled || status.error || !status.active) return nothing;
-    const tz = this.hass?.config?.time_zone;
     const items: { icon: string; text: string; color?: string }[] = [];
     const source = status.source ?? "";
     if (status.manual_since) {
       items.push({
         icon: "mdi:hand-back-right-outline",
-        text: status.manual_until
-          ? l.t("manual_until", { time: zonedClock(status.manual_until, tz) })
-          : l.t("manual"),
+        text: l.t("manual"), // "until …" is in the header line above
       });
     } else if (status.forced_until) {
       const forced = this._profile(status.profile);
@@ -1171,7 +1199,7 @@ export class ZeitwerkCard extends LitElement {
         icon: "mdi:timer-outline",
         text: l.t("forced_until", {
           profile: forced?.name ?? "",
-          time: zonedClock(status.forced_until, tz),
+          time: this._when(status.forced_until),
         }),
         color: forced ? profileColor(plan, forced) : undefined,
       });

@@ -44,6 +44,7 @@ async def test_until_next_holds_until_profile_change(
     assert status.manual_since == at(WED, 17, 40)
     assert status.manual_until == at(WED, 22)
     assert status.manual_entity == "input_number.temperaturspeicher_wohnzimmer"
+    assert status.manual_attribute is None  # the number's state is the value
     state = hass.states.get("sensor.zeitwerk_wohnzimmer_heizung_profile")
     assert state.attributes["manual_override"] is True
 

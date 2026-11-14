@@ -48,6 +48,7 @@ def status_dict(runner: PlanRunner | None) -> dict[str, Any] | None:
         "manual_since": s.manual_since.isoformat() if s.manual_since else None,
         "manual_until": s.manual_until.isoformat() if s.manual_until else None,
         "manual_entity": s.manual_entity,
+        "manual_attribute": s.manual_attribute,
         "error": s.error,
     }
 
