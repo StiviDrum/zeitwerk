@@ -167,7 +167,7 @@ What the week view does:
   plan („Vorlage“, the copy starts switched off). A card configured with an
   unknown `plan:` id creates the plan under that id.
 
-Bundle size (1.0.0-rc.6, minified): 187.2 KB, 49.4 KB gzip.
+Bundle size (1.0.0-rc.7, minified): 187.9 KB, 49.7 KB gzip.
 
 ## Repairs
 
@@ -200,7 +200,7 @@ Only the value a profile actually sets is watched (e.g. the climate
 the value of the active profile counts as an echo, not as a manual change.
 `zeitwerk.apply`, `zeitwerk.resume` and `zeitwerk.force_profile` end a manual
 override. The profile sensor then carries `manual_override`, `manual_since`,
-`manual_until`, `manual_entity`.
+`manual_until`, `manual_entity`, `manual_attribute`.
 
 ### Resume points
 
@@ -269,7 +269,7 @@ Full model: [docs/SPEC.md](https://github.com/StiviDrum/zeitwerk/blob/main/docs/
 | Entity | State | Attributes |
 |---|---|---|
 | `switch.zeitwerk_<plan>` | plan enabled | – |
-| `sensor.zeitwerk_<plan>_profile` | current profile name | `profile_id`, `source` (`schedule`, `default`, `override:<id>`, `forced`, `inactive`, `disabled`), `day_type`, `is_holiday`, `forced_until`, `manual_override`, `manual_since`, `manual_until`, `manual_entity`, `error` |
+| `sensor.zeitwerk_<plan>_profile` | current profile name | `profile_id`, `source` (`schedule`, `default`, `override:<id>`, `forced`, `inactive`, `disabled`), `day_type`, `is_holiday`, `forced_until`, `manual_override`, `manual_since`, `manual_until`, `manual_entity`, `manual_attribute` (watched attribute, e.g. `temperature`; missing when the state itself is watched), `error` |
 | `sensor.zeitwerk_<plan>_next_change` | timestamp of next scheduled change (empty while an override is active) | `next_profile`, `next_profile_name` |
 | `binary_sensor.zeitwerk_<plan>_active` | activation conditions met | `match`, `conditions` (each with `result`) |
 

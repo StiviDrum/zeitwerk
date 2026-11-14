@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.7] - 2026-11-14
+
+### Changed
+- Times in "from …" / "until …" texts (next change, manual change, forced
+  profile) show the short weekday when they are 24 h or more ahead
+  ("ab Mo 05:15"); closer times stay plain ("ab 05:15").
+
+### Fixed
+- Card: while a manual change is active, the plan header shows „Manuell“ with
+  the value actually set instead of the scheduled profile; "until …" leads to
+  the profile that takes over (the current one when a resume point ends the
+  change before the next block).
+- Card: manual values of thermostats show the set temperature, not the HVAC
+  mode. The status (websocket + profile sensor) has a new `manual_attribute`.
+
 ## [1.0.0-rc.6] - 2026-11-14
 
 ### Fixed

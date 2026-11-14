@@ -220,3 +220,9 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Steppers fit on 390 px phones (44 px buttons kept).
   - Verified: mock preview with playwright (drag 13:00 → 09:00, typed 15:30/24:00, 7:45, invalid „99“ reverted, ←/→ on the knob, saved payload), no console errors. Tests: `frontend/tests/time-input.test.ts`.
 - [x] Resume knob alignment (2026-11-14): knob, dot and line share one centre (measured in the preview: all at x = 208.91 px = 13:00); drag label beside the line.
+
+## Manual value in the header, weekday for far times (2026-11-14)
+
+- [x] Plan header shows „Manuell <set value>“ during a manual change (was: scheduled profile); timeline row and header use the watched attribute (`manual_attribute`, e.g. `temperature` for `climate`) instead of the entity state.
+- [x] `zonedWhen`: times ≥ 24 h ahead get the short weekday („ab Mo 05:15“), everywhere „ab …“/„bis …“ is shown. Tests: `frontend/tests/zoned-when.test.ts` (24 h boundary, time zone weekday, year end).
+  - Verified: mock preview (manual + far/near next change, header and timeline, no console errors). Not yet in the HA dev instance.
