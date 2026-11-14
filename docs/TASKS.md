@@ -219,3 +219,4 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Time text fields for block start/end and resume points (`parseTimeInput`: „7“, „730“, „7:30“, „7.30“, „24:00“ for ends only); block times clamp at neighbours; invalid input flashes red and reverts.
 - [x] Steppers fit on 390 px phones (44 px buttons kept).
   - Verified: mock preview with playwright (drag 13:00 → 09:00, typed 15:30/24:00, 7:45, invalid „99“ reverted, ←/→ on the knob, saved payload), no console errors. Tests: `frontend/tests/time-input.test.ts`.
+- [x] Resume knob alignment (2026-11-14): knob, dot and line share one centre (measured in the preview: all at x = 208.91 px = 13:00); drag label beside the line.

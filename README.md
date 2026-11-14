@@ -167,7 +167,7 @@ What the week view does:
   plan („Vorlage“, the copy starts switched off). A card configured with an
   unknown `plan:` id creates the plan under that id.
 
-Bundle size (1.0.0-rc.5, minified): 186.8 KB, 49.3 KB gzip.
+Bundle size (1.0.0-rc.6, minified): 187.2 KB, 49.4 KB gzip.
 
 ## Repairs
 

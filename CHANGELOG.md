@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.6] - 2026-11-14
+
+### Fixed
+- Day editor: the resume point knob is centred exactly on its dotted line
+  (it sat 1 px off and the line did not reach the dot); while dragging, the
+  time label sits beside the line instead of covering the knob.
+
 ## [1.0.0-rc.5] - 2026-11-14
 
 ### Added
