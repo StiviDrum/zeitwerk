@@ -147,7 +147,14 @@ What the week view does:
   everything; the copy starts switched off so two plans never control the
   same entities.
 - A **manual override** shows in the header („manuell bis 22:00“) and as a
-  hatched range in today's row.
+  hatched range in today's row. **„Fortsetzen“** next to it (and the ▷ button
+  in the timeline) ends a manual override or forced profile and returns to
+  the schedule right away (`zeitwerk.resume`).
+- **Resume points** („Rücksetzpunkte“, day editor): times at which a manual
+  change ends and the schedule continues, shown as dotted lines in the week
+  plan and the timeline. „Auch erzwungenes Profil“ lets them end a forced
+  profile, too. They are saved per day and copied with „Tagesplan speichern
+  für“ (Mo–Fr, Sa–So, Alle).
 
 - **New plan** (admins): „+ Neuer Plan“ in the timeline, or when the card has
   no/an unknown plan. Name, icon, tags and the profiles with the same editor
@@ -189,9 +196,33 @@ value by hand (any change whose context does not come from Zeitwerk):
 Only the value a profile actually sets is watched (e.g. the climate
 `temperature` attribute, not `current_temperature`), and a change to exactly
 the value of the active profile counts as an echo, not as a manual change.
-`zeitwerk.apply` and `zeitwerk.force_profile` end a manual override. The
-profile sensor then carries `manual_override`, `manual_since`, `manual_until`,
-`manual_entity`.
+`zeitwerk.apply`, `zeitwerk.resume` and `zeitwerk.force_profile` end a manual
+override. The profile sensor then carries `manual_override`, `manual_since`,
+`manual_until`, `manual_entity`.
+
+### Resume points
+
+A day type can have **resume points**: at these times a manual override ends
+and the current profile is applied again (whichever comes first – resume
+point, profile change or the `minutes:<n>` window). With `resume_forced: true`
+they also end a forced profile. Overrides always keep their priority: a
+resume point never ends an override, so with „Urlaub“ active the away
+profile applies afterwards.
+
+```yaml
+week:
+  day_types:
+    - id: workday
+      name: Werktag
+      days: [mon, tue, wed, thu, fri]
+      blocks: [{ start: "16:00", end: "22:00", profile: comfort }]
+      resume_points: ["13:00", "23:00"]   # hand changes end at 13:00 / 23:00
+      resume_forced: true                 # …and so does a forced profile
+```
+
+Missed while Home Assistant was down → the override ends on the next start.
+DST: a point inside the skipped hour fires at the first valid time after it,
+in the repeated hour only once.
 
 ## Plan format
 
@@ -251,8 +282,9 @@ Full model: [docs/SPEC.md](https://github.com/StiviDrum/zeitwerk/blob/main/docs/
 | `zeitwerk.skip_next` | `plan` | keep the current profile through the next change |
 | `zeitwerk.force_profile` | `plan`, `profile`, optional `duration` | force a profile (default: until the next change) |
 | `zeitwerk.clear_force` | `plan` | end a forced/skipped profile |
-| `zeitwerk.get_plan` | optional `plan` | **response data**: whole plan(s) incl. `days` (blocks per weekday), overrides, activation, holidays, status |
-| `zeitwerk.set_day_plan` | `plan`, `days`, `blocks` | set exactly these blocks on the given days (like the day editor) |
+| `zeitwerk.resume` | optional `plan` (one or a list; empty = all) | end a manual override **and** a forced profile, apply the schedule now (overrides keep priority) |
+| `zeitwerk.get_plan` | optional `plan` | **response data**: whole plan(s) incl. `days` (blocks per weekday), `resume` (resume points per weekday), overrides, activation, holidays, status |
+| `zeitwerk.set_day_plan` | `plan`, `days`, `blocks`, optional `resume_points`, `resume_forced` | set exactly these blocks (and resume points, if given) on the given days (like the day editor) |
 | `zeitwerk.set_override` | `plan`, optional `override_id`, `name`, `profile`, `match`, `conditions`, `position` | create or change an override (position 0 = top) |
 | `zeitwerk.remove_override` | `plan`, `override_id` | delete an override |
 | `zeitwerk.update_plan` | `plan` + any of `name`, `icon`, `tags`, `enabled`, `profiles`, `default_profile`, `activation`, `holidays`, `options` | change parts of a plan (`activation`/`holidays`/`options` are merged) |
@@ -403,6 +435,13 @@ Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis
 zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt
 nichts.
 
+**Rücksetzpunkte** (Tageseditor, je Tag, mit „Tagesplan speichern für“ auf
+mehrere Tage übertragbar): Zu diesen Uhrzeiten endet eine manuelle Änderung,
+und der Zeitplan läuft weiter. „Auch erzwungenes Profil“ beendet dort auch ein
+erzwungenes Profil. Vorrang-Regeln (Urlaub, Abwesend) behalten immer ihren
+Vorrang. **„Fortsetzen“** in der Karte (Dienst `zeitwerk.resume`) kehrt sofort
+zum Zeitplan zurück.
+
 Installation über HACS → Benutzerdefinierte Repositories → Typ *Integration*,
 danach unter *Einstellungen → Geräte & Dienste* „Zeitwerk“ hinzufügen.
 
@@ -410,4 +449,4 @@ Pro Plan gibt es einen Schalter (Plan an/aus), einen Profil-Sensor, einen
 Sensor „Nächster Wechsel“ und einen Binärsensor „Aktiv“. Dienste:
 `zeitwerk.apply` (ohne Plan: alle; setzt nach einer Handänderung wieder die
 Planwerte), `enable`/`disable` (ohne Plan: alle), `set_profile_value`,
-`skip_next`, `force_profile`, `clear_force`.
+`skip_next`, `force_profile`, `clear_force`, `resume`.

@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.4] - 2026-11-14
+
+### Added
+- Resume points („Rücksetzpunkte“) per day type: at these times a manual
+  change ends and the schedule continues; optionally they also end a forced
+  profile (`resume_forced`, „Auch erzwungenes Profil“). Overrides always keep
+  their priority. Edited in the day editor, copied with „Tagesplan speichern
+  für“, shown as dotted lines in the week plan and the timeline.
+- Service `zeitwerk.resume` and a „Fortsetzen“ button (header, timeline):
+  end a manual override and a forced profile, apply the schedule now.
+- `set_day_plan` takes optional `resume_points` / `resume_forced`;
+  `get_plan` returns `resume` per weekday.
+
 ## [1.0.0-rc.3] - 2026-11-05
 
 ### Added

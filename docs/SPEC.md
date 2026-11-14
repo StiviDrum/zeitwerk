@@ -118,6 +118,8 @@ plan:
         days: [mon, tue, wed, thu, fri]
         blocks:
           - { start: "16:00", end: "22:00", profile: comfort }
+        resume_points: ["13:00"]     # optional: Rücksetzpunkte (siehe „Manuelle Änderungen“)
+        resume_forced: false         # optional: Rücksetzpunkte beenden auch ein erzwungenes Profil
       - id: weekend
         name: "Wochenende"
         days: [sat, sun]
@@ -192,6 +194,15 @@ Das Profil wird **nur bei einem Wechsel** angewendet (nicht periodisch), außer 
 
 `manual_override: until_next` – stellt jemand den Zielwert per Hand um, bleibt das bis zum nächsten Profilwechsel bestehen (Verhalten wie ein Thermostat). Erkennung: Zustandsänderung des Ziels mit einem `context`, der nicht von der Integration stammt.
 
+**Rücksetzpunkte** (`resume_points` je Tagestyp, Uhrzeiten `HH:MM`): Zu diesen Zeiten endet eine manuelle Übersteuerung, und das aktuell gültige Profil wird sofort wieder angewendet – unabhängig vom Modus (`until_next`, `minutes:<n>`), je nachdem, was früher kommt. Mit `resume_forced: true` beenden die Rücksetzpunkte dieses Tagestyps auch ein erzwungenes Profil (`force_profile`, `skip_next`).
+
+- Rücksetzpunkte sind keine Profilwechsel und haben keine Farbe/keinen Block; sie gehören zum Tagestyp ihres Kalendertags (Feiertag → Feiertags-Tagestyp).
+- **Vorrang-Regeln haben immer Vorrang:** Ein Rücksetzpunkt beendet nie eine Vorrang-Regel. Ist sie aktiv, gilt nach dem Rücksetzpunkt ihr Profil.
+- Zeitumstellung: Ein Punkt in der übersprungenen Stunde greift beim ersten gültigen Zeitpunkt danach; in der doppelten Stunde nur beim ersten Durchlauf.
+- War HA zum Rücksetzpunkt aus, endet die Übersteuerung beim nächsten Start.
+- Kein zusätzlicher Timer: Der Rücksetzpunkt fließt nur dann in den einen Plan-Timer ein, wenn gerade eine Übersteuerung bzw. ein erzwungenes Profil läuft.
+- `zeitwerk.resume` (Karte: „Fortsetzen“) beendet manuelle Übersteuerung und erzwungenes Profil sofort.
+
 ---
 
 ## 4. Backend (custom_components/zeitwerk)
@@ -245,6 +256,7 @@ Validierung aller Eingaben mit `voluptuous`; Aktionen und Bedingungen mit den HA
 - `zeitwerk.set_profile_value` – Wert in einem Profil ändern (z. B. Komfort auf 21 °C)
 - `zeitwerk.skip_next` – nächsten Wechsel überspringen
 - `zeitwerk.force_profile` – Profil für eine Dauer erzwingen (z. B. „2 h Komfort“)
+- `zeitwerk.resume` – manuelle Übersteuerung und erzwungenes Profil beenden, Zeitplan sofort anwenden (Vorrang-Regeln bleiben)
 
 ### Zeitsteuerung
 
