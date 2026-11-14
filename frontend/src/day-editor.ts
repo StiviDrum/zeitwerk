@@ -88,7 +88,8 @@ export class ZeitwerkDayEditor extends LitElement {
   @state() private _resumeForced = false;
   @state() private _dirty = false;
   @state() private _confirmDiscard = false;
-  @state() private _tip?: { at: number; text: string };
+  /** Live time label while dragging; `side` = resume point (label beside the line). */
+  @state() private _tip?: { at: number; text: string; side?: boolean };
   private _drag?: {
     index: number;
     mode: DragMode;
@@ -258,7 +259,7 @@ export class ZeitwerkDayEditor extends LitElement {
       width: bar.getBoundingClientRect().width,
       original: this._points,
     };
-    this._tip = { at: this._points[index], text: formatTime(this._points[index]) };
+    this._tip = { at: this._points[index], text: formatTime(this._points[index]), side: true };
   }
 
   private _onRpMove(ev: PointerEvent): void {
@@ -270,7 +271,7 @@ export class ZeitwerkDayEditor extends LitElement {
     const target = Math.round((drag.original[drag.index] + delta) / this.step) * this.step;
     const points = moveResumePoint(drag.original, drag.index, target);
     if (!points) return; // another point already sits there
-    this._tip = { at: points[drag.index], text: formatTime(points[drag.index]) };
+    this._tip = { at: points[drag.index], text: formatTime(points[drag.index]), side: true };
     this._changeResume(points);
   }
 
@@ -468,7 +469,12 @@ export class ZeitwerkDayEditor extends LitElement {
         )}
         ${
           this._tip
-            ? html`<div class="tip" style="left:${pct(this._tip.at)}%">${this._tip.text}</div>`
+            ? html`<div
+                class="tip ${this._tip.side ? `side ${this._tip.at > MINUTES_PER_DAY / 2 ? "left" : ""}` : ""}"
+                style="left:${pct(this._tip.at)}%"
+              >
+                ${this._tip.text}
+              </div>`
             : nothing
         }
       </div>
@@ -814,36 +820,40 @@ export class ZeitwerkDayEditor extends LitElement {
       .handle.end {
         right: -5px;
       }
+      /* 2 px dotted line centred on the time; it starts at the knob's centre. */
       .rp {
         position: absolute;
-        top: -6px;
+        top: -16px;
         bottom: -6px;
-        width: 0;
+        width: 2px;
         margin-left: -1px;
-        border-left: 2px dotted var(--zw-text);
+        background: repeating-linear-gradient(to bottom, var(--zw-text) 0 2px, transparent 2px 4px);
         pointer-events: none;
         z-index: 1;
       }
+      /* Knob (hit area) and dot share their centre with the line's top end. */
       .rp-knob {
         position: absolute;
-        top: -22px;
-        left: -15px;
-        width: 30px;
-        height: 26px;
+        top: 0;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 32px;
+        height: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
         pointer-events: auto;
         cursor: ew-resize;
         touch-action: none;
-        border-radius: 13px;
+        border-radius: 14px;
       }
       .rp-knob:focus-visible {
         outline: 2px solid var(--zw-accent);
       }
       .rp-dot {
-        width: 10px;
-        height: 10px;
+        box-sizing: border-box;
+        width: 14px;
+        height: 14px;
         border-radius: 7px;
         border: 2px solid var(--zw-text);
         background: var(--zw-bg);
@@ -891,6 +901,14 @@ export class ZeitwerkDayEditor extends LitElement {
         margin: 0;
         accent-color: var(--zw-accent);
         cursor: pointer;
+      }
+      .tip.side {
+        bottom: auto;
+        top: 50%;
+        transform: translate(8px, -50%);
+      }
+      .tip.side.left {
+        transform: translate(calc(-100% - 8px), -50%);
       }
       .tip {
         position: absolute;
