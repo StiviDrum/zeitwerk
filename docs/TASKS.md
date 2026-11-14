@@ -203,3 +203,12 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - 2026-11-04: Steven's icon/logo (SVG) in `docs/brand/`; PNGs (icon 256/512, logo 360×128/720×256, light + dark lettering) rendered with Inter and shipped in `custom_components/zeitwerk/brand/` – HA 2026.10 serves local branding of custom integrations (verified: icon on the integrations page). Not yet submitted to home-assistant/brands (HACS list icon) – needs Steven's OK.
 - [ ] HACS default repository submission checklist (ask Steven before submitting)
 - [ ] Release v1.0.0
+
+## Resume points and resume button (2026-11-14)
+
+- [x] Day types get `resume_points` (HH:MM) and `resume_forced`; stored only when set (no storage migration). Schema sorts/deduplicates, rejects 24:00.
+- [x] Engine: a resume point since the start of a manual change ends it and re-applies the current profile; with `resume_forced` it also ends a forced/skipped profile (`forced.since` stored). Overrides are never ended. Still one timer per plan (resume point only joins it while a manual/forced state is active). Missed point while HA was down → ends on start.
+- [x] Service `zeitwerk.resume` (manual + forced, overrides keep priority); `set_day_plan` takes `resume_points`/`resume_forced`, `get_plan` returns `resume` per weekday.
+- [x] Card: day editor section „Rücksetzpunkte“ (+ / − / ×, checkbox „Auch erzwungenes Profil“), saved for the selected days and part of day-type regrouping; dotted markers in week plan, timeline and editor bar; „Fortsetzen“ button in the header reason line and the timeline row.
+- [x] Tests: `tests/test_resume.py` (schema, holidays, forced filter, DST spring/autumn, midnight-crossing block, restart, override priority, service, unload), `frontend/tests/resume.test.ts`.
+  - Verified: mock preview (day editor add/check/save for Mo–Fr → payload, markers, resume button → `zeitwerk.resume`, no console errors). Not yet clicked through in the HA dev instance (no login available in this session).
