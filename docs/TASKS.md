@@ -227,3 +227,4 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] `zonedWhen`: times ≥ 24 h ahead get the short weekday („ab Mo 05:15“), everywhere „ab …“/„bis …“ is shown. Tests: `frontend/tests/zoned-when.test.ts` (24 h boundary, time zone weekday, year end).
   - Verified: mock preview (manual + far/near next change, header and timeline, no console errors). Not yet in the HA dev instance.
 - [x] Rule changed (Steven, 2026-11-14): weekday whenever the time is not today, also within 24 h.
+- [x] Checked in the HA dev instance (HA 2026.11.0, 2026-11-14, Saturday 23:05): header „Absenkung 18,0 °C · ab So 08:00“; manual change via `input_number.set_value` → „Manuell 20,0 °C · bis So 08:00 → 21,5 °C“; resume point 23:45 typed in the day editor and saved for Sa+So → „bis 23:45 → 18,0 °C“; „Fortsetzen“ → value back to 18.0; timeline view with „ab Mo 07:30“ for the office. No console errors, no errors in the HA log. Test data restored afterwards.
