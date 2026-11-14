@@ -119,7 +119,8 @@ What the week view does:
   „Ft“ for an own holiday day). **Tap a day** to open the **day editor**: all
   blocks of that day on a 24 h bar – tap a block to select it, tap an empty
   spot or „+ Block“ to add one, drag the handles or the block (snapped to
-  `time_step`), change profile and times, delete. Blocks stay within the day
+  `time_step`), change profile and times (± buttons or type them: „7“, „730“,
+  „7:30“; Enter applies, Esc cancels), delete. Blocks stay within the day
   (0:00–24:00). On **Save** pick further days (Mo–So, quick Mo–Fr / Sa–So /
   Alle) that get exactly this day plan – their old blocks are replaced.
   Internally weekdays with the same plan are grouped into day types
@@ -152,7 +153,8 @@ What the week view does:
   the schedule right away (`zeitwerk.resume`).
 - **Resume points** („Rücksetzpunkte“, day editor): times at which a manual
   change ends and the schedule continues, shown as dotted lines in the week
-  plan and the timeline. „Auch erzwungenes Profil“ lets them end a forced
+  plan and the timeline. Drag the knob above the day bar (or focus it and use
+  ←/→), or type the time. „Auch erzwungenes Profil“ lets them end a forced
   profile, too. They are saved per day and copied with „Tagesplan speichern
   für“ (Mo–Fr, Sa–So, Alle).
 
@@ -165,7 +167,7 @@ What the week view does:
   plan („Vorlage“, the copy starts switched off). A card configured with an
   unknown `plan:` id creates the plan under that id.
 
-Bundle size (1.0.0-rc.4, minified): 182.2 KB, 48.1 KB gzip.
+Bundle size (1.0.0-rc.5, minified): 186.8 KB, 49.3 KB gzip.
 
 ## Repairs
 
@@ -436,7 +438,8 @@ zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt
 nichts.
 
 **Rücksetzpunkte** (Tageseditor, je Tag, mit „Tagesplan speichern für“ auf
-mehrere Tage übertragbar): Zu diesen Uhrzeiten endet eine manuelle Änderung,
+mehrere Tage übertragbar; Griff über der Tagesleiste ziehen oder Uhrzeit
+eintippen): Zu diesen Uhrzeiten endet eine manuelle Änderung,
 und der Zeitplan läuft weiter. „Auch erzwungenes Profil“ beendet dort auch ein
 erzwungenes Profil. Vorrang-Regeln (Urlaub, Abwesend) behalten immer ihren
 Vorrang. **„Fortsetzen“** in der Karte (Dienst `zeitwerk.resume`) kehrt sofort

@@ -212,3 +212,10 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Card: day editor section „Rücksetzpunkte“ (+ / − / ×, checkbox „Auch erzwungenes Profil“), saved for the selected days and part of day-type regrouping; dotted markers in week plan, timeline and editor bar; „Fortsetzen“ button in the header reason line and the timeline row.
 - [x] Tests: `tests/test_resume.py` (schema, holidays, forced filter, DST spring/autumn, midnight-crossing block, restart, override priority, service, unload), `frontend/tests/resume.test.ts`.
   - Verified: mock preview (day editor add/check/save for Mo–Fr → payload, markers, resume button → `zeitwerk.resume`, no console errors). Not yet clicked through in the HA dev instance (no login available in this session).
+
+## Day editor: drag resume points, typed times (2026-11-14)
+
+- [x] Resume point knob above the bar (drag, snap to `time_step`, live tooltip, refuses taken times; keyboard ←/→).
+- [x] Time text fields for block start/end and resume points (`parseTimeInput`: „7“, „730“, „7:30“, „7.30“, „24:00“ for ends only); block times clamp at neighbours; invalid input flashes red and reverts.
+- [x] Steppers fit on 390 px phones (44 px buttons kept).
+  - Verified: mock preview with playwright (drag 13:00 → 09:00, typed 15:30/24:00, 7:45, invalid „99“ reverted, ←/→ on the knob, saved payload), no console errors. Tests: `frontend/tests/time-input.test.ts`.

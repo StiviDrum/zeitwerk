@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.5] - 2026-11-14
+
+### Added
+- Day editor: resume points can be dragged on the day bar (knob above the
+  bar, ←/→ when focused).
+- Day editor: block start/end and resume point times can be typed („7“,
+  „730“, „7:30“, „07:30“, „24:00“ for an end); Enter or leaving the field
+  applies, Esc restores. Typed block times stop at the neighbouring blocks.
+
+### Fixed
+- Day editor: the Beginn/Ende steppers no longer overflow the panel on narrow
+  phones.
+
 ## [1.0.0-rc.4] - 2026-11-14
 
 ### Added
