@@ -110,6 +110,16 @@
         }
       }
     },
+    "resume": {
+      "name": "Resume schedule",
+      "description": "Ends a manual override and a forced profile and applies the schedule right away. Active overrides keep their priority. Disabled plans are skipped.",
+      "fields": {
+        "plan": {
+          "name": "Plans",
+          "description": "One or more plan ids, e.g. wohnzimmer_heizung. Empty: all plans."
+        }
+      }
+    },
     "clear_force": {
       "name": "Clear forced profile",
       "description": "Ends a forced or skipped profile and returns to the schedule.",
@@ -145,6 +155,14 @@
         "blocks": {
           "name": "Blocks",
           "description": "List of objects with start (HH:MM), end (HH:MM) and profile (profile id), e.g. start 06:00, end 08:00, profile comfort."
+        },
+        "resume_points": {
+          "name": "Resume points",
+          "description": "Optional: times (HH:MM) at which a manual override ends and the schedule resumes, e.g. [\"13:00\", \"22:00\"]. Replaces the resume points of the given days; left out they stay unchanged, an empty list removes them."
+        },
+        "resume_forced": {
+          "name": "Also end forced profile",
+          "description": "Optional: whether the resume points of these days also end a forced profile."
         }
       }
     },

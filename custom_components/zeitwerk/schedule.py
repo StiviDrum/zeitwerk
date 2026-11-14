@@ -9,6 +9,9 @@ Rules (docs/SPEC.md §3):
   runs across midnight and keeps the day type of its start day.
 - Blocks of the current day win over a block spilling over from yesterday.
 - Outside of all blocks the plan's ``default_profile`` applies.
+- Resume points are wall times on their day type (no spill-over). They do not
+  change the scheduled profile; they end a manual change (and optionally a
+  forced profile) so the schedule takes over again.
 - DST: wall times that do not exist (spring forward) start at the first valid
   instant after the gap; repeated wall times (fall back) use the first
   occurrence for boundaries.
@@ -230,6 +233,61 @@ def next_change(
         if profile != current:
             return point, profile
     return None
+
+
+def iter_resume_points(
+    plan: Plan,
+    start: datetime,
+    end: datetime,
+    tz: tzinfo,
+    is_holiday: HolidayFn,
+    *,
+    forced: bool = False,
+) -> Iterator[datetime]:
+    """Resume points (UTC) in (start, end], in order.
+
+    ``forced=True`` yields only points of day types that also end a forced
+    profile (``resume_forced``).
+    """
+    start, end = start.astimezone(UTC), end.astimezone(UTC)
+    day = start.astimezone(tz).date()
+    last = end.astimezone(tz).date()
+    previous: datetime | None = None
+    while day <= last:
+        day_type, _ = day_type_for_date(plan, day, is_holiday)
+        if day_type is not None and (day_type.resume_forced or not forced):
+            for minute in day_type.resume_minutes:
+                point = local_instant(day, minute, tz)
+                if point == previous:
+                    continue  # two points inside one spring-forward gap
+                previous = point
+                if start < point <= end:
+                    yield point
+                elif point > end:
+                    return
+        day += timedelta(days=1)
+
+
+def next_resume_point(
+    plan: Plan,
+    now: datetime,
+    tz: tzinfo,
+    is_holiday: HolidayFn,
+    *,
+    forced: bool = False,
+) -> datetime | None:
+    """First resume point (UTC) after ``now`` (``None`` if there is none)."""
+    return next(
+        iter_resume_points(
+            plan,
+            now,
+            now + timedelta(days=SEARCH_DAYS),
+            tz,
+            is_holiday,
+            forced=forced,
+        ),
+        None,
+    )
 
 
 def preview(

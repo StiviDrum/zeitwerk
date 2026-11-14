@@ -66,6 +66,10 @@ def _start_time(value: Any) -> str:
     return value
 
 
+def _sorted_unique(values: list[str]) -> list[str]:
+    return sorted(set(values))
+
+
 def _when_inactive(value: Any) -> str:
     value = cv.string(value)
     if value == WHEN_INACTIVE_NONE:
@@ -103,6 +107,10 @@ DAY_TYPE_SCHEMA = vol.Schema(
         vol.Required("name"): cv.string,
         vol.Optional("days", default=list): vol.All(cv.ensure_list, [vol.In(WEEKDAYS)]),
         vol.Optional("blocks", default=list): [BLOCK_SCHEMA],
+        vol.Optional("resume_points"): vol.All(
+            cv.ensure_list, [_start_time], _sorted_unique
+        ),
+        vol.Optional("resume_forced"): cv.boolean,
     }
 )
 

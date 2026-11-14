@@ -78,6 +78,15 @@ force_profile:
       selector:
         duration:
 
+resume:
+  fields:
+    plan:
+      required: false
+      example: wohnzimmer_heizung
+      selector:
+        text:
+          multiple: true
+
 clear_force:
   fields:
     plan:
@@ -121,6 +130,16 @@ set_day_plan:
       example: '[{"start": "06:00", "end": "08:00", "profile": "comfort"}, {"start": "16:00", "end": "22:00", "profile": "comfort"}]'
       selector:
         object:
+    resume_points:
+      required: false
+      example: '["13:00", "22:00"]'
+      selector:
+        object:
+    resume_forced:
+      required: false
+      example: false
+      selector:
+        boolean:
 
 set_override:
   fields:

@@ -110,6 +110,16 @@
         }
       }
     },
+    "resume": {
+      "name": "Zeitplan fortsetzen",
+      "description": "Beendet eine manuelle Übersteuerung und ein erzwungenes Profil und wendet sofort den Zeitplan an. Aktive Vorrang-Regeln behalten ihren Vorrang. Ausgeschaltete Pläne werden übersprungen.",
+      "fields": {
+        "plan": {
+          "name": "Pläne",
+          "description": "Eine oder mehrere Plan-IDs, z. B. wohnzimmer_heizung. Leer: alle Pläne."
+        }
+      }
+    },
     "clear_force": {
       "name": "Erzwungenes Profil aufheben",
       "description": "Beendet ein erzwungenes oder übersprungenes Profil, der Plan läuft normal weiter.",
@@ -145,6 +155,14 @@
         "blocks": {
           "name": "Blöcke",
           "description": "Liste von Objekten mit start (HH:MM), end (HH:MM) und profile (Profil-ID), z. B. start 06:00, end 08:00, profile comfort."
+        },
+        "resume_points": {
+          "name": "Rücksetzpunkte",
+          "description": "Optional: Uhrzeiten (HH:MM), zu denen eine manuelle Übersteuerung endet und der Zeitplan fortgesetzt wird, z. B. [\"13:00\", \"22:00\"]. Ersetzt die Rücksetzpunkte der angegebenen Tage; weggelassen bleiben sie unverändert, eine leere Liste entfernt sie."
+        },
+        "resume_forced": {
+          "name": "Auch erzwungenes Profil",
+          "description": "Optional: Ob die Rücksetzpunkte dieser Tage auch ein erzwungenes Profil beenden."
         }
       }
     },

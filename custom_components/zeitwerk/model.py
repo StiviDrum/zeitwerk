@@ -91,6 +91,15 @@ class DayType:
     name: str
     days: list[str] = field(default_factory=list)
     blocks: list[Block] = field(default_factory=list)
+    # Wall times (HH:MM) that end a manual change and resume the schedule.
+    resume_points: list[str] = field(default_factory=list)
+    # Whether these resume points also end a forced profile.
+    resume_forced: bool = False
+
+    @property
+    def resume_minutes(self) -> list[int]:
+        """Resume points in minutes since midnight (sorted)."""
+        return sorted(parse_hhmm(p) for p in self.resume_points)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DayType:
@@ -100,16 +109,23 @@ class DayType:
             name=data.get("name", data["id"]),
             days=list(data.get("days", [])),
             blocks=[Block.from_dict(b) for b in data.get("blocks", [])],
+            resume_points=list(data.get("resume_points", [])),
+            resume_forced=bool(data.get("resume_forced", False)),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return storage dict."""
-        return {
+        """Return storage dict (resume settings only when set)."""
+        data: dict[str, Any] = {
             "id": self.id,
             "name": self.name,
             "days": list(self.days),
             "blocks": [b.to_dict() for b in self.blocks],
         }
+        if self.resume_points:
+            data["resume_points"] = list(self.resume_points)
+        if self.resume_forced:
+            data["resume_forced"] = True
+        return data
 
 
 @dataclass(slots=True)

@@ -27,7 +27,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .compat import vol
 from .const import DOMAIN
-from .days import DAY_KEYS, apply_day_plan, week_to_days
+from .days import DAY_KEYS, apply_day_plan, week_to_days, week_to_resume
 from .engine import PlanRunner
 from .manager import PlanNotFoundError, ZeitwerkManager
 from .model import MATCH_ALL, MATCH_ANY
@@ -39,6 +39,7 @@ SERVICE_SET_PROFILE_VALUE = "set_profile_value"
 SERVICE_SKIP_NEXT = "skip_next"
 SERVICE_FORCE_PROFILE = "force_profile"
 SERVICE_CLEAR_FORCE = "clear_force"
+SERVICE_RESUME = "resume"
 SERVICE_GET_PLAN = "get_plan"
 SERVICE_SET_DAY_PLAN = "set_day_plan"
 SERVICE_SET_OVERRIDE = "set_override"
@@ -130,6 +131,11 @@ def plan_overview(manager: ZeitwerkManager, plan_id: str) -> dict[str, Any]:
     return {
         **data,
         "days": week_to_days(data),
+        "resume": {
+            day: settings
+            for day, settings in week_to_resume(data).items()
+            if settings["resume_points"]
+        },
         "status": status_dict(manager.runners.get(plan_id)),
     }
 
@@ -195,6 +201,12 @@ def async_setup_services(hass: HomeAssistant) -> None:
         except HomeAssistantError as err:
             raise ServiceValidationError(str(err)) from err
 
+    async def resume(call: ServiceCall) -> None:
+        manager = get_manager(hass)
+        for plan_id in _plan_ids(hass, call):
+            if manager.plans[plan_id].enabled:
+                await _runner(hass, plan_id).async_resume()
+
     async def clear_force(call: ServiceCall) -> None:
         await _runner(hass, call.data[ATTR_PLAN]).async_clear_forced()
 
@@ -216,7 +228,12 @@ def async_setup_services(hass: HomeAssistant) -> None:
         data = _plan(manager, call.data[ATTR_PLAN])
         try:
             data = apply_day_plan(
-                data, call.data["days"], call.data["blocks"], hass.config.language
+                data,
+                call.data["days"],
+                call.data["blocks"],
+                hass.config.language,
+                resume_points=call.data.get("resume_points"),
+                resume_forced=call.data.get("resume_forced"),
             )
         except (ValueError, KeyError) as err:
             raise ServiceValidationError(str(err)) from err
@@ -328,6 +345,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
                     cv.ensure_list, [vol.In(DAY_KEYS)], vol.Length(min=1)
                 ),
                 vol.Required("blocks"): vol.All(cv.ensure_list, [_BLOCK]),
+                vol.Optional("resume_points"): vol.All(cv.ensure_list, [cv.string]),
+                vol.Optional("resume_forced"): cv.boolean,
             }
         ),
     )
@@ -419,3 +438,4 @@ def async_setup_services(hass: HomeAssistant) -> None:
         ),
     )
     hass.services.async_register(DOMAIN, SERVICE_CLEAR_FORCE, clear_force, _PLAN_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_RESUME, resume, _PLANS_SCHEMA)

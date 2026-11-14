@@ -2,7 +2,9 @@
 
 Priority (docs/SPEC.md §3): disabled -> activation -> forced -> overrides ->
 schedule block -> default profile. A profile is applied only when the effective
-profile changes (or when explicitly re-applied).
+profile changes (or when explicitly re-applied). Resume points of the day type
+end a manual change (and, if configured, a forced profile); they never touch
+overrides.
 """
 
 from __future__ import annotations
@@ -38,8 +40,10 @@ from .model import (
 )
 from .schedule import (
     HolidayFn,
+    iter_resume_points,
     next_change,
     next_evaluation,
+    next_resume_point,
     no_holidays,
     scheduled_at,
 )
@@ -279,6 +283,10 @@ class PlanRunner:
         if not manual:
             return None, False
         mode = self.plan.options.manual_override
+        if self._resumed_since(manual, now, forced=False):
+            _LOGGER.debug("Plan %s: resume point ends manual change", self.plan.id)
+            self._clear_manual()
+            return None, True
         if mode == MANUAL_IGNORE or self.status.profile is None:
             valid = False
         elif self._manual_minutes() is not None:
@@ -290,6 +298,37 @@ class PlanRunner:
             return manual, False
         self._clear_manual()
         return None, self._manual_minutes() is not None
+
+    def _resumed_since(
+        self, entry: dict[str, Any], now: datetime, *, forced: bool
+    ) -> bool:
+        """Whether a resume point passed since ``entry['since']`` (up to now)."""
+        since = dt_util.parse_datetime(entry.get("since") or "")
+        if since is None:
+            return False
+        return (
+            next(
+                iter_resume_points(
+                    self.plan,
+                    since,
+                    now,
+                    dt_util.get_default_time_zone(),
+                    self.is_holiday,
+                    forced=forced,
+                ),
+                None,
+            )
+            is not None
+        )
+
+    def _next_resume(self, now: datetime, *, forced: bool) -> datetime | None:
+        return next_resume_point(
+            self.plan,
+            now,
+            dt_util.get_default_time_zone(),
+            self.is_holiday,
+            forced=forced,
+        )
 
     @callback
     def _async_holidays_changed(self) -> None:
@@ -339,10 +378,13 @@ class PlanRunner:
             until is None
             or until <= now
             or self.plan.profile(forced["profile"]) is None
+            or self._resumed_since(forced, now, forced=True)
         ):
             self.runtime.pop("forced", None)
             self._on_runtime_changed()
             return None
+        if (resume := self._next_resume(now, forced=True)) is not None:
+            until = min(until, resume)
         return forced["profile"], until
 
     async def async_evaluate(
@@ -432,6 +474,10 @@ class PlanRunner:
         earlier = [forced[1]] if forced else []
         if manual is not None and status.manual_until and self._manual_minutes():
             earlier.append(status.manual_until)
+        if manual is not None and (resume := self._next_resume(now, forced=False)):
+            earlier.append(resume)
+            if status.manual_until is None or resume < status.manual_until:
+                status.manual_until = resume
         self._schedule_timer(now, min(earlier, default=None))
         self._on_update(self)
 
@@ -491,7 +537,11 @@ class PlanRunner:
             until = change[0]
         else:
             until = now + duration
-        self.runtime["forced"] = {"profile": profile_id, "until": until.isoformat()}
+        self.runtime["forced"] = {
+            "profile": profile_id,
+            "since": now.isoformat(),
+            "until": until.isoformat(),
+        }
         self._on_runtime_changed()
         await self.async_evaluate(
             refresh_activation=False, force_apply=True, clear_manual=True
@@ -508,10 +558,22 @@ class PlanRunner:
         until = second[0] if second else first[0] + timedelta(days=1)
         self.runtime["forced"] = {
             "profile": self.status.profile,
+            "since": now.isoformat(),
             "until": until.isoformat(),
         }
         self._on_runtime_changed()
         await self.async_evaluate(refresh_activation=False)
+
+    async def async_resume(self) -> None:
+        """End a manual change and a forced profile, apply the schedule now.
+
+        Overrides keep their priority: if one is active, its profile applies.
+        """
+        if self.runtime.pop("forced", None) is not None:
+            self._on_runtime_changed()
+        await self.async_evaluate(
+            refresh_activation=True, force_apply=True, clear_manual=True
+        )
 
     async def async_clear_forced(self) -> None:
         """Remove a forced profile."""

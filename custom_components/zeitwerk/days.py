@@ -122,6 +122,49 @@ def week_to_days(plan: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
     return days
 
 
+def week_to_resume(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Resume settings per weekday (and the own holiday day)."""
+    result: dict[str, dict[str, Any]] = {}
+    for weekday in WEEKDAYS:
+        result[weekday] = _resume_of(_day_type_for(plan, weekday))
+    holiday_id = _holiday_type_id(plan)
+    holiday = next(
+        (d for d in plan["week"]["day_types"] if d["id"] == holiday_id), None
+    )
+    if holiday is not None:
+        result[HOLIDAY] = _resume_of(holiday)
+    return result
+
+
+def _resume_of(day_type: dict[str, Any] | None) -> dict[str, Any]:
+    day_type = day_type or {}
+    return {
+        "resume_points": sorted(set(day_type.get("resume_points") or [])),
+        "resume_forced": bool(day_type.get("resume_forced", False)),
+    }
+
+
+def _resume_fields(settings: dict[str, Any]) -> dict[str, Any]:
+    """Storage fields of resume settings (omitted when empty)."""
+    fields: dict[str, Any] = {}
+    if settings["resume_points"]:
+        fields["resume_points"] = list(settings["resume_points"])
+    if settings["resume_forced"]:
+        fields["resume_forced"] = True
+    return fields
+
+
+def normalize_resume_points(points: list[str]) -> list[str]:
+    """Validate and sort resume points (HH:MM, 00:00–23:59)."""
+    minutes: set[int] = set()
+    for point in points:
+        value = parse_hhmm(point)
+        if value >= MINUTES_PER_DAY:
+            raise ValueError(f"resume point {point}: must be between 00:00 and 23:59")
+        minutes.add(value)
+    return [format_hhmm(m) for m in sorted(minutes)]
+
+
 def days_label(weekdays: list[str], language: str) -> str:
     """'Mo–Fr', 'Sa–So', 'Mo, Mi'."""
     labels = _LABELS.get(language.split("-", maxsplit=1)[0].lower(), _LABELS["en"])
@@ -158,10 +201,15 @@ def apply_day_plan(
     targets: list[str],
     blocks: list[dict[str, Any]],
     language: str,
+    *,
+    resume_points: list[str] | None = None,
+    resume_forced: bool | None = None,
 ) -> dict[str, Any]:
     """Return a copy of ``plan`` where every target day gets exactly ``blocks``.
 
-    Weekdays with identical blocks are regrouped into day types; existing day
+    ``resume_points`` / ``resume_forced`` replace the targets' resume settings
+    when given; otherwise each target keeps its own. Weekdays with identical
+    blocks and resume settings are regrouped into day types; existing day
     types keep id and name when their weekday set is unchanged.
     """
     plan = copy.deepcopy(plan)
@@ -171,17 +219,28 @@ def apply_day_plan(
             "this plan has no own holiday day (holidays.mode must be 'own_day_type')"
         )
     new_blocks = normalize_day_blocks(blocks)
+    new_points = (
+        normalize_resume_points(resume_points) if resume_points is not None else None
+    )
     days = week_to_days(plan)
+    resume = week_to_resume(plan)
     for target in targets:
         days[target] = copy.deepcopy(new_blocks)
+        settings = resume.setdefault(target, _resume_of(None))
+        if new_points is not None:
+            settings["resume_points"] = list(new_points)
+        if resume_forced is not None:
+            settings["resume_forced"] = resume_forced
 
     groups: dict[str, list[str]] = {}
     for weekday in WEEKDAYS:
-        groups.setdefault(json.dumps(days[weekday]), []).append(weekday)
+        key = json.dumps({"blocks": days[weekday], **resume[weekday]})
+        groups.setdefault(key, []).append(weekday)
     old_types = plan["week"]["day_types"]
     taken = {holiday_id} if holiday_id else set()
     day_types: list[dict[str, Any]] = []
     for key, weekdays in groups.items():
+        group = json.loads(key)
         same = next(
             (
                 d
@@ -201,7 +260,8 @@ def apply_day_plan(
                 "id": type_id,
                 "name": same["name"] if same else days_label(weekdays, language),
                 "days": weekdays,
-                "blocks": json.loads(key),
+                "blocks": group["blocks"],
+                **_resume_fields(group),
             }
         )
     if holiday_id:
@@ -214,6 +274,7 @@ def apply_day_plan(
                 else ("Feiertag" if language.startswith("de") else "Holiday"),
                 "days": [],
                 "blocks": days.get(HOLIDAY, []),
+                **_resume_fields(resume.get(HOLIDAY, _resume_of(None))),
             }
         )
     plan["week"]["day_types"] = day_types
