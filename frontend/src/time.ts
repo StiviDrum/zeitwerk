@@ -95,6 +95,26 @@ export function zonedClock(iso: string, timeZone: string | undefined): string {
   return formatTime(minutes);
 }
 
+export const DAY_MS = 86_400_000;
+
+/**
+ * Clock time of an ISO timestamp for "from …" / "until …" texts: "05:15" when
+ * it is less than 24 h ahead (unambiguous), otherwise with the short weekday
+ * ("Mo 05:15").
+ */
+export function zonedWhen(
+  iso: string,
+  timeZone: string | undefined,
+  weekdayShort: (index: number) => string,
+  now: Date = new Date(),
+): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const { minutes, weekdayIndex } = zonedNow(timeZone, date);
+  const clock = formatTime(minutes);
+  return date.getTime() - now.getTime() < DAY_MS ? clock : `${weekdayShort(weekdayIndex)} ${clock}`;
+}
+
 /** Day number (days since epoch of the local calendar date) and minute of day in a time zone. */
 function zonedDay(date: Date, timeZone: string | undefined): { day: number; minutes: number } {
   try {
