@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+import probatio as vol
 import pytest
 
-from custom_components.zeitwerk.compat import vol
 from custom_components.zeitwerk.model import Plan, parse_hhmm
 from custom_components.zeitwerk.schema import (
     async_validate_plan,

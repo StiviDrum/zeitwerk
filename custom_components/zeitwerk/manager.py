@@ -12,8 +12,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.start import async_at_started
+import probatio as vol
 
-from .compat import vol
 from .const import DOMAIN, SIGNAL_PLAN_STATUS
 from .engine import PlanRunner
 from .holidays import HolidayRegistry

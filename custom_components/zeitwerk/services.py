@@ -24,8 +24,8 @@ from homeassistant.exceptions import (
     Unauthorized,
 )
 from homeassistant.helpers import config_validation as cv
+import probatio as vol
 
-from .compat import vol
 from .const import DOMAIN
 from .days import DAY_KEYS, apply_day_plan, week_to_days, week_to_resume
 from .engine import PlanRunner

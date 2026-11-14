@@ -12,8 +12,8 @@ from homeassistant.helpers import (
     script as script_helper,
 )
 from homeassistant.util import slugify
+import probatio as vol
 
-from .compat import vol
 from .const import MAX_PROFILES
 from .model import (
     HOLIDAY_MODE_LIKE_DAY,

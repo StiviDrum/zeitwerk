@@ -27,8 +27,8 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
 )
 from homeassistant.util import dt as dt_util
+import probatio as vol
 
-from .compat import vol
 from .executor import ProfileExecutor
 from .holidays import HolidayRegistry, HolidaySource
 from .manual import STATE, TargetWatch, build_watch, is_manual_change
@@ -208,9 +208,7 @@ class PlanRunner:
             self._unsubs.pop()()
         for group in (self._activation, *self._overrides):
             for checker in group.checkers:
-                unload = getattr(checker, "async_unload", None)
-                if unload is not None:
-                    unload()
+                checker.async_unload()
             group.checkers.clear()
         await self.executor.async_unload()
         self._holiday_source = None

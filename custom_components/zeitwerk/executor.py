@@ -74,9 +74,5 @@ class ProfileExecutor:
     async def async_unload(self) -> None:
         """Stop running scripts and release resources."""
         for script in self._scripts.values():
-            unload = getattr(script, "async_unload", None)
-            if unload is not None:
-                await unload()
-            else:  # pragma: no cover - older HA
-                await script.async_stop()
+            await script.async_unload()
         self._scripts.clear()

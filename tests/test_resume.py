@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
+import probatio as vol
 import pytest
 
-from custom_components.zeitwerk.compat import vol
 from custom_components.zeitwerk.days import apply_day_plan, week_to_resume
 from custom_components.zeitwerk.model import Plan
 from custom_components.zeitwerk.schedule import (

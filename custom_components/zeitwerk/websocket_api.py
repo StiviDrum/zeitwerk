@@ -12,8 +12,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
+import probatio as vol
 
-from .compat import vol
 from .const import DOMAIN
 from .engine import PlanRunner
 from .holidays import HolidaySource
