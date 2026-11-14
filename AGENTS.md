@@ -56,7 +56,7 @@ Then:
 | Tests | `pytest-homeassistant-custom-component` (backend), `vitest` (frontend logic) |
 | CI | GitHub Actions: hassfest, HACS validation, ruff, pytest, eslint, vitest, frontend build |
 | Licence | MIT, copyright „Steven Glab“ |
-| Min. HA version | per `hacs.json` in SPEC (2026.6.0) unless a needed API requires newer – then raise it and note why |
+| Min. HA version | per `hacs.json` (2026.11.0 since 1.0: probatio, official test package; was 2026.6.0) – raise it only when a needed API requires newer and note why |
 
 Useful structural reference: the community template `ludeeus/integration_blueprint` (devcontainer, `scripts/develop`, `scripts/lint`). Adopt its layout where sensible.
 

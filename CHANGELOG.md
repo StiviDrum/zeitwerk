@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.9] - 2026-11-14
+
+### Changed
+- Minimum Home Assistant version is now 2026.11.0 (was 2026.6.0, which CI
+  never covered). Compatibility code for older versions is removed
+  (voluptuous fallback, `async_unload` fallbacks).
+- Tests run on the final `pytest-homeassistant` 2026.11.1; the HA 2026.10 CI
+  job is dropped.
+
 ## [1.0.0-rc.8] - 2026-11-14
 
 ### Changed

@@ -181,7 +181,7 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] CI: main job on 2026.11, compatibility job on 2026.10.4.
 - [x] Checked the 2026.10/11 developer changes: DeviceInfo dataclass (we only use keyword construction), config entry functions may keep returning bools (custom integrations), `step_id` already passed, no `ha-md-list`, no UNDEFINED, no `DeviceEntry.config_entries`. Added manifest `categories: ["helpers"]`.
 - [x] Real instance on 2026.11.0: week/day editor/undo, profiles (entity/icon/action editors), override condition editor, holidays, plan edit, timeline, wizard, card picker/editor, diagnostics download, brand icon via `/api/brands`. No console errors, no deprecation reports.
-- [ ] Switch to the final `pytest-homeassistant` 2026.11.x release when published (drop `requirements_test_plugin.txt` / `--no-deps`).
+- [x] Switch to the final `pytest-homeassistant` 2026.11.x release when published (drop `requirements_test_plugin.txt` / `--no-deps`). Done 2026-11-14 with 2026.11.1.
 - Note: HACS is now the built-in Marketplace (existing installs migrate automatically; categories are used for browsing).
 
 ## Timeline card: plan selection and detail view (2026-11-05)
@@ -228,3 +228,9 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
   - Verified: mock preview (manual + far/near next change, header and timeline, no console errors). Not yet in the HA dev instance.
 - [x] Rule changed (Steven, 2026-11-14): weekday whenever the time is not today, also within 24 h.
 - [x] Checked in the HA dev instance (HA 2026.11.0, 2026-11-14, Saturday 23:05): header „Absenkung 18,0 °C · ab So 08:00“; manual change via `input_number.set_value` → „Manuell 20,0 °C · bis So 08:00 → 21,5 °C“; resume point 23:45 typed in the day editor and saved for Sa+So → „bis 23:45 → 18,0 °C“; „Fortsetzen“ → value back to 18.0; timeline view with „ab Mo 07:30“ for the office. No console errors, no errors in the HA log. Test data restored afterwards.
+
+## Minimum Home Assistant 2026.11 (2026-11-14)
+
+- [x] Steven's decision: `hacs.json` minimum 2026.6.0 → 2026.11.0 (CI only ever covered 2026.10/11).
+- [x] Removed backward compatibility: `compat.py` (probatio/voluptuous) → `import probatio as vol`; `getattr(…, "async_unload")` fallbacks for scripts and condition checkers; test helper switch between both test packages; CI job and requirements for HA 2026.10.
+- [x] Tests on the final `pytest-homeassistant==2026.11.1` (no more `--no-deps` beta install).

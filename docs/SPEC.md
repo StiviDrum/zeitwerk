@@ -338,7 +338,7 @@ zeitwerk/
 ```json
 {
   "name": "Zeitwerk",
-  "homeassistant": "2026.6.0",
+  "homeassistant": "2026.11.0",
   "render_readme": true,
   "zip_release": true,
   "filename": "zeitwerk.zip"

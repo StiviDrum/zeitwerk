@@ -53,6 +53,8 @@ end of the first pass is kept, so nothing switches twice.
 
 ## Installation (HACS, custom repository)
 
+Requires Home Assistant 2026.11 or newer.
+
 1. HACS → ⋮ → *Custom repositories* → `https://github.com/StiviDrum/zeitwerk`, type **Integration**.
 2. Install **Zeitwerk**, restart Home Assistant.
 3. *Settings → Devices & services → Add integration → Zeitwerk*.
@@ -167,7 +169,7 @@ What the week view does:
   plan („Vorlage“, the copy starts switched off). A card configured with an
   unknown `plan:` id creates the plan under that id.
 
-Bundle size (1.0.0-rc.8, minified): 187.9 KB, 49.7 KB gzip.
+Bundle size (1.0.0-rc.9, minified): 187.9 KB, 49.7 KB gzip.
 
 ## Repairs
 
@@ -375,12 +377,8 @@ python scripts/seed_reference_plans.py --token <token>   # creates the 5 heating
 cd frontend && npm run watch   # rebuilds the card into custom_components/zeitwerk/frontend/
 ```
 
-Tests run against Home Assistant 2026.11 with its official test package
-`pytest-homeassistant` (`requirements_test.txt`; the plugin itself comes from
-`requirements_test_plugin.txt` and is installed with `--no-deps` until a final
-2026.11 release of it exists). CI additionally runs the test suite against
-2026.10 with `pytest-homeassistant-custom-component`
-(`requirements_test_ha2026_10.txt`).
+Tests run against Home Assistant 2026.11 (the minimum version) with its
+official test package `pytest-homeassistant` (`requirements_test.txt`).
 
 Card preview without Home Assistant (mocked `hass`): build the card, run
 `python3 -m http.server 8000` in the repo root and open
@@ -445,7 +443,8 @@ erzwungenes Profil. Vorrang-Regeln (Urlaub, Abwesend) behalten immer ihren
 Vorrang. **„Fortsetzen“** in der Karte (Dienst `zeitwerk.resume`) kehrt sofort
 zum Zeitplan zurück.
 
-Installation über HACS → Benutzerdefinierte Repositories → Typ *Integration*,
+Voraussetzung: Home Assistant 2026.11 oder neuer. Installation über HACS →
+Benutzerdefinierte Repositories → Typ *Integration*,
 danach unter *Einstellungen → Geräte & Dienste* „Zeitwerk“ hinzufügen.
 
 Pro Plan gibt es einen Schalter (Plan an/aus), einen Profil-Sensor, einen
