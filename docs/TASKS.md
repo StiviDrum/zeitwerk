@@ -226,3 +226,4 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Plan header shows „Manuell <set value>“ during a manual change (was: scheduled profile); timeline row and header use the watched attribute (`manual_attribute`, e.g. `temperature` for `climate`) instead of the entity state.
 - [x] `zonedWhen`: times ≥ 24 h ahead get the short weekday („ab Mo 05:15“), everywhere „ab …“/„bis …“ is shown. Tests: `frontend/tests/zoned-when.test.ts` (24 h boundary, time zone weekday, year end).
   - Verified: mock preview (manual + far/near next change, header and timeline, no console errors). Not yet in the HA dev instance.
+- [x] Rule changed (Steven, 2026-11-14): weekday whenever the time is not today, also within 24 h.

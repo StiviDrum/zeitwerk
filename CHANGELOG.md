@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-rc.8] - 2026-11-14
+
+### Changed
+- "from …" / "until …" times show the short weekday whenever they are not
+  today, also within the next 24 h ("ab Sa 05:15" on Friday evening).
+
 ## [1.0.0-rc.7] - 2026-11-14
 
 ### Changed
