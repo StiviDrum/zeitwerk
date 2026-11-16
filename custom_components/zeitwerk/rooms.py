@@ -198,6 +198,9 @@ class RoomWindowTracker:
         elif raw != self._raw:
             self._raw, self._raw_since = raw, now
         self._settle(now)
+        if initial and not self.is_open:
+            # Not restored: a stale persisted "open" must not skip open_delay later.
+            self._persist()
 
     def _restore(self, now: datetime) -> bool:
         """Core restart: reuse the persisted open state if a window is still open.
@@ -240,13 +243,20 @@ class RoomWindowTracker:
     def _set(self, is_open: bool) -> None:
         self.is_open = is_open
         self.open_since = self._raw_since if is_open else None
-        self.runtime["window"] = {
-            "open": is_open,
+        self._persist()
+        self._notify(changed=True)
+
+    def _persist(self) -> None:
+        """Store open/since in the runtime dict (only writes on change)."""
+        value = {
+            "open": self.is_open,
             "since": self.open_since.isoformat() if self.open_since else None,
         }
+        if self.runtime.get("window") == value:
+            return
+        self.runtime["window"] = value
         if self._on_runtime_changed:
             self._on_runtime_changed()
-        self._notify(changed=True)
 
     def _notify(self, *, changed: bool) -> None:
         if self._on_update:

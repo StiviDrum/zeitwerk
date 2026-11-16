@@ -245,7 +245,7 @@ Done with subagents (AGENTS.md §8); orchestrator commits.
 - [x] Backend: plan `room` / `room_reactions.window`, engine priority (window above overrides), `source: room:window`
 - [x] Backend: websocket `zeitwerk/rooms/*`, plan mutations with room fields; services unchanged
   - Implemented by `zw-backend`, two `zw-reviewer` passes. Decisions beyond the first SPEC draft: unavailable contacts keep their last value, window state persisted across restarts, room edits never flip the window, `room_missing`/`area_missing` flags. `tests/test_rooms.py`.
-- [ ] Backend: register sidebar panel (admin only), serve panel module, remove on unload
+- [x] Backend: register sidebar panel (admin only), serve panel module, remove on unload
 - [ ] Frontend: split build into card + panel modules
 - [ ] Frontend: panel shell with routing, header, narrow layout, error states
 - [ ] Frontend: move day editor, rules, profiles, wizard into the panel

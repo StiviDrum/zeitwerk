@@ -13,6 +13,11 @@ STORAGE_VERSION: Final = 2
 CARD_FILENAME: Final = "zeitwerk-card.js"
 CARD_URL_BASE: Final = "/zeitwerk_static"
 
+PANEL_FILENAME: Final = "zeitwerk-panel.js"
+PANEL_URL_PATH: Final = "zeitwerk"
+PANEL_ELEMENT: Final = "zeitwerk-panel"
+DATA_PANEL_MODULE_URL: Final = "zeitwerk_panel_module_url"
+
 SIGNAL_PLAN_STATUS: Final = "zeitwerk_plan_status_{}"
 SIGNAL_ROOM_STATUS: Final = "zeitwerk_room_status_{}"
 

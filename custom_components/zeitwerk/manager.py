@@ -400,25 +400,45 @@ class ZeitwerkManager:
         room = Room.from_dict(validate_room(data))
         self.rooms[room.id] = room
         self.async_schedule_save()
+        self._notify_room(EVENT_ADDED, room.id)  # before any "updated"
         if self._started:
             self._start_tracker(room)
             # Plans that referenced this id before (stale storage) pick it up now.
             for plan_id in self.plans_of_room(room.id):
                 plan = self.plans[plan_id]
                 await self._async_replace(plan, plan)
-        self._notify_room(EVENT_ADDED, room.id)
         return room
 
     async def async_update_room(self, room_id: str, data: dict[str, Any]) -> Room:
         """Replace a room (full update); its plans keep running."""
-        self.get_room(room_id)
+        old = self.get_room(room_id)
         room = Room.from_dict(validate_room({**data, "id": room_id}))
         self.rooms[room_id] = room
         self.async_schedule_save()
+        self._update_device(old, room)
         if tracker := self.trackers.get(room_id):
             tracker.async_reconfigure(room)
         self._notify_room(EVENT_UPDATED, room_id)
         return room
+
+    def _update_device(self, old: Room, room: Room) -> None:
+        """Keep the room device in sync (name; area unless the user moved it)."""
+        registry = dr.async_get(self.hass)
+        for device in dr.async_entries_for_config_entry(registry, self.entry_id):
+            if (DOMAIN, f"room:{room.id}") not in device.identifiers:
+                continue
+            changes: dict[str, Any] = {}
+            if device.name != room.name:
+                changes["name"] = room.name
+            if (
+                room.area_id != old.area_id
+                and room.area_id
+                and not self.area_missing(room)
+                and device.area_id in (None, old.area_id)
+            ):
+                changes["area_id"] = room.area_id
+            if changes:
+                registry.async_update_device(device.id, **changes)
 
     async def async_delete_room(self, room_id: str) -> None:
         """Remove a room; its plans become general plans."""

@@ -839,3 +839,93 @@ async def test_ws_rooms_non_admin(
     assert manager.rooms["wz"].name == "Wohnzimmer"
     await reader.send_json_auto_id({"type": "zeitwerk/rooms/list"})
     assert (await reader.receive_json())["success"]
+
+
+async def test_restart_resets_stale_persisted_open(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    t0 = at(WED, 17, 40)
+    entry, manager = await setup_room(hass, freezer, t0)
+    await open_window(hass, freezer, t0)
+    assert manager.runtime["room:wz"]["window"]["open"] is True
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # closed during downtime -> persisted state is reset on start
+    freezer.move_to(t0 + timedelta(minutes=10))
+    await win(hass, WIN_A, "off")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    manager = entry.runtime_data
+    assert manager.runtime["room:wz"]["window"] == {"open": False, "since": None}
+
+    # opened briefly (never debounced), then restart: must not open immediately
+    freezer.move_to(t0 + timedelta(minutes=20))
+    await win(hass, WIN_A, "on")
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert manager.runtime["room:wz"]["window"]["open"] is False
+    freezer.move_to(t0 + timedelta(minutes=30))
+    hass.states.async_remove(WIN_A)
+    await win(hass, WIN_A, "on")  # core restart: last_changed is "now"
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert not entry.runtime_data.trackers["wz"].is_open
+
+
+async def test_create_room_event_order_and_runtime_key_removed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict
+) -> None:
+    t0 = at(WED, 17, 40)
+    freezer.move_to(t0)
+    hass_storage["zeitwerk"] = {
+        "version": 2,
+        "minor_version": 1,
+        "key": "zeitwerk",
+        "data": {
+            "plans": [living_room_plan(room="wz", room_reactions={"window": "eco"})],
+            "rooms": [],
+            "runtime": {},
+        },
+    }
+    await setup_helpers(hass)
+    await win(hass, WIN_A, "off")
+    await win(hass, WIN_B, "off")
+    _, manager = await setup_zeitwerk(hass)
+    events: list[str] = []
+    manager.async_add_room_listener(lambda e, r: events.append(e))
+    await manager.async_create_room(room_data())
+    await hass.async_block_till_done()
+    assert events[0] == "added"
+    assert "room:wz" in manager.runtime
+    await manager.async_delete_room("wz")
+    assert "room:wz" not in manager.runtime
+
+
+async def test_room_rename_and_area_update_device(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    t0 = at(WED, 17, 40)
+    entry, manager = await setup_room(hass, freezer, t0)
+    devices = dr.async_get(hass)
+    areas = ar.async_get(hass)
+    one, two = areas.async_create("Eins"), areas.async_create("Zwei")
+
+    def device():
+        return devices.async_get_device_by_identifier(
+            (DOMAIN, "room:wz"), entry.entry_id
+        )
+
+    await manager.async_update_room("wz", {**room_data(), "name": "Wohnen"})
+    assert device().name == "Wohnen"
+    await manager.async_update_room(
+        "wz", {**room_data(), "name": "Wohnen", "area_id": one.id}
+    )
+    assert device().area_id == one.id
+    # the user moves the device: later room area changes leave it alone
+    devices.async_update_device(device().id, area_id=two.id)
+    three = areas.async_create("Drei")
+    await manager.async_update_room(
+        "wz", {**room_data(), "name": "Wohnen", "area_id": three.id}
+    )
+    assert device().area_id == two.id
