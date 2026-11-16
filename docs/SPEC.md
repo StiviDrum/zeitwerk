@@ -365,7 +365,7 @@ zeitwerk/
 | 0.3 | Overrides und Aktivierungs-Bedingungen (all/any) inkl. Editor; manuelle Übersteuerung |
 | 0.4 | Feiertage (wie Wochentag / eigener Tagestyp), Zeitleiste, Ziehen per Touch, Tag kopieren |
 | 0.5 | Config-Flow, visueller Karteneditor, Übersetzungen |
-| 1.0 | Stabil, Doku, Screenshots, Aufnahme in HACS-Standardliste beantragen |
+| 1.0 | Seitenleiste „Zeitwerk“ mit allen Editoren, Räume (Fenster), Karte nur noch Anzeige + Bedienung (§10); stabil, Doku, Screenshots, Aufnahme in HACS-Standardliste beantragen |
 
 ---
 
@@ -380,3 +380,123 @@ Bestehende Logik zum Abgleich (aktuell als Automation `claude_Heizplan` umgesetz
 - Feiertage: Wohnzimmer Feiertage wie Sonntag (`holidays.mode: like_day`, `like_day: sun`), Quelle Holiday-Integration Hessen.
 
 Migration: Sobald 0.3 läuft, werden die Pläne angelegt, `claude_Heizplan` + Scheduler-Pläne deaktiviert (nicht gelöscht) und beides eine Woche parallel beobachtet.
+
+---
+
+## 10. Seitenleiste und Räume (1.0, beschlossen 2026-11-16)
+
+Steven: Der Editor in der Karte ist zu viel. Bearbeitet wird künftig in einer eigenen Seitenleiste; die Karte zeigt an und bedient. Zusätzlich zu allgemeinen Zeitplänen gibt es **Räume**.
+
+### Aufteilung
+
+| | Karte (`zeitwerk-card`) | Seitenleiste „Zeitwerk“ (`/zeitwerk`) |
+|---|---|---|
+| Wer | alle Nutzer | nur Admins (`require_admin`) |
+| Inhalt | Kopf mit aktuellem Profil/Wert, Wochenraster (nur Anzeige), Zeitleiste, manuell übersteuern, Fortsetzen, Plan an/aus | Übersicht, Raumeditor, Assistent, Tages-Editor, Regeln, Profile, Aktivierung, Feiertage |
+| Bearbeiten | Link „In Zeitwerk bearbeiten“ (nur Admins), Tippen auf einen Tag öffnet den Tages-Editor in der Seitenleiste | – |
+| Bundle | eigenes kleines Modul | eigenes Modul, wird nur beim Öffnen der Seitenleiste geladen |
+
+Kartenkonfiguration bleibt kompatibel (`view: week | timeline`); `view: profiles` zeigt nur noch die Profilwerte mit Reglern (Schnellansicht), der Profil-Editor zieht um.
+
+### Routen der Seitenleiste
+
+```
+/zeitwerk                         Übersicht: Räume nach Etage + „Allgemeine Zeitpläne“
+/zeitwerk/room/<room_id>          Raumeditor
+/zeitwerk/plan/<plan_id>          Plan (Wochenraster)
+/zeitwerk/plan/<plan_id>/day/<mon..sun|holiday>   Tages-Editor
+/zeitwerk/plan/<plan_id>/rules    Regeln (Vorrang, Aktivierung, Feiertage, Optionen)
+/zeitwerk/plan/<plan_id>/profiles Profile
+/zeitwerk/new[?room=<room_id>]    Assistent für einen neuen Plan
+```
+
+Schmale Bildschirme (Handy, Companion-App) sind Pflicht: einspaltig, gleiche Touch-Regeln wie DESIGN.md.
+
+### Datenmodell Raum
+
+```yaml
+room:
+  id: "wohnzimmer"                  # slug, eindeutig
+  name: "Wohnzimmer"                # Vorgabe: Name des Bereichs
+  area_id: "wohnzimmer"             # optional: HA-Bereich (liefert Etage, Icon, Vorschläge)
+  icon: "mdi:sofa"                  # optional, Vorgabe: Icon des Bereichs
+  windows:
+    entities: [binary_sensor.fenster_wohnzimmer_links, binary_sensor.fenster_wohnzimmer_rechts]
+    open_delay: 60                  # s: so lange muss ein Fenster offen sein, bis es zählt
+    close_delay: 0                  # s: so lange müssen alle zu sein, bis es wieder zählt
+  sensors:                          # nur Anzeige
+    temperature: sensor.wohnzimmer_temperatur
+    humidity: sensor.wohnzimmer_feuchte
+  # presence: später (gleiches Muster wie windows)
+```
+
+Plan (Erweiterung, abwärtskompatibel – ohne `room` ist es ein allgemeiner Zeitplan):
+
+```yaml
+plan:
+  room: wohnzimmer                  # optional: zu genau einem Raum
+  room_reactions:
+    window: off                     # Profil-id, das bei offenem Fenster gilt; fehlt = Plan ignoriert Fenster
+```
+
+- Ein Raum hat beliebig viele Pläne (z. B. Heizung + Licht), ein Plan gehört zu höchstens einem Raum.
+- Fenster-Zustand: offen, wenn mindestens eine Entität `on`/`open` ist (nach `open_delay`); zu, wenn alle zu sind (nach `close_delay`). `unavailable`/`unknown` zählt als zu und wird in der Übersicht als Hinweis gezeigt.
+- Raum löschen: Pläne bleiben erhalten und werden allgemeine Zeitpläne.
+- Bereich gelöscht: Raum bleibt, `area_id` wird leer, Hinweis in der Übersicht.
+
+### Rangfolge im Plan eines Raums
+
+```
+0. activation nicht erfüllt                 -> inaktiv (wie bisher)
+1. Raum-Reaktion „Fenster offen“            -> room_reactions.window
+2. Vorrang-Regeln (Reihenfolge)             -> deren Profil
+3. erzwungenes Profil / manuelle Übersteuerung (wie bisher)
+4. Block / default_profile
+```
+
+- Fenster auf → Wechsel auf das Fensterprofil, eine laufende manuelle Übersteuerung endet (wie bei jedem Profilwechsel). Fenster zu → das Profil, das *jetzt* gilt, wird angewendet (nicht das von vorher).
+- Ein erzwungenes Profil (`force_profile`) läuft weiter, wird aber vom Fenster überdeckt; nach dem Schließen gilt es wieder, sofern noch nicht abgelaufen.
+- Umsetzung: Die Fenster-Reaktion ist intern eine Vorrang-Regel mit höchster Priorität, deren Bedingung der Raum-Fensterzustand ist; kein zusätzlicher Timer pro Plan, die Verzögerungen laufen einmal pro Raum.
+- Sensor `sensor.zeitwerk_<plan>_profile`: `source: room:window`.
+
+### Entitäten pro Raum
+
+| Entität | Zustand | Attribute |
+|---|---|---|
+| `binary_sensor.zeitwerk_<raum>_window` | Fenster offen (nach Verzögerung), `device_class: window` | `entities` mit Einzelzustand, `open_since` |
+
+Raum als HA-Gerät (Device) mit `suggested_area` = Bereich des Raums; die Plan-Entitäten seiner Pläne bleiben am Plan-Gerät.
+
+### WebSocket-API (Ergänzung)
+
+| Typ | Zweck |
+|---|---|
+| `zeitwerk/rooms/list` / `get` | Räume inkl. Fensterzustand und zugeordneter Pläne |
+| `zeitwerk/rooms/create` / `update` / `delete` | nur Admin, volle Validierung |
+| `zeitwerk/rooms/subscribe` | Live-Updates (oder gemeinsames Abo mit Plänen) |
+
+Plan-Mutationen akzeptieren `room` und `room_reactions`; Validierung: Raum existiert, Profil existiert.
+
+### Übersicht (Startseite der Seitenleiste)
+
+- Räume als Kacheln, gruppiert nach HA-Etage (ohne Etage: „Weitere Räume“), Reihenfolge wie in HA.
+- Kachel: Name, Icon, Ist-Temperatur/Feuchte (falls Sensor), Fenster-Symbol (offen/zu/Sensor fehlt), je Plan ein Chip mit Profilfarbe + Name und „ab HH:MM“ des nächsten Wechsels.
+- Danach „Allgemeine Zeitpläne“ (Pläne ohne Raum) als Liste.
+- Hinweise oben: Plan ohne gültigen Raum, Fenster-Entität nicht verfügbar, Bereich gelöscht.
+- Knöpfe: „Raum hinzufügen“ (Bereich wählen → Fenster-/Sensor-Vorschläge aus dem Bereich), „Plan hinzufügen“.
+
+### Raumeditor
+
+- Bereich (Bereichs-Auswahl), Name, Icon.
+- Fenster: Entitäten (Vorschläge: `binary_sensor` mit `device_class` window/door/opening im Bereich), Verzögerungen.
+- Sensoren: Temperatur, Feuchte (Vorschläge aus dem Bereich).
+- Pläne des Raums: Liste mit aktuellem Profil, je Plan „bei offenem Fenster: <Profil> | ignorieren“; „Neuer Plan für diesen Raum“ (Assistent mit vorbelegtem Raum), „Vorhandenen Plan zuordnen“.
+
+### Speicher
+
+Store-Version 1 → 2: `rooms: []` ergänzt; Pläne unverändert (allgemeine Zeitpläne). Migration mit Test.
+
+### Später (nicht 1.0)
+
+- Anwesenheit pro Raum (`presence`, gleiches Muster wie Fenster, Reaktion „Raum leer → Profil“).
+- Lüftungshinweis (Feuchte), Vorheizzeit lernen, Raumvorlagen.

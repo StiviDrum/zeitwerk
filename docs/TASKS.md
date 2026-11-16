@@ -234,3 +234,23 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Steven's decision: `hacs.json` minimum 2026.6.0 → 2026.11.0 (CI only ever covered 2026.10/11).
 - [x] Removed backward compatibility: `compat.py` (probatio/voluptuous) → `import probatio as vol`; `getattr(…, "async_unload")` fallbacks for scripts and condition checkers; test helper switch between both test packages; CI job and requirements for HA 2026.10.
 - [x] Tests on the final `pytest-homeassistant==2026.11.1` (no more `--no-deps` beta install).
+
+## 1.0 – Sidebar panel and rooms (SPEC §10, decided 2026-11-16)
+
+Done with subagents (AGENTS.md §8); orchestrator commits.
+
+- [ ] Research: current panel registration, panel props/routing, HA elements in panels, area/floor registries
+- [ ] Backend: room model + schema validation, store migration 1 → 2
+- [ ] Backend: room window state (delays, unavailable), `binary_sensor.zeitwerk_<room>_window`, room device
+- [ ] Backend: plan `room` / `room_reactions.window`, engine priority (window above overrides), `source: room:window`
+- [ ] Backend: websocket `zeitwerk/rooms/*`, plan mutations with room fields; services unchanged
+- [ ] Backend: register sidebar panel (admin only), serve panel module, remove on unload
+- [ ] Frontend: split build into card + panel modules
+- [ ] Frontend: panel shell with routing, header, narrow layout, error states
+- [ ] Frontend: move day editor, rules, profiles, wizard into the panel
+- [ ] Frontend: overview (rooms by floor, general plans, hints)
+- [ ] Frontend: room editor (area, windows, sensors, plans + window reaction)
+- [ ] Frontend: card slimmed to display + control, „In Zeitwerk bearbeiten“ deep links (admins only)
+- [ ] Tests: migration, window delays, priority vs. overrides/manual/forced, unload cleanup, DST unaffected; vitest for routing + overview grouping
+- [ ] Dev instance: test bed gets rooms + `input_boolean` window stand-ins; manual check
+- [ ] README, CHANGELOG, translations (en + de); bundle sizes measured
