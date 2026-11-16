@@ -440,6 +440,7 @@ plan:
 ```
 
 - Ein Raum hat beliebig viele Pläne (z. B. Heizung + Licht), ein Plan gehört zu höchstens einem Raum.
+- Steven (2026-11-16): Kontakte melden nur offen/zu, gekippt zählt als offen; Fenster-Vorrang auch vor Urlaub ist gewollt (im Urlaub sind alle Fenster zu).
 - Fenster-Zustand: offen, wenn mindestens eine Entität `on`/`open` ist (nach `open_delay`); zu, wenn alle zu sind (nach `close_delay`). `unavailable`/`unknown` zählt als zu und wird in der Übersicht als Hinweis gezeigt.
 - Raum löschen: Pläne bleiben erhalten und werden allgemeine Zeitpläne.
 - Bereich gelöscht: Raum bleibt, `area_id` wird leer, Hinweis in der Übersicht.

@@ -37,7 +37,8 @@ Then:
 
 ## 2. Git workflow
 
-- Work on `main` with small, focused commits using Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`).
+- The 1.0 rework (SPEC §10) happens on branch `feat/1.0-panel-rooms`; `main` stays at the last release candidate until the rework is released, then the branch is merged. Pre-releases for testing are tagged from the branch.
+- Otherwise work on `main` with small, focused commits using Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`).
 - Push regularly (at least at the end of every task in TASKS.md). CI must stay green; fix red CI before continuing.
 - At the end of each milestone: bump version in `manifest.json` + `package.json`, update `CHANGELOG.md`, tag `v0.x.0`, push the tag (release workflow builds the zip). Pre-releases (`0.x`) are marked as pre-release on GitHub.
 - Never force-push to `main`. Never commit secrets, tokens, `.storage` files or Steven's personal data (real person names, addresses, entity IDs beyond the generic examples in SPEC §9 are fine in docs/tests).
