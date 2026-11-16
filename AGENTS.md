@@ -92,3 +92,20 @@ Useful structural reference: the community template `ludeeus/integration_bluepri
 - No dependency on Bubble Card, card-mod or any other custom card – only look compatible (DESIGN.md).
 - No heavy UI libraries (no MWC/Material bundles, no chart libs, no moment/dayjs). Use HA's own elements (`ha-selector`, `ha-icon`, `ha-switch`, `ha-dialog`…) when available at runtime; fall back gracefully.
 - Do not invent numbers in docs/README (bundle size, performance) – measure them.
+
+## 8. Subagents (since 2026-11-16)
+
+Development is delegated to the subagents in `.claude/agents/`; the main session (Opus) is the orchestrator.
+
+| Agent | Model | Role |
+|---|---|---|
+| `zw-backend` | Sonnet | Python integration code + pytest |
+| `zw-frontend` | Sonnet | TS/Lit card + panel code + vitest |
+| `zw-ha-research` | Sonnet | current HA API lookups with sources (read-only) |
+| `zw-reviewer` | Sonnet | review of uncommitted changes vs. SPEC/quality bar (read-only) |
+| `zw-checker` | Haiku | runs lint/typecheck/tests/build/CI status, reports (no edits) |
+| `zw-docs` | Haiku | README, CHANGELOG, TASKS ticks, translations |
+
+- The orchestrator owns SPEC/architecture, task splitting, final review and is the **only one who commits and pushes**.
+- Flow per task: implement (backend/frontend, in parallel when paths don't overlap) → `zw-checker` → `zw-reviewer` → orchestrator checks the diff → commit.
+- Trivial changes (one-liners, short texts) the orchestrator does directly.
