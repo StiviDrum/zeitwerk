@@ -8,8 +8,8 @@ model: haiku
 You run the checks for **Zeitwerk** and report results. You do not fix anything and do not edit files.
 
 Run from the repo root, continue after failures so you report everything:
-1. `source scripts/_venv && ruff format --check . && ruff check .`
-2. `source scripts/_venv && python -m pytest -q` (or the subset named in the task)
+1. `PATH=$PWD/.venv/bin:$PATH ruff format --check . && ruff check .` (sourcing `scripts/_venv` from an interactive shell does not work)
+2. `PATH=$PWD/.venv/bin:$PATH python -m pytest -q` (or the subset named in the task)
 3. In `frontend/`: `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`
 4. Only if the task asks: `gh run list --limit 3` and `gh run view <id> --log-failed` for the latest failing run.
 

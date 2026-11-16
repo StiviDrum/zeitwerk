@@ -27,6 +27,8 @@ MANUAL_MINUTES_PREFIX = "minutes:"
 
 MINUTES_PER_DAY = 24 * 60
 
+ROOM_REACTION_WINDOW = "window"
+
 
 def parse_hhmm(value: str) -> int:
     """Return minutes since midnight for ``HH:MM`` (``24:00`` allowed)."""
@@ -292,6 +294,86 @@ class Options:
 
 
 @dataclass(slots=True)
+class RoomWindows:
+    """Window contacts of a room and their debounce delays (seconds)."""
+
+    entities: list[str] = field(default_factory=list)
+    open_delay: int = 60
+    close_delay: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> RoomWindows:
+        """Create from storage dict."""
+        data = data or {}
+        return cls(
+            entities=list(data.get("entities", [])),
+            open_delay=data.get("open_delay", 60),
+            close_delay=data.get("close_delay", 0),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return storage dict."""
+        return {
+            "entities": list(self.entities),
+            "open_delay": self.open_delay,
+            "close_delay": self.close_delay,
+        }
+
+
+@dataclass(slots=True)
+class RoomSensors:
+    """Display-only sensors of a room."""
+
+    temperature: str | None = None
+    humidity: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> RoomSensors:
+        """Create from storage dict."""
+        data = data or {}
+        return cls(temperature=data.get("temperature"), humidity=data.get("humidity"))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return storage dict."""
+        return {"temperature": self.temperature, "humidity": self.humidity}
+
+
+@dataclass(slots=True)
+class Room:
+    """A room: groups plans and provides the window state (SPEC §10)."""
+
+    id: str
+    name: str
+    area_id: str | None = None
+    icon: str | None = None
+    windows: RoomWindows = field(default_factory=RoomWindows)
+    sensors: RoomSensors = field(default_factory=RoomSensors)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Room:
+        """Create from storage dict."""
+        return cls(
+            id=data["id"],
+            name=data.get("name", data["id"]),
+            area_id=data.get("area_id"),
+            icon=data.get("icon"),
+            windows=RoomWindows.from_dict(data.get("windows")),
+            sensors=RoomSensors.from_dict(data.get("sensors")),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return storage dict."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "area_id": self.area_id,
+            "icon": self.icon,
+            "windows": self.windows.to_dict(),
+            "sensors": self.sensors.to_dict(),
+        }
+
+
+@dataclass(slots=True)
 class Plan:
     """A Zeitwerk plan."""
 
@@ -307,6 +389,14 @@ class Plan:
     activation: Activation = field(default_factory=Activation)
     holidays: Holidays = field(default_factory=Holidays)
     options: Options = field(default_factory=Options)
+    # Optional room membership; reactions map a room event to a profile id.
+    room: str | None = None
+    room_reactions: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def window_profile(self) -> str | None:
+        """Profile that applies while the room's window is open."""
+        return self.room_reactions.get(ROOM_REACTION_WINDOW) if self.room else None
 
     def profile(self, profile_id: str | None) -> Profile | None:
         """Return the profile with this id."""
@@ -337,11 +427,15 @@ class Plan:
             activation=Activation.from_dict(data.get("activation")),
             holidays=Holidays.from_dict(data.get("holidays")),
             options=Options.from_dict(data.get("options")),
+            room=data.get("room") or None,
+            room_reactions={
+                k: v for k, v in (data.get("room_reactions") or {}).items() if v
+            },
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return storage dict."""
-        return {
+        """Return storage dict (room fields only when set)."""
+        data: dict[str, Any] = {
             "id": self.id,
             "name": self.name,
             "enabled": self.enabled,
@@ -355,3 +449,8 @@ class Plan:
             "overrides": [o.to_dict() for o in self.overrides],
             "options": self.options.to_dict(),
         }
+        if self.room:
+            data["room"] = self.room
+        if self.room_reactions:
+            data["room_reactions"] = dict(self.room_reactions)
+        return data

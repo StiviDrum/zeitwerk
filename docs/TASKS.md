@@ -239,11 +239,12 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 
 Done with subagents (AGENTS.md §8); orchestrator commits.
 
-- [ ] Research: current panel registration, panel props/routing, HA elements in panels, area/floor registries
-- [ ] Backend: room model + schema validation, store migration 1 → 2
-- [ ] Backend: room window state (delays, unavailable), `binary_sensor.zeitwerk_<room>_window`, room device
-- [ ] Backend: plan `room` / `room_reactions.window`, engine priority (window above overrides), `source: room:window`
-- [ ] Backend: websocket `zeitwerk/rooms/*`, plan mutations with room fields; services unchanged
+- [x] Research: current panel registration, panel props/routing, HA elements in panels, area/floor registries
+- [x] Backend: room model + schema validation, store migration 1 → 2
+- [x] Backend: room window state (delays, unavailable), `binary_sensor.zeitwerk_<room>_window`, room device
+- [x] Backend: plan `room` / `room_reactions.window`, engine priority (window above overrides), `source: room:window`
+- [x] Backend: websocket `zeitwerk/rooms/*`, plan mutations with room fields; services unchanged
+  - Implemented by `zw-backend`, two `zw-reviewer` passes. Decisions beyond the first SPEC draft: unavailable contacts keep their last value, window state persisted across restarts, room edits never flip the window, `room_missing`/`area_missing` flags. `tests/test_rooms.py`.
 - [ ] Backend: register sidebar panel (admin only), serve panel module, remove on unload
 - [ ] Frontend: split build into card + panel modules
 - [ ] Frontend: panel shell with routing, header, narrow layout, error states

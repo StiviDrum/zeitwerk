@@ -20,6 +20,7 @@ class StoredData(TypedDict):
     """Top level storage layout."""
 
     plans: list[dict[str, Any]]
+    rooms: list[dict[str, Any]]
     # per plan: last_applied profile, forced profile/until (ISO)
     runtime: dict[str, dict[str, Any]]
 
@@ -33,12 +34,13 @@ class _VersionedStore(Store[StoredData]):
         old_minor_version: int,
         old_data: dict[str, Any],
     ) -> StoredData:
-        """Migrate older storage versions (none yet)."""
+        """Migrate older storage versions (1 -> 2 adds ``rooms``)."""
         _LOGGER.debug(
             "Migrating storage from %s.%s", old_major_version, old_minor_version
         )
         return {
             "plans": list(old_data.get("plans", [])),
+            "rooms": list(old_data.get("rooms", [])),
             "runtime": dict(old_data.get("runtime", {})),
         }
 
@@ -56,8 +58,9 @@ class ZeitwerkStore:
         """Load stored data (empty layout when nothing is stored)."""
         data = await self._store.async_load()
         if not data:
-            return {"plans": [], "runtime": {}}
+            return {"plans": [], "rooms": [], "runtime": {}}
         data.setdefault("plans", [])
+        data.setdefault("rooms", [])
         data.setdefault("runtime", {})
         return data
 

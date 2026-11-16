@@ -441,9 +441,9 @@ plan:
 
 - Ein Raum hat beliebig viele Pläne (z. B. Heizung + Licht), ein Plan gehört zu höchstens einem Raum.
 - Steven (2026-11-16): Kontakte melden nur offen/zu, gekippt zählt als offen; Fenster-Vorrang auch vor Urlaub ist gewollt (im Urlaub sind alle Fenster zu).
-- Fenster-Zustand: offen, wenn mindestens eine Entität `on`/`open` ist (nach `open_delay`); zu, wenn alle zu sind (nach `close_delay`). `unavailable`/`unknown` zählt als zu und wird in der Übersicht als Hinweis gezeigt.
+- Fenster-Zustand: offen, wenn mindestens eine Entität `on`/`open` ist (nach `open_delay`); zu, wenn alle zu sind (nach `close_delay`). Eine Entität, die `unavailable`/`unknown` wird, behält ihren letzten Zustand (ein ausgefallener Kontakt beendet „Fenster offen“ nicht); ist sie seit dem Start nicht verfügbar, zählt sie als zu. Nicht verfügbare Kontakte erscheinen in der Übersicht als Hinweis. Nach einem Neustart gilt ein vorher offenes Fenster sofort wieder als offen, wenn mindestens ein Kontakt noch offen ist (gespeicherter Zustand, kein kurzes Aufheizen); sonst zählt `last_changed`, nach einem HA-Neustart also die volle Verzögerung. Entfernte/umbenannte Kontakte zählen als zu. Raum bearbeiten ändert den Fensterzustand nicht (eine laufende Verzögerung bleibt bestehen).
 - Raum löschen: Pläne bleiben erhalten und werden allgemeine Zeitpläne.
-- Bereich gelöscht: Raum bleibt, `area_id` wird leer, Hinweis in der Übersicht.
+- Bereich gelöscht: Raum und `area_id` bleiben, die API meldet `area_missing`, Hinweis in der Übersicht. Plan mit unbekanntem Raum: `room_missing`, Hinweis; wird der Raum (wieder) angelegt, greift er sofort.
 
 ### Rangfolge im Plan eines Raums
 
@@ -456,7 +456,7 @@ plan:
 ```
 
 - Fenster auf → Wechsel auf das Fensterprofil, eine laufende manuelle Übersteuerung endet (wie bei jedem Profilwechsel). Fenster zu → das Profil, das *jetzt* gilt, wird angewendet (nicht das von vorher).
-- Ein erzwungenes Profil (`force_profile`) läuft weiter, wird aber vom Fenster überdeckt; nach dem Schließen gilt es wieder, sofern noch nicht abgelaufen.
+- Ein erzwungenes Profil (`force_profile`) läuft weiter, wird aber vom Fenster überdeckt (keine Aktionen, solange das Fenster offen ist); nach dem Schließen gilt es wieder, sofern noch nicht abgelaufen. `skip_next` bei offenem Fenster bezieht sich auf das Profil ohne Fenster.
 - Umsetzung: Die Fenster-Reaktion ist intern eine Vorrang-Regel mit höchster Priorität, deren Bedingung der Raum-Fensterzustand ist; kein zusätzlicher Timer pro Plan, die Verzögerungen laufen einmal pro Raum.
 - Sensor `sensor.zeitwerk_<plan>_profile`: `source: room:window`.
 
