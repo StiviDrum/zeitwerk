@@ -229,9 +229,20 @@ def _entity_list(value: Any) -> list[str]:
     return list(dict.fromkeys(ids))
 
 
+# "new" is the panel route for creating a room (/zeitwerk/room/new).
+RESERVED_ROOM_IDS: frozenset[str] = frozenset({"new"})
+
+
+def _room_id(value: Any) -> str:
+    value = _id(value)
+    if value in RESERVED_ROOM_IDS:
+        raise vol.Invalid(f"'{value}' is reserved and cannot be used as a room id")
+    return value
+
+
 ROOM_SCHEMA = vol.Schema(
     {
-        vol.Required("id"): _id,
+        vol.Required("id"): _room_id,
         vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("area_id", default=None): vol.Any(None, cv.string),
         vol.Optional("icon", default=None): vol.Any(None, cv.icon),

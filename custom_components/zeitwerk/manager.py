@@ -26,6 +26,7 @@ from .manual import action_targets
 from .model import Plan, Room
 from .rooms import RoomWindowTracker
 from .schema import (
+    RESERVED_ROOM_IDS,
     async_validate_plan,
     make_plan_id,
     validate_plan,
@@ -393,7 +394,9 @@ class ZeitwerkManager:
         data = dict(data)
         if not data.get("id"):
             data["id"] = make_plan_id(
-                str(data.get("name", "")), set(self.rooms), fallback="room"
+                str(data.get("name", "")),
+                set(self.rooms) | RESERVED_ROOM_IDS,
+                fallback="room",
             )
         elif data["id"] in self.rooms:
             raise vol.Invalid(f"a room with id '{data['id']}' already exists")

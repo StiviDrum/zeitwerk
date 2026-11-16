@@ -929,3 +929,18 @@ async def test_room_rename_and_area_update_device(
         "wz", {**room_data(), "name": "Wohnen", "area_id": three.id}
     )
     assert device().area_id == two.id
+
+
+def test_room_id_new_is_reserved() -> None:
+    """'new' is the panel route for creating a room and cannot be an id."""
+    import probatio as vol
+
+    from custom_components.zeitwerk.schema import (
+        RESERVED_ROOM_IDS,
+        make_plan_id,
+        validate_room,
+    )
+
+    with pytest.raises(vol.Invalid, match="reserved"):
+        validate_room({"id": "new", "name": "New"})
+    assert make_plan_id("New", set(RESERVED_ROOM_IDS), fallback="room") == "new_2"
