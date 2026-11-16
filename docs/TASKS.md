@@ -255,5 +255,6 @@ Done with subagents (AGENTS.md §8); orchestrator commits.
 - [x] Frontend: card slimmed to display + control, „In Zeitwerk bearbeiten“ deep links (admins only)
   - Measured: card 94 437 B (29 489 B gz), panel 179 456 B (47 295 B gz); old single bundle 187 860 B. Checked in the mock preview (playwright), not yet in the HA dev instance.
 - [ ] Tests: migration, window delays, priority vs. overrides/manual/forced, unload cleanup, DST unaffected; vitest for routing + overview grouping
-- [ ] Dev instance: test bed gets rooms + `input_boolean` window stand-ins; manual check
+- [x] Dev instance: test bed gets rooms + `input_boolean` window stand-ins; manual check
+  - 2026-11-16 smoke test (zw-frontend, headless Chromium, local test users removed afterwards, .storage restored): panel admin-only incl. deep links; HA selectors render natively in the room editor; window open 30 s delay → `room:window`, value 18 → 16, closed → back; „Fenster offen“ in panel + card; day editor save + reload; time grid 30; card link without reload; restart with open window keeps the window profile (no other value in history); 390 px; non-admin without panel/edit link. No Zeitwerk console or log errors. Fixed afterwards: window picker also offers `input_boolean`, optional selectors no longer show „*“.
 - [ ] README, CHANGELOG, translations (en + de); bundle sizes measured

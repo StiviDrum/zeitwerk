@@ -22,6 +22,9 @@ import {
 import { pageStyles, tokens } from "./styles";
 import type { HomeAssistant, Plan, Room } from "./types";
 
+/** Window contacts: binary sensors, or input_boolean helpers as stand-ins. */
+const WINDOW_DOMAINS = ["binary_sensor", "input_boolean"];
+
 export interface RoomSavedDetail {
   room: Room;
   created: boolean;
@@ -222,6 +225,7 @@ export class ZeitwerkRoomEditor extends LitElement {
     const onChange = (id: string) => this._set(applyArea(this._draft, id, this.hass, !this.room));
     if (this._native && this.hass) {
       return html`<ha-selector
+        .required=${false}
         .hass=${this.hass}
         .selector=${{ area: {} }}
         .value=${this._draft.area_id || undefined}
@@ -263,6 +267,7 @@ export class ZeitwerkRoomEditor extends LitElement {
   ) {
     if (this._native && this.hass) {
       return html`<ha-selector
+        .required=${false}
         .hass=${this.hass}
         .selector=${{ entity: selector }}
         .value=${value || undefined}
@@ -303,14 +308,15 @@ export class ZeitwerkRoomEditor extends LitElement {
       if (v && !d.windows.includes(v)) this._set({ windows: [...d.windows, v] });
     };
     const binary = Object.keys(this.hass?.states ?? {})
-      .filter((id) => id.startsWith("binary_sensor."))
+      .filter((id) => WINDOW_DOMAINS.some((d) => id.startsWith(`${d}.`)))
       .sort();
     return html`
       ${
         this._native && this.hass
           ? html`<ha-selector
+              .required=${false}
               .hass=${this.hass}
-              .selector=${{ entity: { domain: "binary_sensor", multiple: true } }}
+              .selector=${{ entity: { domain: WINDOW_DOMAINS, multiple: true } }}
               .value=${d.windows}
               @value-changed=${(ev: CustomEvent<{ value?: string[] }>) => {
                 ev.stopPropagation();
