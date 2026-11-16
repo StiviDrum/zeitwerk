@@ -63,6 +63,8 @@ export class ZeitwerkProfiles extends LitElement {
    * reads the result with `result()`. Profile ids are derived from the names.
    */
   @property({ type: Boolean }) public embedded = false;
+  /** Embedded in the panel: the panel toolbar replaces the back header. */
+  @property({ type: Boolean }) public hideHead = false;
 
   @state() private _profiles: DraftProfile[] = [];
   @state() private _defaultKey = 0;
@@ -281,6 +283,15 @@ export class ZeitwerkProfiles extends LitElement {
     return undefined;
   }
 
+  /** Current profiles (id + name) without validation – for dependent selects in the wizard. */
+  public draftProfiles(): { id: string; name: string }[] {
+    const named = this._profiles.filter((p) => p.name.trim());
+    return assignIds(named.map((p) => ({ id: p.id, name: p.name.trim() }))).map((p) => ({
+      id: p.id,
+      name: p.name,
+    }));
+  }
+
   /** The edited profiles as stored in a plan (ids assigned), or the first problem. */
   public result(): { error?: string; profiles: Profile[]; defaultId: string } {
     const error = this._validate();
@@ -315,6 +326,15 @@ export class ZeitwerkProfiles extends LitElement {
     } finally {
       this._busy = false;
     }
+  }
+
+  public get dirty(): boolean {
+    return this._dirty;
+  }
+
+  /** Go back, asking for confirmation first when there are unsaved changes. */
+  public requestBack(): void {
+    this._back();
   }
 
   private _back = (): void => {
@@ -643,6 +663,7 @@ export class ZeitwerkProfiles extends LitElement {
 
   private _renderHead() {
     const t = this._t;
+    if (this.hideHead) return nothing;
     return html`
       <div class="head">
         <button class="round" aria-label=${t("back")} @click=${this._back}>

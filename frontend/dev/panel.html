@@ -6,11 +6,11 @@
     <title>zeitwerk-panel preview</title>
     <!--
       Standalone preview of the built panel with a mocked `hass` (no Home Assistant needed).
-      Query parameters: ?path=/plan/wohnzimmer_heizung/day/mon  ?narrow=1  ?theme=light  ?lang=en  ?admin=0
       Build first (npm run build or npm run watch), then from the repo root:
         python3 -m http.server 8000
-      and open http://localhost:8000/frontend/dev/preview.html
-      Query parameters: ?theme=light  ?lang=en  ?admin=0  ?plan=missing
+      and open http://localhost:8000/frontend/dev/panel.html
+      Query parameters: ?path=/room/wohnzimmer  ?narrow=1  ?theme=light  ?lang=en  ?admin=0
+        ?fail=1 (subscriptions fail twice, then work: retry check)
     -->
     <style>
       :root {

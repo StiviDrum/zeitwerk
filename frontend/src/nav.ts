@@ -16,7 +16,9 @@ export type Route =
   | { name: "rules"; planId: string }
   | { name: "profiles"; planId: string }
   | { name: "new"; room?: string; preset?: string }
-  | { name: "room"; roomId: string };
+  | { name: "room"; roomId: string }
+  /** `/room/new`: the room editor for a new room (so the id "new" cannot address a room). */
+  | { name: "room_new" };
 
 function decode(part: string): string {
   try {
@@ -58,7 +60,8 @@ export function parseRoute(path: string | undefined | null, search = ""): Route 
       if (sub === "day" && extra && isDayKey(extra)) return { name: "day", planId: id, day: extra };
       return { name: "plan", planId: id };
     case "room":
-      return id ? { name: "room", roomId: id } : { name: "overview" };
+      if (!id) return { name: "overview" };
+      return id === "new" ? { name: "room_new" } : { name: "room", roomId: id };
     case "new": {
       const route: Route = { name: "new" };
       const room = params.get("room");
@@ -89,6 +92,8 @@ export function routePath(route: Route): string {
       return `${PANEL_PREFIX}/plan/${enc(route.planId)}/profiles`;
     case "room":
       return `${PANEL_PREFIX}/room/${enc(route.roomId)}`;
+    case "room_new":
+      return `${PANEL_PREFIX}/room/new`;
     case "new": {
       const params = new URLSearchParams();
       if (route.room) params.set("room", route.room);
@@ -124,11 +129,16 @@ export function navigateTo(route: Route, replace = false): void {
   navigate(routePath(route), replace);
 }
 
-/** Click handler for link-like buttons: opens `path` unless a modifier is held. */
-export function openPath(path: string, ev?: MouseEvent): void {
-  if (ev && (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button === 1)) {
-    window.open(path, "_blank");
-    return;
-  }
-  navigate(path);
+/**
+ * Click handler for real `<a href>` links: plain left clicks navigate inside
+ * the app (no reload); modified clicks (ctrl/cmd/shift/alt) and middle clicks
+ * keep the browser's native behaviour (new tab/window).
+ */
+export function linkClick(path: string): (ev: MouseEvent) => void {
+  return (ev) => {
+    if (ev.defaultPrevented || ev.button !== 0) return;
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    ev.preventDefault();
+    navigate(path);
+  };
 }

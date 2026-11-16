@@ -31,6 +31,7 @@ export interface GridRow {
 export function stripStatus(plan: Plan): Plan {
   const copy = structuredClone(plan);
   delete copy.status;
+  delete copy.room_missing;
   return copy;
 }
 
@@ -244,4 +245,29 @@ export function watchedEntities(plan: Plan, conditions = true): string[] {
     }
   }
   return ids;
+}
+
+/** Allowed values of the plan option `options.time_step` (minutes). */
+export const TIME_STEPS = [5, 10, 15, 30, 60];
+
+/** The plan's time step (fallback 15). */
+export function timeStepOf(plan: Plan): number {
+  const n = Number(plan.options?.time_step);
+  return TIME_STEPS.includes(n) ? n : 15;
+}
+
+/**
+ * Whether a `hass` update matters to the panel: language/theme/admin, the
+ * area and floor registries (floor grouping, icons) or one of `ids`.
+ */
+export function hassChanged(old: HomeAssistant, now: HomeAssistant, ids: string[]): boolean {
+  return (
+    old.language !== now.language ||
+    old.locale?.language !== now.locale?.language ||
+    old.themes?.darkMode !== now.themes?.darkMode ||
+    old.user?.is_admin !== now.user?.is_admin ||
+    old.areas !== now.areas ||
+    old.floors !== now.floors ||
+    ids.some((id) => old.states[id] !== now.states[id])
+  );
 }

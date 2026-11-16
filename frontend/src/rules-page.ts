@@ -17,6 +17,7 @@ import {
   type Condition,
 } from "./conditions";
 import type { Localizer } from "./localize";
+import { TIME_STEPS, timeStepOf } from "./plan-view";
 import { pageStyles, tokens } from "./styles";
 import { WEEKDAYS, type HomeAssistant, type Override, type Plan, type Weekday } from "./types";
 
@@ -30,7 +31,14 @@ type SubPage =
   | { kind: "activation" }
   | { kind: "holidays" }
   | { kind: "duplicate"; name: string }
-  | { kind: "plan-edit"; name: string; icon: string; tags: string; confirmDelete: boolean }
+  | {
+      kind: "plan-edit";
+      name: string;
+      icon: string;
+      tags: string;
+      timeStep: number;
+      confirmDelete: boolean;
+    }
   | { kind: "override"; index: number; draft: Override }
   | { kind: "activation-edit"; match: "all" | "any"; conditions: Condition[] };
 
@@ -50,6 +58,8 @@ export class ZeitwerkRules extends LitElement {
   @property({ attribute: false }) public duplicate?: (name: string) => Promise<void>;
   /** Delete the whole plan. */
   @property({ attribute: false }) public deletePlan?: () => Promise<void>;
+  /** Embedded in the panel: the panel toolbar replaces the top-level back header. */
+  @property({ type: Boolean }) public hideHead = false;
 
   @state() private _page: SubPage = { kind: "menu" };
   @state() private _error?: string;
@@ -243,7 +253,47 @@ export class ZeitwerkRules extends LitElement {
     }
   }
 
+  /** Snapshot of the open sub page, to tell whether its draft was edited. */
+  private _snapshot = JSON.stringify(this._page);
+  @state() private _confirmBack = false;
+
+  private get _pageDirty(): boolean {
+    const kind = this._page.kind;
+    const draftPage =
+      kind === "override" ||
+      kind === "activation-edit" ||
+      kind === "plan-edit" ||
+      kind === "duplicate";
+    return draftPage && JSON.stringify(this._page) !== this._snapshot;
+  }
+
+  /**
+   * Back one level (used by the panel toolbar): nested pages go to their
+   * parent, asking before an edited draft is discarded; from the menu the
+   * page itself is left (`zw-back`).
+   */
+  public requestBack(): void {
+    if (this._page.kind === "menu") {
+      this._fire("zw-back");
+      return;
+    }
+    if (this._pageDirty && !this._confirmBack) {
+      this._confirmBack = true;
+      return;
+    }
+    const kind = this._page.kind;
+    this._open(
+      kind === "override"
+        ? { kind: "overrides" }
+        : kind === "activation-edit"
+          ? { kind: "activation" }
+          : { kind: "menu" },
+    );
+  }
+
   private _open(page: SubPage): void {
+    this._snapshot = JSON.stringify(page);
+    this._confirmBack = false;
     this._error = undefined;
     this._confirmDelete = false;
     this._conditionsValid = true;
@@ -296,6 +346,26 @@ export class ZeitwerkRules extends LitElement {
 
   protected render() {
     if (!this.plan || !this.localize) return nothing;
+    const t = this.localize.t.bind(this.localize);
+    return html`${this._renderPage()}
+    ${
+      this._confirmBack
+        ? html`<div class="confirm-box" role="alert">
+            <span>${t("discard_changes")}</span>
+            <div class="actions">
+              <button class="secondary grow" @click=${() => (this._confirmBack = false)}>
+                ${t("cancel")}
+              </button>
+              <button class="danger-fill grow" @click=${() => this.requestBack()}>
+                ${t("discard")}
+              </button>
+            </div>
+          </div>`
+        : nothing
+    }`;
+  }
+
+  private _renderPage() {
     switch (this._page.kind) {
       case "override":
         return this._renderOverrideEditor(this._page);
@@ -444,7 +514,7 @@ export class ZeitwerkRules extends LitElement {
         </svg>
       </button>`;
     return html`
-      ${this._head(t("config_title"), plan.name, () => this._fire("zw-back"))}
+      ${this.hideHead ? nothing : this._head(t("config_title"), plan.name, () => this._fire("zw-back"))}
       ${this._separator(t("section_rules"), undefined, [
         "help_overrides",
         "help_activation",
@@ -467,6 +537,7 @@ export class ZeitwerkRules extends LitElement {
             name: plan.name,
             icon: plan.icon ?? "",
             tags: plan.tags.join(", "),
+            timeStep: timeStepOf(plan),
             confirmDelete: false,
           });
         })}
@@ -506,6 +577,7 @@ export class ZeitwerkRules extends LitElement {
             .split(",")
             .map((x) => x.trim())
             .filter(Boolean);
+          p.options = { ...p.options, time_step: page.timeStep };
         },
         () => this._open({ kind: "menu" }),
       );
@@ -560,6 +632,21 @@ export class ZeitwerkRules extends LitElement {
             .value=${page.tags}
             @input=${(ev: Event) => set({ tags: (ev.target as HTMLInputElement).value })}
           />
+        </label>
+        <label class="field">
+          <span class="label">${t("time_step")}</span>
+          <select
+            @change=${(ev: Event) =>
+              set({ timeStep: Number((ev.target as HTMLSelectElement).value) })}
+          >
+            ${TIME_STEPS.map(
+              (n) =>
+                html`<option value=${n} ?selected=${n === page.timeStep}>
+                  ${t("time_step_value", { n })}
+                </option>`,
+            )}
+          </select>
+          <span class="muted">${t("time_step_hint")}</span>
         </label>
         <span class="muted">${t("plan_id_hint", { id: this.plan.id })}</span>
       </div>

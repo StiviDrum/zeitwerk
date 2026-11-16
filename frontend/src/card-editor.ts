@@ -86,7 +86,6 @@ export class ZeitwerkCardEditor extends LitElement {
       },
       { name: "show_profile_sliders", selector: { boolean: {} } },
       { name: "compact", selector: { boolean: {} } },
-      { name: "time_step", selector: { number: { min: 5, max: 60, step: 5, mode: "box" } } },
     ];
   }
 
@@ -99,7 +98,6 @@ export class ZeitwerkCardEditor extends LitElement {
       title: "ed_title",
       show_profile_sliders: "ed_sliders",
       compact: "ed_compact",
-      time_step: "ed_step",
     };
     const key = keys[field.name];
     return key ? this._l.t(key) : field.name;
@@ -111,10 +109,11 @@ export class ZeitwerkCardEditor extends LitElement {
       if (v === "" || v === undefined || (Array.isArray(v) && !v.length)) delete clean[k];
     }
     if (clean.view === "timeline") {
-      for (const k of ["plan", "show_profile_sliders", "compact", "time_step"]) delete clean[k];
+      for (const k of ["plan", "show_profile_sliders", "compact"]) delete clean[k];
     } else {
       for (const k of ["plans", "tags", "title"]) delete clean[k];
     }
+    delete clean.time_step; // now a plan option (Zeitwerk panel > plan settings)
     clean.type = config.type ?? "custom:zeitwerk-card";
     this._config = clean as unknown as ZeitwerkCardConfig;
     this.dispatchEvent(
@@ -132,7 +131,6 @@ export class ZeitwerkCardEditor extends LitElement {
       view: "week",
       show_profile_sliders: true,
       compact: false,
-      time_step: 15,
       ...this._config,
     };
     if (this._native && this.hass) {

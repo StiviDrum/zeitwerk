@@ -10,6 +10,7 @@ import type { Localizer } from "./localize";
 import type { ZeitwerkProfiles } from "./profiles-page";
 import { pageStyles, tokens } from "./styles";
 import type { HomeAssistant, Plan } from "./types";
+import { defaultWindowProfile, withRoom } from "./rooms";
 import { buildPlan, draftErrors, seedProfiles, type WizardDraft } from "./wizard";
 
 export class ZeitwerkPlanWizard extends LitElement {
@@ -17,6 +18,14 @@ export class ZeitwerkPlanWizard extends LitElement {
   @property({ attribute: false }) public localize!: Localizer;
   /** Plan id to use (e.g. the card's configured but missing plan). */
   @property({ attribute: false }) public presetId?: string;
+  /** Room the new plan belongs to (route `?room=`); asks for the window profile. */
+  @property({ attribute: false }) public roomId?: string;
+  @property({ attribute: false }) public roomName?: string;
+  /** Embedded in the panel: the panel toolbar replaces the back header. */
+  @property({ type: Boolean }) public hideHead = false;
+  /** Chosen window profile; undefined = not touched (suggestion applies). */
+  @state() private _windowProfile?: string;
+  @state() private _confirmBack = false;
 
   @state() private _draft?: WizardDraft;
   @state() private _error?: string;
@@ -44,14 +53,23 @@ export class ZeitwerkPlanWizard extends LitElement {
     }
     this._busy = true;
     try {
-      const created = await this.hass!.callWS<{ id: string; name: string }>({
+      let created = await this.hass!.callWS<Plan>({
         type: "zeitwerk/plans/duplicate",
         plan_id: this._template,
         name,
       });
+      if (this.roomId) {
+        // A copy for a room belongs to that room (with the suggested window reaction).
+        const assigned = withRoom(created, this.roomId, defaultWindowProfile(created.profiles));
+        created = await this.hass!.callWS<Plan>({
+          type: "zeitwerk/plans/update",
+          plan_id: created.id,
+          plan: assigned,
+        });
+      }
       this.dispatchEvent(
         new CustomEvent("zw-created", {
-          detail: { id: created.id, name: created.name },
+          detail: { id: created.id, name: created.name, plan: created },
           bubbles: true,
           composed: true,
         }),
@@ -63,6 +81,58 @@ export class ZeitwerkPlanWizard extends LitElement {
     } finally {
       this._busy = false;
     }
+  }
+
+  /** Room plans: which profile applies while a window is open (suggestion: off/frost/aus). */
+  private _windowField() {
+    if (!this.roomId) return nothing;
+    const t = this.localize.t.bind(this.localize);
+    const editor = this.renderRoot.querySelector<ZeitwerkProfiles>("zeitwerk-profiles");
+    const profiles = editor?.draftProfiles() ?? [];
+    const suggestion = defaultWindowProfile(profiles);
+    const current = this._windowProfile ?? suggestion;
+    const selected = profiles.some((p) => p.id === current) ? current : "";
+    return html`<div class="panel">
+      <span class="muted">${t("wizard_room", { room: this.roomName ?? this.roomId })}</span>
+      <label class="field">
+        <span class="label">${t("wizard_window_profile")}</span>
+        <select
+          @change=${(ev: Event) => (this._windowProfile = (ev.target as HTMLSelectElement).value)}
+        >
+          <option value="" ?selected=${selected === ""}>${t("room_ignore")}</option>
+          ${profiles.map(
+            (p) => html`<option value=${p.id} ?selected=${p.id === selected}>${p.name}</option>`,
+          )}
+        </select>
+      </label>
+    </div>`;
+  }
+
+  private get _dirty(): boolean {
+    const d = this._draft;
+    const editor = this.renderRoot?.querySelector<ZeitwerkProfiles>("zeitwerk-profiles");
+    return !!(d?.name.trim() || d?.tags.some((x) => x.trim()) || editor?.dirty);
+  }
+
+  /** Cancel (toolbar back): with entered data the first call asks for confirmation. */
+  public requestBack(): void {
+    if (this._dirty && !this._confirmBack) {
+      this._confirmBack = true;
+      return;
+    }
+    this.dispatchEvent(new CustomEvent("zw-cancel", { bubbles: true, composed: true }));
+  }
+
+  /** The profile list lives in a child element: re-render the dependent select after edits. */
+  private _refreshTimer?: number;
+  private _refresh = (): void => {
+    window.clearTimeout(this._refreshTimer);
+    this._refreshTimer = window.setTimeout(() => this.requestUpdate(), 0);
+  };
+
+  public disconnectedCallback(): void {
+    super.disconnectedCallback();
+    window.clearTimeout(this._refreshTimer);
   }
 
   private _templateField() {
@@ -85,6 +155,10 @@ export class ZeitwerkPlanWizard extends LitElement {
         )}
       </select>
     </label>`;
+  }
+
+  protected firstUpdated(): void {
+    this._refresh();
   }
 
   protected willUpdate(changed: PropertyValues): void {
@@ -132,20 +206,25 @@ export class ZeitwerkPlanWizard extends LitElement {
       this._error = errors.join(" ");
       return;
     }
-    const plan = buildPlan(d, result.profiles, result.defaultId, {
-      workday: t("workday"),
-      weekend: t("weekend"),
-      daily: t("daily"),
-    });
+    const plan = buildPlan(
+      {
+        ...d,
+        room: this.roomId,
+        windowProfile: this._windowProfile ?? defaultWindowProfile(result.profiles),
+      },
+      result.profiles,
+      result.defaultId,
+      { workday: t("workday"), weekend: t("weekend"), daily: t("daily") },
+    );
     this._busy = true;
     try {
-      const created = await this.hass!.callWS<{ id: string; name: string }>({
+      const created = await this.hass!.callWS<Plan>({
         type: "zeitwerk/plans/create",
         plan,
       });
       this.dispatchEvent(
         new CustomEvent("zw-created", {
-          detail: { id: created.id, name: created.name },
+          detail: { id: created.id, name: created.name, plan: created },
           bubbles: true,
           composed: true,
         }),
@@ -165,24 +244,30 @@ export class ZeitwerkPlanWizard extends LitElement {
     const back = () =>
       this.dispatchEvent(new CustomEvent("zw-cancel", { bubbles: true, composed: true }));
     return html`
-      <div class="head">
-        <button class="round" aria-label=${t("back")} @click=${back}>
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
-        <span class="title">${t("wizard_title")}</span>
-      </div>
+      ${
+        this.hideHead
+          ? nothing
+          : html`
+              <div class="head">
+                <button class="round" aria-label=${t("back")} @click=${back}>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M15 6l-6 6 6 6" />
+                  </svg>
+                </button>
+                <span class="title">${t("wizard_title")}</span>
+              </div>
+            `
+      }
       ${
         this._template
           ? html`<div class="panel">
@@ -273,6 +358,9 @@ export class ZeitwerkPlanWizard extends LitElement {
         .plan=${this._seed}
         .localize=${this.localize}
         @zw-entity-changed=${this._onEntity}
+        @input=${this._refresh}
+        @change=${this._refresh}
+        @click=${this._refresh}
       ></zeitwerk-profiles>
 
       <div class="panel">
@@ -292,6 +380,22 @@ export class ZeitwerkPlanWizard extends LitElement {
           </div>
         </div>
       </div>
+      ${this._windowField()}
+      ${
+        this._confirmBack
+          ? html`<div class="confirm-box" role="alert">
+              <span>${t("discard_changes")}</span>
+              <div class="actions">
+                <button class="secondary grow" @click=${() => (this._confirmBack = false)}>
+                  ${t("cancel")}
+                </button>
+                <button class="danger-fill grow" @click=${() => this.requestBack()}>
+                  ${t("discard")}
+                </button>
+              </div>
+            </div>`
+          : nothing
+      }
       ${this._error ? html`<div class="error" role="alert">${this._error}</div>` : nothing}
       <div class="actions">
         <button class="danger" @click=${back}>${t("cancel")}</button>
@@ -392,6 +496,28 @@ export class ZeitwerkPlanWizard extends LitElement {
       }
       select option {
         color: initial;
+      }
+      .confirm-box {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--zw-danger) 12%, transparent);
+        font-size: 14px;
+      }
+      .confirm-box .actions button {
+        height: 52px;
+        border-radius: 26px;
+        font-size: 15px;
+      }
+      .secondary {
+        background: var(--zw-surface-2);
+        color: var(--zw-text);
+        font-weight: 600;
+      }
+      .grow {
+        flex: 1;
       }
       .segmented button {
         flex: 1;

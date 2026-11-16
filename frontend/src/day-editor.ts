@@ -79,6 +79,8 @@ export class ZeitwerkDayEditor extends LitElement {
   @property({ type: Number }) public step = 15;
   @property({ attribute: false }) public error: string | null = null;
   @property({ type: Boolean }) public busy = false;
+  /** Embedded in the panel: the panel toolbar replaces the title/close header. */
+  @property({ type: Boolean }) public hideHead = false;
 
   @state() private _blocks: DayBlock[] = [];
   @state() private _selected = -1;
@@ -357,6 +359,11 @@ export class ZeitwerkDayEditor extends LitElement {
 
   // --- Save / discard -------------------------------------------------------------
 
+  /** Close, asking for confirmation first when there are unsaved changes. */
+  public requestClose(): void {
+    this._close();
+  }
+
   private _close(): void {
     if (this._dirty && !this._confirmDiscard) {
       this._confirmDiscard = true;
@@ -623,7 +630,7 @@ export class ZeitwerkDayEditor extends LitElement {
       role="region"
       aria-label=${t("day_editor_title", { day: this._dayName(this.day) })}
     >
-      <div class="head">
+      <div class="head" ?hidden=${this.hideHead}>
         <div class="titles">
           <span class="title">${t("day_editor_title", { day: this._dayName(this.day) })}</span>
           <span class="context">${this.plan.name}</span>
@@ -713,6 +720,9 @@ export class ZeitwerkDayEditor extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+      }
+      .head[hidden] {
+        display: none;
       }
       .titles {
         display: flex;

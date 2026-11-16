@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { navigate, navigateTo, parentRoute, parseRoute, routePath } from "../src/nav";
+import { linkClick, navigate, navigateTo, parentRoute, parseRoute, routePath } from "../src/nav";
 
 describe("parseRoute", () => {
   it("parses all routes", () => {
@@ -15,6 +15,7 @@ describe("parseRoute", () => {
     expect(parseRoute("/plan/heat/profiles")).toEqual({ name: "profiles", planId: "heat" });
     expect(parseRoute("/new")).toEqual({ name: "new" });
     expect(parseRoute("/room/living")).toEqual({ name: "room", roomId: "living" });
+    expect(parseRoute("/room/new")).toEqual({ name: "room_new" });
   });
 
   it("tolerates empty, missing and odd paths", () => {
@@ -58,6 +59,7 @@ describe("routePath / parentRoute", () => {
       "/plan/heat/rules",
       "/plan/heat/profiles",
       "/room/living",
+      "/room/new",
       "/new",
       "/new?room=living",
     ]) {
@@ -75,6 +77,7 @@ describe("routePath / parentRoute", () => {
     expect(parentRoute({ name: "rules", planId: "a" })).toEqual({ name: "plan", planId: "a" });
     expect(parentRoute({ name: "plan", planId: "a" })).toEqual({ name: "overview" });
     expect(parentRoute({ name: "new" })).toEqual({ name: "overview" });
+    expect(parentRoute({ name: "room_new" })).toEqual({ name: "overview" });
   });
 });
 
@@ -106,5 +109,37 @@ describe("navigate", () => {
     expect(history.replaceState).toHaveBeenCalledWith(null, "", "/zeitwerk");
     expect(history.pushState).not.toHaveBeenCalled();
     expect(events[0].detail).toEqual({ replace: true });
+  });
+});
+
+describe("linkClick", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function click(init: Partial<MouseEvent>) {
+    const history = { pushState: vi.fn(), replaceState: vi.fn() };
+    vi.stubGlobal("history", history);
+    vi.stubGlobal("window", { dispatchEvent: vi.fn() });
+    const ev = {
+      button: 0,
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+      ...init,
+    } as unknown as MouseEvent;
+    linkClick("/zeitwerk/new")(ev);
+    return { history, ev };
+  }
+
+  it("navigates in-app on a plain left click", () => {
+    const { history, ev } = click({});
+    expect(ev.preventDefault).toHaveBeenCalled();
+    expect(history.pushState).toHaveBeenCalledWith(null, "", "/zeitwerk/new");
+  });
+
+  it("leaves modified and middle clicks to the browser", () => {
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }]) {
+      const { history, ev } = click(init);
+      expect(ev.preventDefault).not.toHaveBeenCalled();
+      expect(history.pushState).not.toHaveBeenCalled();
+    }
   });
 });

@@ -87,7 +87,43 @@ export interface Plan {
   week: { day_types: DayType[] };
   overrides: Override[];
   options: Record<string, unknown>;
+  /** Room the plan belongs to (SPEC §10); absent = general schedule. */
+  room?: string | null;
+  /** Room event -> profile id (`window`: profile while a window is open). */
+  room_reactions?: { window?: string | null };
+  /** The plan names a room that does not exist (any more). */
+  room_missing?: boolean;
   status?: PlanStatus | null;
+}
+
+export interface RoomWindowState {
+  open: boolean;
+  open_since: string | null;
+  entities: Record<string, string>;
+  /** Window contacts that are unavailable/unknown right now. */
+  unavailable: string[];
+}
+
+/** Room as sent by `zeitwerk/rooms/*` (SPEC §10). */
+export interface Room {
+  id: string;
+  name: string;
+  area_id: string | null;
+  icon: string | null;
+  windows: { entities: string[]; open_delay: number; close_delay: number };
+  sensors: { temperature: string | null; humidity: string | null };
+  /** Null while the room has no window tracker (e.g. not started yet). */
+  window: RoomWindowState | null;
+  area_missing: boolean;
+  /** Ids of the plans that belong to the room. */
+  plans: string[];
+}
+
+export interface RoomEvent {
+  event: "init" | "added" | "updated" | "removed";
+  rooms?: Room[];
+  room_id?: string;
+  room?: Room | null;
 }
 
 export interface PlanEvent {
@@ -126,8 +162,32 @@ export interface HassConnection {
   ): Promise<() => Promise<void> | void>;
 }
 
+/** Registry data HA's frontend puts on `hass` (all optional here). */
+export interface HassArea {
+  area_id: string;
+  name: string;
+  floor_id?: string | null;
+  icon?: string | null;
+  temperature_entity_id?: string | null;
+  humidity_entity_id?: string | null;
+}
+
+export interface HassFloor {
+  floor_id: string;
+  name: string;
+  level?: number | null;
+  icon?: string | null;
+}
+
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
+  areas?: Record<string, HassArea>;
+  floors?: Record<string, HassFloor>;
+  devices?: Record<string, { id: string; area_id?: string | null }>;
+  entities?: Record<
+    string,
+    { entity_id: string; device_id?: string | null; area_id?: string | null }
+  >;
   locale?: { language: string };
   language?: string;
   config?: { time_zone?: string; unit_system?: { temperature?: string } };

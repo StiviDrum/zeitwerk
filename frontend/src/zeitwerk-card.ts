@@ -5,7 +5,7 @@ import { NowClock } from "./clock";
 import { profileColor, textOn, tint } from "./colors";
 import { syncDark } from "./display-ui";
 import { localizer, type Localizer } from "./localize";
-import { navigateTo, openPath, routePath } from "./nav";
+import { linkClick, navigateTo, routePath } from "./nav";
 import { ZeitwerkPlanHeader } from "./plan-header";
 import {
   errorMessage,
@@ -31,6 +31,7 @@ import { ZeitwerkTimelinePlan, type ScheduledSegment } from "./timeline-plan";
 import { formatTime, zonedNow } from "./time";
 import type { HomeAssistant, Plan, PlanEvent, Profile, ZeitwerkCardConfig } from "./types";
 import { CARD_VERSION } from "./version";
+import { RetrySubscription } from "./subscription";
 import { ZeitwerkWeekGrid } from "./week-grid";
 import type { DayKey } from "./day-plan";
 import type { TemplateResult } from "lit";
@@ -83,7 +84,7 @@ export class ZeitwerkCard extends LitElement {
   private _previewTimer?: number;
   private _watched?: { source: unknown; ids: string[] };
 
-  private _unsub?: Promise<() => Promise<void> | void>;
+  private _sub?: RetrySubscription<PlanEvent>;
   private _subscribedPlan?: string;
   private _clock = new NowClock(
     this,
@@ -104,10 +105,8 @@ export class ZeitwerkCard extends LitElement {
 
   public setConfig(config: ZeitwerkCardConfig): void {
     if (!config || typeof config !== "object") throw new Error("Invalid configuration");
-    if (config.time_step !== undefined && !(config.time_step >= 1 && config.time_step <= 60)) {
-      throw new Error("time_step must be between 1 and 60 minutes");
-    }
-    this._config = { view: "week", show_profile_sliders: true, time_step: 15, ...config };
+    // `time_step` is a plan option now; the key is still accepted and ignored.
+    this._config = { view: "week", show_profile_sliders: true, ...config };
     if (this._subscribedPlan !== this._config.plan) this._resubscribe();
   }
 
@@ -147,6 +146,8 @@ export class ZeitwerkCard extends LitElement {
     this._unsubscribe();
     this._clock.stop();
     window.clearTimeout(this._previewTimer);
+    window.clearTimeout(this._noticeTimer);
+    window.clearTimeout(this._undoTimer);
     this._sliderEnd();
     Object.values(this._valueTimers).forEach((t) => window.clearTimeout(t));
     this._valueTimers = {};
@@ -170,7 +171,7 @@ export class ZeitwerkCard extends LitElement {
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("hass") && this.hass) {
       syncDark(this, this.hass);
-      if (!this._unsub && this._subscribedPlan === undefined && this._config && this.isConnected) {
+      if (!this._sub && this._subscribedPlan === undefined && this._config && this.isConnected) {
         this._resubscribe();
       }
     }
@@ -196,11 +197,28 @@ export class ZeitwerkCard extends LitElement {
   // --- Data -----------------------------------------------------------------
 
   private _unsubscribe(): void {
-    const unsub = this._unsub;
-    this._unsub = undefined;
+    this._sub?.stop();
+    this._sub = undefined;
     this._subscribedPlan = undefined;
-    unsub?.then((fn) => fn()).catch(() => undefined);
   }
+
+  private _start(msg: Record<string, unknown>, onEvent: (event: PlanEvent) => void): void {
+    const sub = new RetrySubscription<PlanEvent>({
+      hass: () => this.hass,
+      msg,
+      onEvent,
+      onError: (err) => {
+        if (this._sub !== sub) return;
+        if (!err) this._error = undefined;
+        else if ((err as { code?: string }).code === "not_found") this._plan = null;
+        else this._error = errorMessage(err);
+      },
+    });
+    this._sub = sub;
+    sub.start();
+  }
+
+  private _retry = (): void => this._sub?.retryNow();
 
   private _resubscribe(): void {
     this._unsubscribe();
@@ -217,47 +235,28 @@ export class ZeitwerkCard extends LitElement {
     if (!this.hass?.connection || !planId || (view !== "week" && view !== "profiles")) return;
     if (!this.isConnected) return;
     this._subscribedPlan = planId;
-    const unsub = this.hass.connection.subscribeMessage<PlanEvent>((msg) => this._onEvent(msg), {
-      type: "zeitwerk/plans/subscribe",
-      plan_id: planId,
-    });
-    this._unsub = unsub;
-    unsub.catch((err: { code?: string; message?: string }) => {
-      if (this._unsub !== unsub) return;
-      this._unsub = undefined;
-      if (err?.code === "not_found") this._plan = null;
-      else this._error = errorMessage(err);
-    });
+    this._start({ type: "zeitwerk/plans/subscribe", plan_id: planId }, (msg) => this._onEvent(msg));
   }
 
   private _subscribeAll(): void {
     if (!this.hass?.connection || !this.isConnected) return;
     this._subscribedPlan = "*";
-    const unsub = this.hass.connection.subscribeMessage<PlanEvent>(
-      (msg) => {
-        let plans = this._plans ?? [];
-        if (msg.event === "init") plans = msg.plans ?? [];
-        else if (msg.event === "removed") plans = plans.filter((p) => p.id !== msg.plan_id);
-        else if (msg.plan) {
-          const plan = msg.plan;
-          const i = plans.findIndex((p) => p.id === msg.plan_id);
-          plans = i < 0 ? [...plans, plan] : plans.map((p, j) => (j === i ? plan : p));
-        }
-        this._plans = plans;
-        if (this._detail) {
-          this._plan = plans.find((p) => p.id === this._detail) ?? null;
-          if (this._plan) this._planUpdated();
-          else this._closeDetail();
-        }
-        this._schedulePreview(msg.event === "init" ? 0 : 1000);
-      },
-      { type: "zeitwerk/plans/subscribe" },
-    );
-    this._unsub = unsub;
-    unsub.catch((err) => {
-      if (this._unsub !== unsub) return;
-      this._unsub = undefined;
-      this._error = errorMessage(err);
+    this._start({ type: "zeitwerk/plans/subscribe" }, (msg) => {
+      let plans = this._plans ?? [];
+      if (msg.event === "init") plans = msg.plans ?? [];
+      else if (msg.event === "removed") plans = plans.filter((p) => p.id !== msg.plan_id);
+      else if (msg.plan) {
+        const plan = msg.plan;
+        const i = plans.findIndex((p) => p.id === msg.plan_id);
+        plans = i < 0 ? [...plans, plan] : plans.map((p, j) => (j === i ? plan : p));
+      }
+      this._plans = plans;
+      if (this._detail) {
+        this._plan = plans.find((p) => p.id === this._detail) ?? null;
+        if (this._plan) this._planUpdated();
+        else this._closeDetail();
+      }
+      this._schedulePreview(msg.event === "init" ? 0 : 1000);
     });
   }
 
@@ -638,7 +637,8 @@ export class ZeitwerkCard extends LitElement {
     const l = this._l;
     const view = this._config.view;
     if (view === "timeline") {
-      if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
+      if (this._error)
+        return this._message(l.t("not_loaded", { error: this._error }), true, false, true);
       if (!this.hass || this._plans === undefined) return this._message(l.t("loading"));
       if (this._detail && this._plan) return this._renderWeek(this._plan);
       return this._renderTimeline();
@@ -647,7 +647,8 @@ export class ZeitwerkCard extends LitElement {
       return this._message(l.t("view_unsupported", { view }));
     }
     if (!this._config.plan) return this._message(l.t("no_plan"), false, true);
-    if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
+    if (this._error)
+      return this._message(l.t("not_loaded", { error: this._error }), true, false, true);
     if (!this.hass || this._plan === undefined) return this._message(l.t("loading"));
     if (this._plan === null)
       return this._message(l.t("plan_missing", { plan: this._config.plan }), true, true);
@@ -719,18 +720,23 @@ export class ZeitwerkCard extends LitElement {
   private _newPlanButton(preset?: string) {
     if (!this._admin) return nothing;
     const path = routePath({ name: "new", preset });
-    return html`<button class="textbtn" @click=${(ev: MouseEvent) => openPath(path, ev)}>
+    return html`<a class="textbtn" href=${path} @click=${linkClick(path)}>
       ${this._l.t("new_plan")}
-    </button>`;
+    </a>`;
   }
 
-  private _message(text: string, isError = false, offerWizard = false) {
+  private _message(text: string, isError = false, offerWizard = false, retry = false) {
     return html`<ha-card>
       <div class="message ${isError ? "error" : ""}" role=${isError ? "alert" : nothing}>
         <span class="brand">Zeitwerk</span>
         <span>${text}</span>
         ${this._notice ? html`<span class="notice">${this._notice}</span>` : nothing}
         ${offerWizard ? this._newPlanButton(this._config?.plan) : nothing}
+        ${
+          retry
+            ? html`<button class="textbtn" @click=${this._retry}>${this._l.t("retry")}</button>`
+            : nothing
+        }
       </div>
     </ha-card>`;
   }
@@ -832,7 +838,7 @@ export class ZeitwerkCard extends LitElement {
   private _editLink(plan: Plan) {
     if (!this._admin) return nothing;
     const path = routePath({ name: "plan", planId: plan.id });
-    return html`<button class="link settings" @click=${(ev: MouseEvent) => openPath(path, ev)}>
+    return html`<a class="link settings" href=${path} @click=${linkClick(path)}>
       <span class="licon"><ha-icon .icon=${"mdi:pencil-outline"}></ha-icon></span>
       <span class="ltext">
         <span class="ltitle">${this._l.t("edit_in_zeitwerk")}</span>
@@ -850,7 +856,7 @@ export class ZeitwerkCard extends LitElement {
       >
         <path d="M9 6l6 6-6 6" />
       </svg>
-    </button>`;
+    </a>`;
   }
 
   static styles = [
@@ -1083,6 +1089,7 @@ export class ZeitwerkCard extends LitElement {
         text-underline-offset: 3px;
       }
       .link {
+        text-decoration: none;
         width: 100%;
         display: flex;
         align-items: center;

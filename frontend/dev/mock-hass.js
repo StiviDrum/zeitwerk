@@ -131,12 +131,42 @@ const bath = {
   icon: "mdi:shower",
   profiles: profiles("bad"),
 };
+if (panelMode) {
+  plan.room = "wohnzimmer";
+  plan.room_reactions = { window: "away" };
+  bath.room = "bad";
+}
+const garden = { ...structuredClone(bath), id: "garten", name: "Bewaesserung", icon: "mdi:sprinkler", enabled: true, room: undefined };
+const quiet = (extra) => ({ profile: "eco", source: "default", day_type: null, is_holiday: false, active: true, next_change: null, next_profile: null, forced_until: null, error: null, ...extra });
+const others = { [bath.id]: bath, [garden.id]: garden };
+const otherStatus = (p) => (p.enabled ? quiet({}) : quiet({ profile: null, source: "disabled", active: false }));
 const allPlans = () => [
   { ...plan, status: status() },
-  ...(panelMode
-    ? [{ ...bath, status: { profile: null, source: "disabled", day_type: null, is_holiday: false, active: false, next_change: null, next_profile: null, forced_until: null, error: null } }]
-    : []),
+  ...(panelMode ? Object.values(others).map((p) => ({ ...p, status: otherStatus(p) })) : []),
 ];
+
+// Rooms (panel only): two floors, one open window, one unavailable contact.
+const rooms = {
+  wohnzimmer: { id: "wohnzimmer", name: "Wohnzimmer", area_id: "wohnzimmer", icon: null, windows: { entities: ["binary_sensor.fenster_wz_links", "binary_sensor.fenster_wz_rechts"], open_delay: 60, close_delay: 0 }, sensors: { temperature: "sensor.wz_temperatur", humidity: "sensor.wz_feuchte" } },
+  schlafzimmer: { id: "schlafzimmer", name: "Schlafzimmer", area_id: "schlafzimmer", icon: "mdi:bed", windows: { entities: ["binary_sensor.fenster_sz"], open_delay: 60, close_delay: 0 }, sensors: { temperature: null, humidity: null } },
+  bad: { id: "bad", name: "Bad", area_id: "bad", icon: null, windows: { entities: ["binary_sensor.fenster_bad"], open_delay: 30, close_delay: 0 }, sensors: { temperature: null, humidity: null } },
+};
+const roomPayload = (r) => {
+  const st = (id) => states[id]?.state;
+  const unavailable = r.windows.entities.filter((id) => ["unavailable", "unknown", undefined].includes(st(id)));
+  return {
+    ...r,
+    window: r.windows.entities.length
+      ? { open: r.windows.entities.some((id) => ["on", "open"].includes(st(id))), open_since: null, entities: Object.fromEntries(r.windows.entities.map((id) => [id, st(id)])), unavailable }
+      : null,
+    area_missing: !!r.area_id && !hass.areas[r.area_id],
+    plans: allPlans().filter((p) => p.room === r.id).map((p) => p.id),
+  };
+};
+const roomSubscribers = new Set();
+const emitRoom = (event, id) => {
+  for (const cb of roomSubscribers) cb({ event, room_id: id, room: event === "removed" ? null : roomPayload(rooms[id]) });
+};
 
 const subscribers = new Set();
 const emit = () => {
@@ -180,6 +210,17 @@ const states = {
   },
 };
 
+Object.assign(states, {
+  "binary_sensor.fenster_wz_links": { entity_id: "binary_sensor.fenster_wz_links", state: "on", attributes: { friendly_name: "Fenster WZ links", device_class: "window" } },
+  "binary_sensor.fenster_wz_rechts": { entity_id: "binary_sensor.fenster_wz_rechts", state: "off", attributes: { friendly_name: "Fenster WZ rechts", device_class: "window" } },
+  "binary_sensor.fenster_sz": { entity_id: "binary_sensor.fenster_sz", state: "unavailable", attributes: { friendly_name: "Fenster SZ", device_class: "window" } },
+  "binary_sensor.fenster_bad": { entity_id: "binary_sensor.fenster_bad", state: "off", attributes: { friendly_name: "Fenster Bad", device_class: "window" } },
+  "binary_sensor.tuer_bad": { entity_id: "binary_sensor.tuer_bad", state: "off", attributes: { friendly_name: "Tuer Bad", device_class: "door" } },
+  "sensor.wz_temperatur": { entity_id: "sensor.wz_temperatur", state: "21.3", attributes: { friendly_name: "WZ Temperatur", device_class: "temperature", unit_of_measurement: "°C" } },
+  "sensor.wz_feuchte": { entity_id: "sensor.wz_feuchte", state: "48", attributes: { friendly_name: "WZ Feuchte", device_class: "humidity", unit_of_measurement: "%" } },
+  "sensor.bad_temperatur": { entity_id: "sensor.bad_temperatur", state: "23.1", attributes: { friendly_name: "Bad Temperatur", device_class: "temperature", unit_of_measurement: "°C" } },
+});
+
 const log = (...args) => console.log("[mock-hass]", ...args);
 window.mockCalls = [];
 
@@ -188,6 +229,22 @@ if (manual) states["input_number.temperaturspeicher_wohnzimmer"].state = "21.5";
 
 const hass = {
   states,
+  areas: {
+    wohnzimmer: { area_id: "wohnzimmer", name: "Wohnzimmer", floor_id: "eg", icon: "mdi:sofa" },
+    schlafzimmer: { area_id: "schlafzimmer", name: "Schlafzimmer", floor_id: "og" },
+    bad: { area_id: "bad", name: "Bad", floor_id: "eg", temperature_entity_id: "sensor.bad_temperatur" },
+    keller: { area_id: "keller", name: "Keller", floor_id: null },
+  },
+  floors: {
+    og: { floor_id: "og", name: "Obergeschoss", level: 1 },
+    eg: { floor_id: "eg", name: "Erdgeschoss", level: 0 },
+  },
+  devices: {},
+  entities: {
+    "binary_sensor.fenster_bad": { entity_id: "binary_sensor.fenster_bad", area_id: "bad" },
+    "binary_sensor.tuer_bad": { entity_id: "binary_sensor.tuer_bad", area_id: "bad" },
+    "sensor.bad_temperatur": { entity_id: "sensor.bad_temperatur", area_id: "bad" },
+  },
   language: params.get("lang") || "de",
   locale: { language: params.get("lang") || "de" },
   config: { time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone, unit_system: { temperature: "°C" } },
@@ -200,6 +257,13 @@ const hass = {
   connection: {
     async subscribeMessage(cb, msg) {
       log("subscribe", msg);
+      window.mockSubscribeCalls = (window.mockSubscribeCalls ?? 0) + 1;
+      if (params.get("fail") === "1" && window.mockSubscribeCalls <= 2) throw { code: "unknown_error", message: "mock: not ready" };
+      if (msg.type === "zeitwerk/rooms/subscribe") {
+        roomSubscribers.add(cb);
+        setTimeout(() => cb({ event: "init", rooms: Object.values(rooms).map(roomPayload) }), 50);
+        return () => roomSubscribers.delete(cb);
+      }
       if (msg.plan_id && msg.plan_id !== plan.id) throw { code: "not_found", message: `Plan '${msg.plan_id}' not found` };
       subscribers.add(cb);
       setTimeout(() => cb({ event: "init", plans: allPlans() }), 50);
@@ -212,8 +276,28 @@ const hass = {
     if (msg.type === "zeitwerk/plans/list") return { plans: [{ ...plan, status: status() }] };
     if (msg.type === "zeitwerk/plans/create") {
       const id = msg.plan.id || msg.plan.name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-      return { ...msg.plan, id };
+      return { ...msg.plan, id, enabled: true, tags: msg.plan.tags ?? [], status: null };
     }
+    if (msg.type === "zeitwerk/rooms/create") {
+      const id = (msg.room.id || msg.room.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"));
+      rooms[id] = { windows: { entities: [], open_delay: 60, close_delay: 0 }, sensors: { temperature: null, humidity: null }, ...msg.room, id };
+      setTimeout(() => emitRoom("added", id), 30);
+      return roomPayload(rooms[id]);
+    }
+    if (msg.type === "zeitwerk/rooms/update") {
+      if (!rooms[msg.room_id]) throw { code: "not_found", message: "room" };
+      if (msg.room.name === "FAIL") throw { code: "invalid_format", message: "mock: invalid room" };
+      rooms[msg.room_id] = { ...msg.room, id: msg.room_id };
+      setTimeout(() => emitRoom("updated", msg.room_id), 30);
+      return roomPayload(rooms[msg.room_id]);
+    }
+    if (msg.type === "zeitwerk/rooms/delete") {
+      delete rooms[msg.room_id];
+      for (const p of [plan, ...Object.values(others)]) if (p.room === msg.room_id) { delete p.room; delete p.room_reactions; }
+      setTimeout(() => emitRoom("removed", msg.room_id), 30);
+      return null;
+    }
+    if (msg.type === "zeitwerk/rooms/list") return { rooms: Object.values(rooms).map(roomPayload) };
     if (msg.type === "zeitwerk/preview") {
       const dt = plan.week.day_types.find((d) => d.days.includes(["mon", "tue", "wed", "thu", "fri", "sat", "sun"][today]));
       const day = new Date();
@@ -247,8 +331,15 @@ const hass = {
       return { ...plan, id: msg.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), name: msg.name, enabled: false };
     }
     if (msg.type === "zeitwerk/plans/update") {
-      if (msg.plan_id === bath.id) return { ...msg.plan, status: null };
+      if (others[msg.plan_id]) {
+        others[msg.plan_id] = structuredClone(msg.plan);
+        const p = others[msg.plan_id];
+        for (const cb of subscribers) cb({ event: "updated", plan_id: p.id, plan: { ...p, status: otherStatus(p) } });
+        for (const id of Object.keys(rooms)) setTimeout(() => emitRoom("updated", id), 30);
+        return { ...p, status: otherStatus(p) };
+      }
       plan = structuredClone(msg.plan);
+      for (const id of Object.keys(rooms)) setTimeout(() => emitRoom("updated", id), 30);
       setTimeout(emit, 30);
       return { ...plan, status: status() };
     }

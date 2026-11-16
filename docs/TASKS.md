@@ -249,8 +249,9 @@ Done with subagents (AGENTS.md §8); orchestrator commits.
 - [x] Frontend: split build into card + panel modules
 - [x] Frontend: panel shell with routing, header, narrow layout, error states
 - [x] Frontend: move day editor, rules, profiles, wizard into the panel
-- [ ] Frontend: overview (rooms by floor, general plans, hints)
-- [ ] Frontend: room editor (area, windows, sensors, plans + window reaction)
+- [x] Frontend: overview (rooms by floor, general plans, hints)
+- [x] Frontend: room editor (area, windows, sensors, plans + window reaction)
+  - Reviewed by `zw-reviewer` (blocking: `room_missing` sent back on save – fixed in frontend and backend). Measured: card 98 698 B, panel 218 705 B. Mock preview only; `ha-selector` path untested.
 - [x] Frontend: card slimmed to display + control, „In Zeitwerk bearbeiten“ deep links (admins only)
   - Measured: card 94 437 B (29 489 B gz), panel 179 456 B (47 295 B gz); old single bundle 187 860 B. Checked in the mock preview (playwright), not yet in the HA dev instance.
 - [ ] Tests: migration, window delays, priority vs. overrides/manual/forced, unload cleanup, DST unaffected; vitest for routing + overview grouping

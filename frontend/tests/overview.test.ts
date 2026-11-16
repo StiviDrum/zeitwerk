@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { localizer } from "../src/localize";
-import { gridRows, overviewRow, watchedEntities, type ViewCtx } from "../src/plan-view";
+import {
+  gridRows,
+  hassChanged,
+  overviewRow,
+  stripStatus,
+  timeStepOf,
+  watchedEntities,
+  type ViewCtx,
+} from "../src/plan-view";
 import type { HomeAssistant, Plan } from "../src/types";
 
 const setValue = (value: number) => [
@@ -123,5 +131,45 @@ describe("gridRows", () => {
     const rows = gridRows(ctx, p);
     expect(rows).toHaveLength(8);
     expect(rows[7].key).toBe("holiday");
+  });
+});
+
+describe("timeStepOf", () => {
+  it("reads options.time_step with fallback 15", () => {
+    expect(timeStepOf(plan())).toBe(15);
+    expect(timeStepOf(plan({ options: { time_step: 30 } }))).toBe(30);
+    expect(timeStepOf(plan({ options: { time_step: 7 } }))).toBe(15);
+    expect(timeStepOf(plan({ options: { time_step: "10" } }))).toBe(10);
+  });
+});
+
+describe("stripStatus", () => {
+  it("drops all read-only keys the backend rejects", () => {
+    const stripped = stripStatus(plan({ room: "r", room_missing: true }));
+    expect(stripped.status).toBeUndefined();
+    expect("room_missing" in stripped).toBe(false);
+    expect(stripped.room).toBe("r");
+  });
+});
+
+describe("hassChanged", () => {
+  const base = {
+    states: { "sensor.a": { state: "1" } },
+    areas: {},
+    floors: {},
+  } as unknown as HomeAssistant;
+  it("ignores unrelated state changes", () => {
+    const next = {
+      ...base,
+      states: { ...base.states, "sensor.other": { state: "2" } },
+    } as unknown as HomeAssistant;
+    expect(hassChanged(base, next, ["sensor.a"])).toBe(false);
+  });
+  it("reacts to watched entities, areas and floors", () => {
+    const state = { ...base, states: { "sensor.a": { state: "2" } } } as unknown as HomeAssistant;
+    expect(hassChanged(base, state, ["sensor.a"])).toBe(true);
+    expect(hassChanged(base, { ...base, areas: {} }, [])).toBe(true);
+    expect(hassChanged(base, { ...base, floors: {} }, [])).toBe(true);
+    expect(hassChanged(base, { ...base, language: "de" }, [])).toBe(true);
   });
 });
