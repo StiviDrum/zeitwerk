@@ -4,7 +4,46 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0-rc.10] - unreleased
+
+### Added
+- Sidebar panel „Zeitwerk“ (admin users only): overview with rooms grouped by
+  floor and general schedules, room editor, plan wizard (also for a preselected
+  room), week plan, day editor, rules, profiles. Deep links such as
+  `/zeitwerk/plan/<id>`, `/zeitwerk/plan/<id>/day/mon` and `/zeitwerk/room/<id>`.
+- Rooms: a Home Assistant area with window contacts (`binary_sensor` or
+  `input_boolean`; `open_delay` default 60 s, `close_delay` default 0 s) and
+  optional temperature and humidity sensors. A room can have several plans; per
+  plan, an open window switches to a profile (`room_reactions.window`) or is
+  ignored. An open window takes priority over vacation and other overrides,
+  manual changes and forced profiles. The window state survives restarts.
+- Binary sensor `binary_sensor.zeitwerk_<room>_window` (attributes `entities`,
+  `open_since`, `unavailable`); the profile sensor reports `source: room:window`.
+- Websocket commands `zeitwerk/rooms/list`, `get`, `create`, `update`, `delete`
+  and `subscribe`; plans accept `room` and `room_reactions` and report
+  `room_missing`, rooms report `area_missing`.
+- Card: admins get „In Zeitwerk bearbeiten“ and a tap on a day opens its day
+  editor in the panel.
+- Plan option `options.time_step` (5, 10, 15, 30 or 60 minutes, default 15),
+  set on the rules page.
+
+### Changed
+- The editors moved from the card to the sidebar panel: day editor, rules,
+  profiles, plan settings and the new-plan wizard. The card now only displays
+  and controls (header, week grid, timeline, sliders, „Fortsetzen“, plan
+  on/off). `view: profiles` is the slider quick view.
+- The card option `time_step` is ignored; the step is a plan option now.
+- Card and panel are built as separate modules; the panel is loaded only when
+  its sidebar entry is opened.
+- Storage schema 2 adds `rooms`. Existing storage migrates automatically; plans
+  are unchanged and remain general schedules.
+
+### Fixed
+- Websocket: plan and room payloads that still contain read-only keys (as
+  returned by the API) are accepted when sent back.
+- Room id `new` is reserved, because the panel route for creating a room uses it.
+- Panel: the window picker also offers `input_boolean` entities, and optional
+  selectors no longer show a „*“.
 
 ## [1.0.0-rc.9] - 2026-11-14
 

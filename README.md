@@ -27,7 +27,8 @@ A plan says *when* a profile applies (week grid with day types such as
 Assistant actions, e.g. set a temperature). Overrides with priority
 ("vacation → away", "nobody home → away") and activation conditions are built
 in. Zeitwerk ships its own Lovelace card, which registers itself – no manual
-resource needed.
+resource needed. All editing happens in a **sidebar panel** for admins; **rooms**
+group plans by Home Assistant area and react to open windows.
 
 ## How it decides
 
@@ -35,10 +36,12 @@ For every enabled plan, in this order:
 
 1. Activation conditions not met → plan is *inactive* (does nothing, or applies
    `when_inactive: profile:<id>` once).
-2. A forced profile (`zeitwerk.force_profile` / `skip_next`) is active → that profile.
-3. First override whose conditions match (list order = priority) → its profile.
-4. The block of the current day type → its profile.
-5. Otherwise the plan's `default_profile`.
+2. The plan belongs to a room and the room's window is open (after its delay)
+   → the profile in `room_reactions.window`, if set. See [Rooms](#rooms).
+3. A forced profile (`zeitwerk.force_profile` / `skip_next`) is active → that profile.
+4. First override whose conditions match (list order = priority) → its profile.
+5. The block of the current day type → its profile.
+6. Otherwise the plan's `default_profile`.
 
 Profiles are applied **only when the result changes** (plus on start with
 `reapply_on_start`, and after editing the active profile with
@@ -59,6 +62,137 @@ Requires Home Assistant 2026.11 or newer.
 2. Install **Zeitwerk**, restart Home Assistant.
 3. *Settings → Devices & services → Add integration → Zeitwerk*.
 
+## Sidebar panel
+
+Zeitwerk adds an entry **Zeitwerk** to the sidebar. It is visible to admin users
+only and is where everything is edited. The card only displays and controls
+(see [Card](#card)). On narrow screens (phone, Companion app) the panel uses a
+single column.
+
+- **Overview** (`/zeitwerk`): rooms as tiles, grouped by floor (rooms without a
+  floor under „Other rooms“). A tile shows the name, icon, temperature and
+  humidity (if sensors are set), the window state and one chip per plan with
+  its profile colour and the next change („from 22:00“). Below the rooms:
+  **general schedules** (plans without a room). Hints at the top: a plan with a
+  missing room, a window contact that is unavailable, a deleted area. Buttons
+  „Add room“ and „Add plan“.
+- **Week plan** (`/zeitwerk/plan/<plan_id>`): the week grid. Tap a day to open
+  the **day editor** (`/zeitwerk/plan/<plan_id>/day/mon`): all blocks of that
+  day on a 24 h bar – tap a block to select it, tap an empty spot or „+ Block“
+  to add one, drag the handles or the block (snapped to the plan's time step),
+  change profile and times (± buttons or type them: „7“, „730“, „7:30“; Enter
+  applies, Esc cancels), delete. Blocks stay within the day (0:00–24:00).
+  Resume points („Rücksetzpunkte“) are set here too: drag the knob above the
+  day bar or type the time. On **Save** pick further days (Mo–So, quick Mo–Fr /
+  Sa–So / Alle) that get exactly this day plan – their old blocks are replaced.
+  Weekdays with the same plan are grouped into day types automatically (so
+  `day_type` attributes show names like „Mo–Fr“).
+- **Rules** (`/zeitwerk/plan/<plan_id>/rules`, „?“ explains them): **Overrides**
+  in priority order with a live *active* badge – drag the handle (or focus it
+  and press ↑/↓) to reorder, tap to edit name, profile, all/any and conditions
+  (Home Assistant's own condition editor; JSON fallback if it cannot be
+  loaded). **Activation**: all/any, live ✓ per condition, "otherwise" behaviour
+  (`when_inactive`) and immediate re-evaluation (`reevaluate`). A paused plan
+  shows the reason in the header, e.g. „pausiert – Heizperiode: Aus“.
+  **Holidays**: source (Holiday calendar or Workday sensor), mode off / like a
+  weekday / own day (creates a „Feiertag“ day type with its own row and tab)
+  and the next three holidays. **Options**: the time step for the editors
+  (`options.time_step`: 5, 10, 15, 30 or 60 minutes, default 15).
+- **Profiles** (`/zeitwerk/plan/<plan_id>/profiles`): name, icon, colour, default
+  profile (exactly one; it applies wherever no block is planned) and 1–5
+  profiles; drag the handle (or ↑/↓) to change their order (= slider order).
+  What the profiles switch: either **one entity for all** (each profile sets its
+  own value – temperature, option, on/off, brightness …) or **own entities per
+  profile**, each profile with one or more „entity → value“ lines (e.g. Morning:
+  light A on – Evening: light B on and light A off). Anything else can be edited
+  as actions with Home Assistant's action editor. Deleting a profile: its blocks
+  disappear (the default profile applies there) and rules using it switch to the
+  default profile.
+- **Plan** (on the rules page): edit plan (name, icon, tags; the plan id stays,
+  so cards and automations keep working), **delete plan** (confirmation) and
+  **duplicate plan** (also as „Vorlage“ in the new-plan wizard): copies
+  everything; the copy starts switched off so two plans never control the same
+  entities.
+- **Room** (`/zeitwerk/room/<room_id>`): area, name, icon, window contacts with
+  their delays, temperature and humidity sensors, and the plans of the room with
+  their window reaction (see [Rooms](#rooms)).
+- **New plan** (`/zeitwerk/new`, or `/zeitwerk/new?room=<room_id>` for a plan in
+  a room): „+ Neuer Plan“ in the overview or in the card. Name, icon, tags and the
+  profiles with the editor described above, plus a start layout (workday/weekend
+  or every day). The plan name is suggested from the chosen entity. Or start from
+  an existing plan („Vorlage“, the copy starts switched off). A card configured
+  with an unknown `plan:` id offers to create the plan under that id.
+- After every change „Gespeichert · Rückgängig“ is shown for 10 s. Undo is
+  refused if the plan was changed elsewhere in the meantime.
+
+The panel is loaded only when its sidebar entry is opened.
+
+## Rooms
+
+A room is a Home Assistant **area** (e.g. Wohnzimmer) with its window contacts
+and optional temperature and humidity sensors. A room can have several plans
+(heating and lights, for example), and a plan belongs to at most one room. Plans
+without a room are general schedules and work as before.
+
+Each plan of a room decides what an open window does: a profile (e.g. `off` for
+the heating) or nothing (the plan ignores windows when `room_reactions.window`
+is not set).
+
+- **Window contacts** are `binary_sensor` or `input_boolean` entities. Contacts
+  only report open or closed, so a tilted window counts as open.
+- A window counts as **open** when at least one contact has been open for
+  `open_delay` (default 60 s). It counts as **closed** again when all contacts
+  have been closed for `close_delay` (default 0 s).
+- **Priority**: an open window beats vacation and other overrides, manual
+  changes and forced profiles. A forced profile keeps running but is covered by
+  the window until it closes. When the window closes, the profile that holds
+  *now* is applied, not the one from before.
+- A contact that becomes **unavailable** keeps its last value, so a failing
+  sensor does not end „window open“. A contact that has been unavailable since
+  Home Assistant started counts as closed. Removed or renamed contacts count as
+  closed.
+- The window state **survives restarts**: a window that was open stays open
+  after a restart if at least one contact is still open. Contacts that are not
+  reachable yet after the start (e.g. Zigbee) count as open until they report.
+  Otherwise the close delay starts again after the restart.
+- Editing a room does not change the window state; a running delay continues.
+  `zeitwerk.apply` and `zeitwerk.resume` re-apply the window profile while a
+  window is open.
+- Deleting a room keeps its plans as general schedules. If the area of a room
+  is deleted, the room stays and the overview shows a hint (`area_missing`). A
+  plan that points to a room which does not exist is flagged (`room_missing`);
+  once the room exists, the reaction applies at once.
+- Each room gets a binary sensor `binary_sensor.zeitwerk_<room>_window` (device
+  class *window*): on while the window counts as open. Its attributes are
+  `entities` (state of each contact), `open_since` and `unavailable`. The room
+  is a device suggested for its area; the entities of its plans stay on the plan
+  devices. In a plan's profile sensor, `source` is `room:window` while the window
+  reaction is in effect.
+
+Room as stored and sent over the websocket API (YAML notation):
+
+```yaml
+room:
+  id: wohnzimmer
+  name: Wohnzimmer
+  area_id: wohnzimmer          # optional: Home Assistant area (floor, default icon)
+  icon: mdi:sofa               # optional
+  windows:
+    entities: [binary_sensor.fenster_wohnzimmer_links, input_boolean.fenster_wohnzimmer_rechts]
+    open_delay: 60             # seconds
+    close_delay: 0             # seconds
+  sensors:                     # display only
+    temperature: sensor.wohnzimmer_temperatur
+    humidity: sensor.wohnzimmer_feuchte
+  # returned read-only: window (state), plans, area_missing
+---
+plan:
+  id: wohnzimmer_heizung
+  room: wohnzimmer
+  room_reactions:
+    window: eco                # profile id; without this key the plan ignores windows
+```
+
 ## Card
 
 The integration serves the card and registers it with the frontend itself –
@@ -68,12 +202,13 @@ visual editor) or in YAML:
 
 ```yaml
 type: custom:zeitwerk-card
-view: week                  # week | timeline
+view: week                  # week | timeline | profiles
 plan: wohnzimmer_heizung    # plan id (week view)
 show_profile_sliders: true  # quick view of the profile values
-time_step: 15               # minutes, used for new blocks and the editor steppers
 compact: false              # hides sliders/legend, smaller grid
 ```
+
+`view: profiles` is the quick view: the profile values with their sliders.
 
 Timeline of all plans (optionally filtered by tag):
 
@@ -85,91 +220,39 @@ tags: [heizung]   # optional; plans with any of these tags
 title: Heizung    # optional
 ```
 
-Tap a plan in the timeline to open its full week view (profiles, day editor,
-configuration) in the same card; „‹ Zeitpläne“ goes back.
+The card displays and controls; it does not edit. Editing happens in the
+[sidebar panel](#sidebar-panel).
 
-The timeline shows one band per plan for today (scheduled blocks, manual
-override hatched, now-line), the current profile and value and the next
-change („ab 22:00“ / „in 20 min“); plans not in their default profile get a
-border in the profile colour.
-
-What the week view does:
-
-- Header with the current profile and value, the next change and the plan
+- **Header** with the current profile and value, the next change and the plan
   on/off switch. Only when the plan deviates from the week plan a quiet line
   says why („Vorrang: Urlaub“, „manuell bis 22:00“, „Komfort bis 22:00“,
-  „Feiertag“). Today's row in the grid is outlined.
+  „Feiertag“, „Fenster offen“). A manual override shows „manuell bis 22:00“ and
+  **„Fortsetzen“** next to it (and the ▷ button in the timeline) ends a manual
+  override or forced profile and returns to the schedule right away
+  (`zeitwerk.resume`).
 - **Profile sliders** for profiles that set exactly one value on one entity
   (`input_number`/`number` value, climate temperature, select option,
   brightness, position, percentage, on/off). Dragging calls
   `zeitwerk.set_profile_value` (debounced 400 ms; on touch screens the slider
-  reacts only after a short hold, so scrolling never changes a value); on/off profiles are switched
-  via the websocket API (admin).
-- **Profiles** (gear next to the „Profile“ heading, admin): name, icon,
-  colour, default profile (exactly one; it applies wherever no block is
-  planned) and 1–5 profiles; drag the handle (or ↑/↓) to change their order
-  (= slider order). What the profiles switch: either **one entity
-  for all** (each profile sets its own value – temperature, option, on/off,
-  brightness …) or **own entities per profile**, each profile with one or
-  more „entity → value“ lines (e.g. Morning: light A on – Evening: light B on
-  and light A off). Anything else can be edited as actions with Home
-  Assistant's action editor. Deleting a profile: its blocks disappear (the
-  default profile applies there) and rules using it switch to the default
-  profile.
-- **Week grid** (display only) with a now-line; block labels adapt to the
-  available width („06:00–08:00“, „06:00“ or none – hover shows the span): one row per weekday (plus
-  „Ft“ for an own holiday day). **Tap a day** to open the **day editor**: all
-  blocks of that day on a 24 h bar – tap a block to select it, tap an empty
-  spot or „+ Block“ to add one, drag the handles or the block (snapped to
-  `time_step`), change profile and times (± buttons or type them: „7“, „730“,
-  „7:30“; Enter applies, Esc cancels), delete. Blocks stay within the day
-  (0:00–24:00). On **Save** pick further days (Mo–So, quick Mo–Fr / Sa–So /
-  Alle) that get exactly this day plan – their old blocks are replaced.
-  Internally weekdays with the same plan are grouped into day types
-  automatically (so `day_type` attributes show names like „Mo–Fr“). Editing
-  needs an admin user.
-- **Konfiguration** (one entry below the grid with a summary). Section
-  *Regeln* („?“ explains them) → *Overrides*,
-  *Activation*, *Holidays*, each on its own page.
-- **Overrides / Activation**: overrides in
-  priority order with a live *active* badge – drag the handle (or focus it and
-  press ↑/↓) to reorder, tap to edit name, profile, all/any and conditions
-  (Home Assistant's own condition editor; JSON fallback if it cannot be
-  loaded). Activation: all/any, live ✓ per condition, "otherwise" behaviour
-  (`when_inactive`) and immediate re-evaluation (`reevaluate`). A paused plan
-  shows the reason in the header, e.g. „pausiert – Heizperiode: Aus“.
-- **Holidays** (configuration page): source (Holiday calendar or Workday sensor), mode
-  off / like a weekday / own day (creates a „Feiertag“ day type with its own
-  row and tab) and the next three holidays.
-- **Undo**: after every change made in the card (day, rules, profiles,
-  slider) „Gespeichert · Rückgängig“ is shown for 10 s. Undo is refused if the
-  plan was changed elsewhere in the meantime.
-- **Plan** section of the configuration page: **edit plan** (name, icon,
-  tags; the plan id stays, so cards and automations keep working) with
-  **delete plan** (confirmation), and **duplicate plan** ( or „Vorlage“ in the new-plan wizard): copies
-  everything; the copy starts switched off so two plans never control the
-  same entities.
-- A **manual override** shows in the header („manuell bis 22:00“) and as a
-  hatched range in today's row. **„Fortsetzen“** next to it (and the ▷ button
-  in the timeline) ends a manual override or forced profile and returns to
-  the schedule right away (`zeitwerk.resume`).
-- **Resume points** („Rücksetzpunkte“, day editor): times at which a manual
-  change ends and the schedule continues, shown as dotted lines in the week
-  plan and the timeline. Drag the knob above the day bar (or focus it and use
-  ←/→), or type the time. „Auch erzwungenes Profil“ lets them end a forced
-  profile, too. They are saved per day and copied with „Tagesplan speichern
-  für“ (Mo–Fr, Sa–So, Alle).
+  reacts only after a short hold, so scrolling never changes a value); on/off
+  profiles are switched via the websocket API (admin).
+- **Week grid** (display only) with a now-line and the resume points as dotted
+  lines; block labels adapt to the available width („06:00–08:00“, „06:00“ or
+  none – hover shows the span). Today's row is outlined. For admins, tapping a
+  day opens its day editor in the panel.
+- **Timeline**: one band per plan for today (scheduled blocks, manual override
+  hatched, now-line), the current profile and value and the next change („ab
+  22:00“ / „in 20 min“); plans not in their default profile get a border in the
+  profile colour. Tapping a plan opens its week view in the same card; „‹
+  Zeitpläne“ goes back.
+- **Admins** get „In Zeitwerk bearbeiten“ (opens the plan in the panel) and
+  „+ Neuer Plan“ (opens the wizard in the panel).
+- Changes made in the card (e.g. a slider) offer „Gespeichert · Rückgängig“ for
+  10 s.
+- `time_step` in the card is ignored. The time step is a plan option now
+  (`options.time_step`, set on the rules page of the panel).
 
-- **New plan** (admins): „+ Neuer Plan“ in the timeline, or when the card has
-  no/an unknown plan. Name, icon, tags and the profiles with the same editor
-  as the profiles page – one entity for all profiles or own entities per
-  profile (several per profile, HA action editor), icons, colours, default
-  profile, 1–5 profiles – plus a start layout (workday/weekend or every day).
-  The plan name is suggested from the chosen entity. Or start from an existing
-  plan („Vorlage“, the copy starts switched off). A card configured with an
-  unknown `plan:` id creates the plan under that id.
-
-Bundle size (1.0.0-rc.9, minified): 187.9 KB, 49.7 KB gzip.
+Bundle size (minified, 1.0 build): card 98 698 bytes, panel 218 705 bytes.
 
 ## Repairs
 
@@ -233,6 +316,9 @@ in the repeated hour only once.
 ```yaml
 id: wohnzimmer_heizung
 name: Heizung Wohnzimmer
+room: wohnzimmer                  # optional, see Rooms
+room_reactions:
+  window: eco                     # optional: profile while the room's window is open
 profiles:
   - id: comfort
     name: Komfort
@@ -261,19 +347,28 @@ overrides:
     profile: eco
     conditions:
       - { condition: state, entity_id: input_boolean.urlaub, state: "on" }
-options: { reapply_on_start: true, reapply_on_profile_change: true }
+options: { time_step: 15, reapply_on_start: true, reapply_on_profile_change: true }
 ```
 
-Full model: [docs/SPEC.md](https://github.com/StiviDrum/zeitwerk/blob/main/docs/SPEC.md) §3.
+Full model: [docs/SPEC.md](https://github.com/StiviDrum/zeitwerk/blob/main/docs/SPEC.md) §3
+(rooms: §10).
 
-## Entities (per plan, one device per plan)
+## Entities
+
+Per plan (one device per plan):
 
 | Entity | State | Attributes |
 |---|---|---|
 | `switch.zeitwerk_<plan>` | plan enabled | – |
-| `sensor.zeitwerk_<plan>_profile` | current profile name | `profile_id`, `source` (`schedule`, `default`, `override:<id>`, `forced`, `inactive`, `disabled`), `day_type`, `is_holiday`, `forced_until`, `manual_override`, `manual_since`, `manual_until`, `manual_entity`, `manual_attribute` (watched attribute, e.g. `temperature`; missing when the state itself is watched), `error` |
+| `sensor.zeitwerk_<plan>_profile` | current profile name | `profile_id`, `source` (`schedule`, `default`, `override:<id>`, `forced`, `room:window`, `inactive`, `disabled`), `day_type`, `is_holiday`, `forced_until`, `manual_override`, `manual_since`, `manual_until`, `manual_entity`, `manual_attribute` (watched attribute, e.g. `temperature`; missing when the state itself is watched), `error` |
 | `sensor.zeitwerk_<plan>_next_change` | timestamp of next scheduled change (empty while an override is active) | `next_profile`, `next_profile_name` |
 | `binary_sensor.zeitwerk_<plan>_active` | activation conditions met | `match`, `conditions` (each with `result`) |
+
+Per room (one device per room):
+
+| Entity | State | Attributes |
+|---|---|---|
+| `binary_sensor.zeitwerk_<room>_window` | window open (after the delay), device class *window* | `entities` (state of each contact), `open_since`, `unavailable` |
 
 ## Services
 
@@ -352,13 +447,28 @@ after the delay.
 
 ## Websocket API
 
-Creating, editing and deleting plans is websocket-only (admin): `zeitwerk/plans/list`
-(`tag`), `zeitwerk/plans/get` (`plan_id`), `zeitwerk/plans/create` (`plan`),
-`zeitwerk/plans/update` (`plan_id`, `plan`), `zeitwerk/plans/delete` (`plan_id`),
-`zeitwerk/plans/subscribe` (optional `plan_id`; sends `init`, then
-`added`/`updated`/`removed`), `zeitwerk/preview` (`plan_ids`, `tag`, `start`,
-`end`; scheduled segments, max. 8 days), `zeitwerk/holidays/upcoming`
-(`source`, optional `count`; next holidays of a calendar/Workday source).
+The card and the sidebar panel use these websocket commands. Creating, updating,
+duplicating and deleting (plans and rooms) need an admin user. Read-only fields
+(e.g. `status`, `room_missing`, the room's `window`, `plans`, `area_missing`) are
+ignored when sent.
+
+| Type | Fields | Purpose |
+|---|---|---|
+| `zeitwerk/plans/list` | optional `tag` | list plans |
+| `zeitwerk/plans/get` | `plan_id` | one plan |
+| `zeitwerk/plans/create` | `plan` | create a plan (admin) |
+| `zeitwerk/plans/update` | `plan_id`, `plan` | change a plan (admin); accepts `room` and `room_reactions` |
+| `zeitwerk/plans/duplicate` | `plan_id`, optional `name` | copy a plan, which starts switched off (admin) |
+| `zeitwerk/plans/delete` | `plan_id` | delete a plan (admin) |
+| `zeitwerk/plans/subscribe` | optional `plan_id` | sends `init`, then `added` / `updated` / `removed` |
+| `zeitwerk/rooms/list` | – | rooms with window state and their plan ids |
+| `zeitwerk/rooms/get` | `room_id` | one room |
+| `zeitwerk/rooms/create` | `room` | create a room (admin); validated |
+| `zeitwerk/rooms/update` | `room_id`, `room` | replace a room (admin); validated |
+| `zeitwerk/rooms/delete` | `room_id` | delete a room; its plans become general schedules (admin) |
+| `zeitwerk/rooms/subscribe` | optional `room_id` | live updates |
+| `zeitwerk/preview` | `plan_ids`, `tag`, `start`, `end` | scheduled segments, max. 8 days |
+| `zeitwerk/holidays/upcoming` | `source`, optional `count` | next holidays of a calendar/Workday source |
 
 ## Development
 
@@ -374,7 +484,7 @@ scripts/test       # pytest + vitest
 scripts/lint       # ruff + eslint/prettier
 scripts/develop    # local HA at http://localhost:8123 with ./config (heating test bed)
 python scripts/seed_reference_plans.py --token <token>   # creates the 5 heating plans
-cd frontend && npm run watch   # rebuilds the card into custom_components/zeitwerk/frontend/
+cd frontend && npm run watch   # rebuilds the card and the panel into custom_components/zeitwerk/frontend/
 ```
 
 Tests run against Home Assistant 2026.11 (the minimum version) with its
@@ -396,59 +506,218 @@ MIT © Steven Glab
 Zeitwerk ist eine Home-Assistant-Integration für Wochenpläne mit **Profilen**
 (z. B. „Komfort“, „Absenkung“) und eingebauten Vorrang-Regeln (Urlaub,
 niemand zu Hause). Die Karte bringt sie selbst mit und registriert sie
-automatisch.
+automatisch. Bearbeitet wird in einer eigenen **Seitenleiste**; **Räume** fassen
+Pläne nach Bereich zusammen und reagieren auf offene Fenster.
 
 **Status:** Release Candidate für 1.0 – vollständig, wird im Alltag getestet.
 
-Karte: *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk*, oder
-`type: custom:zeitwerk-card` mit `plan: <id>`. Tag im Wochenplan antippen
-= Tages-Editor (Blöcke hinzufügen/löschen/ziehen, beim Speichern weitere Tage
-wählen, die diesen Tagesplan übernehmen), Profil-Regler ändern den
-Wert im Profil (z. B. Komfort 22 → 21,5 °C). Das Zahnrad neben „Profile“ öffnet die Profilverwaltung:
-Name, Symbol, Farbe, Standardprofil, 1–5 Profile und was sie schalten – eine
-Entität für alle (jedes Profil mit eigenem Wert) oder eigene Entitäten je
-Profil (z. B. morgens Licht A, abends Licht B). Nach jeder Änderung gibt es
-10 s lang „Rückgängig“. Unter „Konfiguration“ → Plan: Plan umbenennen (Name, Symbol, Tags),
-löschen und duplizieren (dort oder als
-Vorlage im Assistenten); die Kopie startet ausgeschaltet. Neue Pläne legt man in der
-Karte mit „+ Neuer Plan“ an – mit derselben Profilbearbeitung wie unter
-„Profile“ (eine Entität für alle oder eigene, auch mehrere, je Profil), dazu
-Start mit Werktag/Wochenende oder jeden Tag gleich. Fehler bitte als [GitHub-Issue](https://github.com/StiviDrum/zeitwerk/issues/new/choose)
-melden, mit Diagnose-Datei (*Geräte & Dienste → Zeitwerk → ⋮ → Diagnose
-herunterladen*). Profile lassen sich in der Profilverwaltung per Griff
-sortieren (Reihenfolge der Regler). Fehlende Entitäten in
-einem Plan erscheinen unter *Einstellungen → Reparaturen*. Unter „Konfiguration“ → Regeln: Vorrang-Regeln
-(ziehen zum Sortieren, Bedingungen mit dem HA-Bedingungseditor) und
-Aktivierung (alle/eine, „Sonst“, sofort neu bewerten), Feiertage (Quelle,
-aus / wie Wochentag / eigener Tag, nächste Feiertage). Zeitleiste: `view: timeline`, optional nur bestimmte Pläne (`plans: [...]`,
-im Karten-Editor ankreuzen) oder `tags: [heizung]`; ein Plan antippen öffnet
-seine volle Wochenansicht in derselben Karte.
+### Wie es entscheidet
 
-Alles, was die Karte kann, gibt es auch als Dienst (`zeitwerk.get_plan`,
-`set_day_plan`, `set_override`, `remove_override`, `update_plan`,
-`create_plan`, `duplicate_plan`, `delete_plan`, `enable`, `disable`,
-`apply`) – damit können Automationen oder ein Assistent
-wie Claude (über MCP) Zeitwerk vollständig bedienen, z. B. eine Vorrang-Regel
-„Geofencing-Helfer an → Abwesend“ anlegen.
+Für jeden aktiven Plan gilt diese Reihenfolge:
 
-Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis
-zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt
-nichts.
+1. Aktivierung nicht erfüllt → Plan ist *inaktiv* (tut nichts, oder wendet
+   `when_inactive: profile:<id>` einmal an).
+2. Der Plan gehört zu einem Raum und das Fenster des Raums ist offen (nach der
+   Verzögerung) → das Profil in `room_reactions.window`, falls gesetzt.
+3. Ein erzwungenes Profil (`zeitwerk.force_profile` / `skip_next`) ist aktiv → dieses Profil.
+4. Erste Vorrang-Regel, deren Bedingungen zutreffen (Listenreihenfolge = Priorität) → ihr Profil.
+5. Der Block des aktuellen Tagestyps → sein Profil.
+6. Sonst das Standardprofil des Plans.
 
-**Rücksetzpunkte** (Tageseditor, je Tag, mit „Tagesplan speichern für“ auf
-mehrere Tage übertragbar; Griff über der Tagesleiste ziehen oder Uhrzeit
-eintippen): Zu diesen Uhrzeiten endet eine manuelle Änderung,
-und der Zeitplan läuft weiter. „Auch erzwungenes Profil“ beendet dort auch ein
-erzwungenes Profil. Vorrang-Regeln (Urlaub, Abwesend) behalten immer ihren
-Vorrang. **„Fortsetzen“** in der Karte (Dienst `zeitwerk.resume`) kehrt sofort
-zum Zeitplan zurück.
+Profile werden **nur bei einer Änderung** angewendet (beim Start mit
+`reapply_on_start`, nach Änderung des aktiven Profils mit
+`reapply_on_profile_change`). Sommerzeit: Ein Block, der in die übersprungene
+Stunde fällt, beginnt um 03:00; in der doppelten Stunde im Oktober bleibt der
+Stand vom Ende des ersten Durchlaufs.
+
+### Seitenleiste „Zeitwerk“ (nur Admins)
+
+Zeitwerk hat einen eigenen Eintrag in der Seitenleiste. Dort wird alles
+bearbeitet; die Karte zeigt an und bedient nur.
+
+- **Übersicht** (`/zeitwerk`): Räume als Kacheln, nach Etage gruppiert (ohne
+  Etage: „Weitere Räume“), darunter die **Allgemeinen Zeitpläne**. Kachel mit
+  Name, Symbol, Temperatur/Feuchte, Fenster-Symbol und je Plan einem Chip mit
+  Profilfarbe und „ab HH:MM“. Oben Hinweise (Plan ohne gültigen Raum,
+  Fensterkontakt nicht verfügbar, Bereich gelöscht). Knöpfe „Raum hinzufügen“
+  und „Plan hinzufügen“.
+- **Plan** (`/zeitwerk/plan/<plan_id>`): Wochenraster. Tippen auf einen Tag
+  öffnet den **Tages-Editor** (`/zeitwerk/plan/<plan_id>/day/mon`): alle Blöcke
+  des Tages auf einem 24-h-Balken. Block antippen zum Auswählen, leere Stelle
+  oder „+ Block“ zum Hinzufügen, Griffe oder Block ziehen (auf die Schrittweite
+  des Plans eingerastet), Profil und Zeiten ändern (± oder eintippen: „7“,
+  „730“, „7:30“; Enter übernimmt, Esc verwirft), löschen. Rücksetzpunkte
+  („Rücksetzpunkte“) setzt man hier ebenfalls. Beim **Speichern** wählt man
+  weitere Tage (Mo–So, schnell Mo–Fr / Sa–So / Alle), die genau diesen
+  Tagesplan erhalten – ihre alten Blöcke werden ersetzt. Wochentage mit gleichem
+  Plan werden automatisch zu Tagestypen zusammengefasst (z. B. „Mo–Fr“).
+- **Regeln** (`/zeitwerk/plan/<plan_id>/rules`, „?“ erklärt sie): **Vorrang-Regeln**
+  in Prioritätsreihenfolge mit Live-Badge *aktiv* – ziehen (oder Griff fokussieren
+  und ↑/↓) zum Sortieren, antippen zum Bearbeiten von Name, Profil, alle/eine und
+  Bedingungen (HA-Bedingungseditor). **Aktivierung**: alle/eine, Live-✓ je
+  Bedingung, „Sonst“-Verhalten (`when_inactive`) und sofortige Neubewertung
+  (`reevaluate`). **Feiertage**: Quelle (Feiertagskalender oder Workday-Sensor),
+  Modus aus / wie Wochentag / eigener Tag (legt den Tagestyp „Feiertag“ mit
+  eigener Zeile und eigenem Reiter an) und die nächsten drei Feiertage.
+  **Optionen**: Schrittweite der Editoren (`options.time_step`: 5, 10, 15, 30
+  oder 60 Minuten, Standard 15).
+- **Profile** (`/zeitwerk/plan/<plan_id>/profiles`): Name, Symbol, Farbe,
+  Standardprofil (genau eins; gilt überall ohne geplanten Block) und 1–5 Profile.
+  Reihenfolge per Griff (oder ↑/↓) = Reihenfolge der Regler. Was sie schalten:
+  **eine Entität für alle** (jedes Profil setzt seinen Wert – Temperatur, Option,
+  an/aus, Helligkeit …) oder **eigene Entitäten je Profil** mit einer oder mehreren
+  Zeilen „Entität → Wert“ (z. B. morgens Licht A an – abends Licht B an und Licht A
+  aus). Alles Weitere als Aktionen im HA-Aktionseditor. Ein gelöschtes Profil
+  verliert seine Blöcke (dort gilt das Standardprofil), Regeln mit ihm wechseln
+  auf das Standardprofil.
+- **Plan** (auf der Regeln-Seite): Plan bearbeiten (Name, Symbol, Tags; die
+  Plan-ID bleibt, Karten und Automationen funktionieren weiter), **Plan löschen**
+  (mit Bestätigung) und **Plan duplizieren** (auch als „Vorlage“ im Assistenten).
+  Die Kopie startet ausgeschaltet, damit nie zwei Pläne dieselben Entitäten steuern.
+- **Raum** (`/zeitwerk/room/<room_id>`): Bereich, Name, Symbol, Fensterkontakte mit
+  Verzögerungen, Temperatur- und Feuchtesensor und die Pläne des Raums mit ihrer
+  Fensterreaktion (siehe unten).
+- **Neuer Plan** (`/zeitwerk/new`, bzw. `/zeitwerk/new?room=<room_id>` für einen
+  Plan im Raum): „+ Neuer Plan“ in der Übersicht oder in der Karte. Name, Symbol,
+  Tags und Profile wie oben, dazu Start mit Werktag/Wochenende oder jeden Tag
+  gleich. Der Plan-Name wird aus der gewählten Entität vorgeschlagen. Alternativ
+  als Kopie eines Plans („Vorlage“, die Kopie startet ausgeschaltet). Eine Karte
+  mit unbekanntem `plan:` bietet an, den Plan unter dieser ID anzulegen.
+- Nach jeder Änderung gibt es 10 s lang „Gespeichert · Rückgängig“. Rückgängig
+  ist nicht möglich, wenn der Plan inzwischen woanders geändert wurde.
+
+Bundle-Größen (minifiziert, 1.0-Build): Karte 98 698 Bytes, Seitenleiste 218 705
+Bytes. Die Seitenleiste wird erst beim Öffnen geladen.
+
+### Räume
+
+Ein Raum ist ein Home-Assistant-**Bereich** (z. B. Wohnzimmer) mit seinen
+Fensterkontakten und optional Temperatur- und Feuchtesensoren. Ein Raum kann
+mehrere Pläne haben (z. B. Heizung und Licht), ein Plan gehört zu höchstens
+einem Raum. Pläne ohne Raum sind allgemeine Zeitpläne wie bisher.
+
+Je Plan im Raum wird festgelegt, was ein offenes Fenster bewirkt: ein Profil
+(z. B. „Aus“ für die Heizung) oder nichts – ohne `room_reactions.window` ignoriert
+der Plan Fenster.
+
+- **Fensterkontakte** sind `binary_sensor`- oder `input_boolean`-Entitäten.
+  Kontakte melden nur offen oder zu; gekippt zählt als offen.
+- Ein Fenster gilt als **offen**, wenn mindestens ein Kontakt `open_delay`
+  (Standard 60 s) offen ist. Es gilt wieder als **zu**, wenn alle Kontakte
+  `close_delay` (Standard 0 s) zu sind.
+- **Vorrang**: Ein offenes Fenster schlägt Urlaub und andere Vorrang-Regeln,
+  manuelle Änderungen und erzwungene Profile. Ein erzwungenes Profil läuft
+  weiter, wird vom Fenster aber überdeckt, bis das Fenster zu ist. Beim Schließen
+  gilt das Profil, das *jetzt* gilt, nicht das von vorher.
+- Wird ein Kontakt **nicht verfügbar**, behält er seinen letzten Wert; ein
+  ausgefallener Sensor beendet also nicht „Fenster offen“. Ein Kontakt, der seit
+  dem Start von Home Assistant nicht verfügbar ist, zählt als zu. Entfernte oder
+  umbenannte Kontakte zählen als zu.
+- Der Fensterzustand **übersteht Neustarts**: Ein offenes Fenster bleibt nach
+  einem Neustart offen, solange noch ein Kontakt offen ist. Kontakte, die nach dem
+  Start noch nicht erreichbar sind (z. B. Zigbee), zählen als offen, bis sie sich
+  melden. Sonst beginnt die Schließ-Verzögerung nach dem Neustart neu.
+- Den Raum zu bearbeiten ändert den Fensterzustand nicht; eine laufende
+  Verzögerung läuft weiter. `zeitwerk.apply` und `zeitwerk.resume` wenden bei
+  offenem Fenster das Fensterprofil erneut an.
+- Einen Raum zu löschen lässt seine Pläne als allgemeine Zeitpläne bestehen.
+  Wird der Bereich eines Raums gelöscht, bleibt der Raum, und die Übersicht zeigt
+  einen Hinweis. Ein Plan mit einem fehlenden Raum wird markiert; sobald der Raum
+  existiert, greift die Reaktion sofort.
+- Jeder Raum bekommt einen Binärsensor `binary_sensor.zeitwerk_<raum>_window`
+  (Gerätklasse *Fenster*): an, wenn das Fenster als offen gilt. Attribute:
+  `entities` (Zustand jedes Kontakts), `open_since` und `unavailable`. Der Plan-Sensor
+  zeigt `source: room:window`, solange die Fensterreaktion wirkt.
+
+Raum, wie er gespeichert und über die Websocket-API übertragen wird (YAML-Schreibweise):
+
+```yaml
+room:
+  id: wohnzimmer
+  name: Wohnzimmer
+  area_id: wohnzimmer          # optional: HA-Bereich (Etage, Standard-Symbol)
+  icon: mdi:sofa               # optional
+  windows:
+    entities: [binary_sensor.fenster_wohnzimmer_links, input_boolean.fenster_wohnzimmer_rechts]
+    open_delay: 60             # Sekunden
+    close_delay: 0             # Sekunden
+  sensors:                     # nur Anzeige
+    temperature: sensor.wohnzimmer_temperatur
+    humidity: sensor.wohnzimmer_feuchte
+  # nur lesend zurückgegeben: window (Zustand), plans, area_missing
+---
+plan:
+  id: wohnzimmer_heizung
+  room: wohnzimmer
+  room_reactions:
+    window: eco                # Profil-ID; ohne diesen Schlüssel ignoriert der Plan Fenster
+```
+
+### Karte
+
+Die Karte bringt sich selbst mit und registriert sich automatisch. Hinzufügen
+über *Dashboard bearbeiten → Karte hinzufügen → Zeitwerk* oder in YAML:
+
+```yaml
+type: custom:zeitwerk-card
+view: week                  # week | timeline | profiles
+plan: wohnzimmer_heizung    # Plan-ID (Wochenansicht)
+show_profile_sliders: true  # Schnellansicht: Regler für die Profilwerte
+compact: false              # blendet Regler/Legende aus, kleineres Raster
+```
+
+Die Karte **zeigt an und bedient**, sie bearbeitet nicht. Der Kopf zeigt Profil,
+Wert, nächsten Wechsel und den Plan-Schalter; eine manuelle Änderung zeigt
+„manuell bis 22:00“ mit **„Fortsetzen“** (Dienst `zeitwerk.resume`). Das
+Wochenraster zeigt Rücksetzpunkte als gepunktete Linien. Die Zeitleiste
+(`view: timeline`, optional nur bestimmte Pläne mit `plans: [...]` oder
+`tags: [heizung]`) zeigt pro Plan ein Band für heute; ein Plan antippen öffnet
+seine Wochenansicht in derselben Karte („‹ Zeitpläne“ führt zurück).
+`view: profiles` zeigt die Profilwerte mit Reglern. Änderungen an der Karte
+(z. B. ein Regler) bieten 10 s lang „Rückgängig“.
+
+Für Admins gibt es „In Zeitwerk bearbeiten“ (öffnet den Plan in der Seitenleiste),
+„+ Neuer Plan“ und ein Antippen eines Tages im Wochenraster öffnet dessen
+Tages-Editor in der Seitenleiste. Die Kartenoption `time_step` wird ignoriert; die
+Schrittweite ist jetzt eine Plan-Option (Regeln-Seite der Seitenleiste).
+
+### Weitere Abschnitte
+
+Pro Plan gibt es einen Schalter (Plan an/aus), einen Profil-Sensor, einen
+Sensor „Nächster Wechsel“ und einen Binärsensor „Aktiv“; pro Raum einen
+Binärsensor „Fenster“. Dienste:
+`zeitwerk.apply` (ohne Plan: alle; setzt nach einer Handänderung wieder die
+Planwerte), `enable`/`disable` (ohne Plan: alle), `set_profile_value`,
+`skip_next`, `force_profile`, `clear_force`, `resume`.
+
+Websocket-Befehle `zeitwerk/plans/*` und `zeitwerk/rooms/*` (Anlegen, Ändern,
+Duplizieren und Löschen nur für Admins; Pläne akzeptieren `room` und
+`room_reactions`) – die Karte und die Seitenleiste nutzen sie.
 
 Voraussetzung: Home Assistant 2026.11 oder neuer. Installation über HACS →
 Benutzerdefinierte Repositories → Typ *Integration*,
 danach unter *Einstellungen → Geräte & Dienste* „Zeitwerk“ hinzufügen.
 
-Pro Plan gibt es einen Schalter (Plan an/aus), einen Profil-Sensor, einen
-Sensor „Nächster Wechsel“ und einen Binärsensor „Aktiv“. Dienste:
-`zeitwerk.apply` (ohne Plan: alle; setzt nach einer Handänderung wieder die
-Planwerte), `enable`/`disable` (ohne Plan: alle), `set_profile_value`,
-`skip_next`, `force_profile`, `clear_force`, `resume`.
+Manuelle Änderungen (`manual_override`): `until_next` hält den Handwert bis
+zum nächsten Profilwechsel, `minutes:<n>` für n Minuten, `ignore` erkennt
+nichts.
+
+**Rücksetzpunkte** (Tages-Editor in der Seitenleiste, je Tag, mit „Tagesplan
+speichern für“ auf mehrere Tage übertragbar; Griff über der Tagesleiste ziehen
+oder Uhrzeit eintippen): Zu diesen Uhrzeiten endet eine manuelle Änderung,
+und der Zeitplan läuft weiter. „Auch erzwungenes Profil“ beendet dort auch ein
+erzwungenes Profil. Vorrang-Regeln (Urlaub, Abwesend) behalten immer ihren
+Vorrang. **„Fortsetzen“** in der Karte (Dienst `zeitwerk.resume`) kehrt sofort
+zum Zeitplan zurück.
+
+Fehler bitte als [GitHub-Issue](https://github.com/StiviDrum/zeitwerk/issues/new/choose)
+melden, mit Diagnose-Datei (*Geräte & Dienste → Zeitwerk → ⋮ → Diagnose
+herunterladen*). Fehlende Entitäten in einem Plan erscheinen unter
+*Einstellungen → Reparaturen*.
+
+Alles, was die Seitenleiste kann, gibt es auch als Dienst (`zeitwerk.get_plan`,
+`set_day_plan`, `set_override`, `remove_override`, `update_plan`,
+`create_plan`, `duplicate_plan`, `delete_plan`, `enable`, `disable`,
+`apply`) – damit können Automationen oder ein Assistent
+wie Claude (über MCP) Zeitwerk vollständig bedienen, z. B. eine Vorrang-Regel
+„Geofencing-Helfer an → Abwesend“ anlegen.

@@ -450,9 +450,10 @@ plan:
 ```
 0. activation nicht erfüllt                 -> inaktiv (wie bisher)
 1. Raum-Reaktion „Fenster offen“            -> room_reactions.window
-2. Vorrang-Regeln (Reihenfolge)             -> deren Profil
-3. erzwungenes Profil / manuelle Übersteuerung (wie bisher)
+2. erzwungenes Profil (force_profile/skip_next, wie bisher)
+3. Vorrang-Regeln (Reihenfolge)             -> deren Profil
 4. Block / default_profile
+   (manuelle Übersteuerung wie bisher bis zum nächsten Wechsel; ein Fensterwechsel beendet sie)
 ```
 
 - Fenster auf → Wechsel auf das Fensterprofil, eine laufende manuelle Übersteuerung endet (wie bei jedem Profilwechsel). Fenster zu → das Profil, das *jetzt* gilt, wird angewendet (nicht das von vorher).
