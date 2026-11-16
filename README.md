@@ -154,7 +154,7 @@ is not set).
 - The window state **survives restarts**: a window that was open stays open
   after a restart if at least one contact is still open. Contacts that are not
   reachable yet after the start (e.g. Zigbee) count as open until they report.
-  Otherwise the close delay starts again after the restart.
+  Otherwise the open delay starts again after the restart.
 - Editing a room does not change the window state; a running delay continues.
   `zeitwerk.apply` and `zeitwerk.resume` re-apply the window profile while a
   window is open.
@@ -616,7 +616,7 @@ der Plan Fenster.
 - Der Fensterzustand **übersteht Neustarts**: Ein offenes Fenster bleibt nach
   einem Neustart offen, solange noch ein Kontakt offen ist. Kontakte, die nach dem
   Start noch nicht erreichbar sind (z. B. Zigbee), zählen als offen, bis sie sich
-  melden. Sonst beginnt die Schließ-Verzögerung nach dem Neustart neu.
+  melden. Sonst beginnt die Öffnungs-Verzögerung nach dem Neustart neu.
 - Den Raum zu bearbeiten ändert den Fensterzustand nicht; eine laufende
   Verzögerung läuft weiter. `zeitwerk.apply` und `zeitwerk.resume` wenden bei
   offenem Fenster das Fensterprofil erneut an.
@@ -625,7 +625,7 @@ der Plan Fenster.
   einen Hinweis. Ein Plan mit einem fehlenden Raum wird markiert; sobald der Raum
   existiert, greift die Reaktion sofort.
 - Jeder Raum bekommt einen Binärsensor `binary_sensor.zeitwerk_<raum>_window`
-  (Gerätklasse *Fenster*): an, wenn das Fenster als offen gilt. Attribute:
+  (Geräteklasse *Fenster*): an, wenn das Fenster als offen gilt. Attribute:
   `entities` (Zustand jedes Kontakts), `open_since` und `unavailable`. Der Plan-Sensor
   zeigt `source: room:window`, solange die Fensterreaktion wirkt.
 
