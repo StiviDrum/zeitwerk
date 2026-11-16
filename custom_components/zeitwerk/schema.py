@@ -92,6 +92,19 @@ def _manual_override(value: Any) -> str:
     raise vol.Invalid("manual_override must be 'until_next', 'ignore' or 'minutes:<n>'")
 
 
+TIME_STEPS = (5, 10, 15, 30, 60)
+
+
+def _time_step(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value not in TIME_STEPS:
+        raise vol.Invalid(
+            "time_step must be one of "
+            + ", ".join(str(v) for v in TIME_STEPS)
+            + " (minutes)"
+        )
+    return value
+
+
 _LIST_OF_DICTS = vol.All(cv.ensure_list, [dict])
 
 BLOCK_SCHEMA = vol.Schema(
@@ -162,6 +175,7 @@ OPTIONS_SCHEMA = vol.Schema(
         vol.Optional("reapply_on_start", default=True): cv.boolean,
         vol.Optional("reapply_on_profile_change", default=True): cv.boolean,
         vol.Optional("manual_override", default=MANUAL_UNTIL_NEXT): _manual_override,
+        vol.Optional("time_step"): _time_step,
     }
 )
 

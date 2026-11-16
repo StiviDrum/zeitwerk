@@ -266,6 +266,9 @@ class Holidays:
         }
 
 
+DEFAULT_TIME_STEP = 15
+
+
 @dataclass(slots=True)
 class Options:
     """Behaviour options of a plan."""
@@ -273,6 +276,8 @@ class Options:
     reapply_on_start: bool = True
     reapply_on_profile_change: bool = True
     manual_override: str = MANUAL_UNTIL_NEXT
+    # Grid snapping of the frontend editors (minutes); ignored by the engine.
+    time_step: int = DEFAULT_TIME_STEP
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> Options:
@@ -282,15 +287,19 @@ class Options:
             reapply_on_start=data.get("reapply_on_start", True),
             reapply_on_profile_change=data.get("reapply_on_profile_change", True),
             manual_override=data.get("manual_override", MANUAL_UNTIL_NEXT),
+            time_step=data.get("time_step", DEFAULT_TIME_STEP),
         )
 
     def to_dict(self) -> dict[str, Any]:
         """Return storage dict."""
-        return {
+        data: dict[str, Any] = {
             "reapply_on_start": self.reapply_on_start,
             "reapply_on_profile_change": self.reapply_on_profile_change,
             "manual_override": self.manual_override,
         }
+        if self.time_step != DEFAULT_TIME_STEP:
+            data["time_step"] = self.time_step
+        return data
 
 
 @dataclass(slots=True)

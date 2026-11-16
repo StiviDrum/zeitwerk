@@ -396,7 +396,7 @@ Steven: Der Editor in der Karte ist zu viel. Bearbeitet wird künftig in einer e
 | Bearbeiten | Link „In Zeitwerk bearbeiten“ (nur Admins), Tippen auf einen Tag öffnet den Tages-Editor in der Seitenleiste | – |
 | Bundle | eigenes kleines Modul | eigenes Modul, wird nur beim Öffnen der Seitenleiste geladen |
 
-Kartenkonfiguration bleibt kompatibel (`view: week | timeline`); `view: profiles` zeigt nur noch die Profilwerte mit Reglern (Schnellansicht), der Profil-Editor zieht um.
+Kartenkonfiguration bleibt kompatibel (`view: week | timeline`); `view: profiles` zeigt nur noch die Profilwerte mit Reglern (Schnellansicht), der Profil-Editor zieht um. `time_step` wird Plan-Option (`options.time_step`: 5/10/15/30/60, Standard 15, in den Regeln einstellbar); die Kartenoption wird ignoriert.
 
 ### Routen der Seitenleiste
 

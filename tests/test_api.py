@@ -103,6 +103,22 @@ async def test_ws_crud_and_subscribe(
     assert msg["error"]["code"] == "invalid_format"
     assert "unknown profile 'nope'" in msg["error"]["message"]
 
+    upd = living_room_plan(options={"time_step": 30})
+    await client.send_json_auto_id(
+        {"type": "zeitwerk/plans/update", "plan_id": "heizung_wohnzimmer", "plan": upd}
+    )
+    msg = await _result(client)
+    assert msg["success"], msg
+    assert msg["result"]["options"]["time_step"] == 30
+
+    upd = living_room_plan(options={"time_step": 7})
+    await client.send_json_auto_id(
+        {"type": "zeitwerk/plans/update", "plan_id": "heizung_wohnzimmer", "plan": upd}
+    )
+    msg = await _result(client)
+    assert msg["error"]["code"] == "invalid_format"
+    assert "time_step must be one of" in msg["error"]["message"]
+
     await client.send_json_auto_id({"type": "zeitwerk/plans/get", "plan_id": "nope"})
     msg = await _result(client)
     assert msg["error"]["code"] == "not_found"

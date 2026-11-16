@@ -43,6 +43,21 @@ def test_reference_plan_roundtrip() -> None:
     assert plan.activation.reevaluate is True
 
 
+def test_time_step_default_and_roundtrip() -> None:
+    data = validate_plan(living_room_plan())
+    assert "time_step" not in data["options"]
+    assert Plan.from_dict(data).options.time_step == 15
+    # explicit default is not stored
+    data = validate_plan(living_room_plan(options={"time_step": 15}))
+    assert "time_step" not in Plan.from_dict(data).to_dict()["options"]
+    for step in (5, 10, 30, 60):
+        data = validate_plan(living_room_plan(options={"time_step": step}))
+        assert data["options"]["time_step"] == step
+        plan = Plan.from_dict(data)
+        assert plan.options.time_step == step
+        assert plan.to_dict() == data
+
+
 def test_parse_hhmm() -> None:
     assert parse_hhmm("00:00") == 0
     assert parse_hhmm("24:00") == 1440
@@ -109,6 +124,9 @@ def test_parse_hhmm() -> None:
         ),
         ({"activation": {"when_inactive": "profile:nope"}}, "when_inactive"),
         ({"options": {"manual_override": "minutes:0"}}, "manual_override"),
+        ({"options": {"time_step": 7}}, "time_step must be one of 5, 10, 15, 30, 60"),
+        ({"options": {"time_step": "15"}}, "time_step"),
+        ({"options": {"time_step": True}}, "time_step"),
     ],
 )
 def test_invalid_plans(changes: dict[str, Any], message: str) -> None:

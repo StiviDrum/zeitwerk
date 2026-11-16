@@ -242,7 +242,7 @@ update_plan:
         object:
     options:
       required: false
-      example: '{"manual_override": "until_next"}'
+      example: '{"manual_override": "until_next", "time_step": 15}'
       selector:
         object:
 
