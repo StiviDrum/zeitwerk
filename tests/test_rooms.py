@@ -523,6 +523,21 @@ async def test_ws_rooms(
     assert msg["result"]["plans"] == [PLAN]
     assert msg["result"]["window"]["open"] is False
 
+    # Payloads as fetched (with read-only keys) can be saved back unchanged.
+    room_payload = msg["result"]
+    await admin.send_json_auto_id(
+        {"type": "zeitwerk/rooms/update", "room_id": "wohnzimmer", "room": room_payload}
+    )
+    assert (await admin.receive_json())["success"]
+    await admin.send_json_auto_id({"type": "zeitwerk/plans/get", "plan_id": PLAN})
+    plan_payload = (await admin.receive_json())["result"]
+    assert "room_missing" in plan_payload
+    await admin.send_json_auto_id(
+        {"type": "zeitwerk/plans/update", "plan_id": PLAN, "plan": plan_payload}
+    )
+    msg = await admin.receive_json()
+    assert msg["success"], msg
+
     await admin.send_json_auto_id({"type": "zeitwerk/rooms/list"})
     assert len((await admin.receive_json())["result"]["rooms"]) == 1
 

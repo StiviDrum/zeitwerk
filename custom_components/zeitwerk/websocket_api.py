@@ -148,6 +148,16 @@ async def ws_get(
     connection.send_result(msg["id"], _plan_payload(manager, plan))
 
 
+# Keys the API adds to payloads; clients may send them back unchanged.
+_PLAN_READ_ONLY = ("status", "room_missing")
+_ROOM_READ_ONLY = ("window", "plans", "area_missing")
+
+
+def _writable(data: dict[str, Any], read_only: tuple[str, ...]) -> dict[str, Any]:
+    """Drop read-only payload keys so a fetched object can be saved again."""
+    return {k: v for k, v in data.items() if k not in read_only}
+
+
 @websocket_api.websocket_command(
     {vol.Required("type"): "zeitwerk/plans/create", vol.Required("plan"): dict}
 )
@@ -161,7 +171,7 @@ async def ws_create(
     manager: ZeitwerkManager,
 ) -> None:
     """Create a plan (admin)."""
-    plan = await manager.async_create_plan(msg["plan"])
+    plan = await manager.async_create_plan(_writable(msg["plan"], _PLAN_READ_ONLY))
     connection.send_result(msg["id"], _plan_payload(manager, plan))
 
 
@@ -182,7 +192,9 @@ async def ws_update(
     manager: ZeitwerkManager,
 ) -> None:
     """Replace a plan (admin)."""
-    plan = await manager.async_update_plan(msg["plan_id"], msg["plan"])
+    plan = await manager.async_update_plan(
+        msg["plan_id"], _writable(msg["plan"], _PLAN_READ_ONLY)
+    )
     connection.send_result(msg["id"], _plan_payload(manager, plan))
 
 
@@ -404,7 +416,7 @@ async def ws_rooms_create(
     manager: ZeitwerkManager,
 ) -> None:
     """Create a room (admin)."""
-    room = await manager.async_create_room(msg["room"])
+    room = await manager.async_create_room(_writable(msg["room"], _ROOM_READ_ONLY))
     connection.send_result(msg["id"], _room_payload(manager, room))
 
 
@@ -425,7 +437,9 @@ async def ws_rooms_update(
     manager: ZeitwerkManager,
 ) -> None:
     """Replace a room (admin)."""
-    room = await manager.async_update_room(msg["room_id"], msg["room"])
+    room = await manager.async_update_room(
+        msg["room_id"], _writable(msg["room"], _ROOM_READ_ONLY)
+    )
     connection.send_result(msg["id"], _room_payload(manager, room))
 
 
