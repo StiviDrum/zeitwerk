@@ -217,6 +217,22 @@ const en = {
   copy_suffix: "copy",
   wizard_template: "Start from",
   wizard_template_empty: "Empty plan",
+  panel_title: "Zeitwerk",
+  general_plans: "General schedules",
+  rooms: "Rooms",
+  rooms_placeholder: "Rooms are coming soon.",
+  edit_in_zeitwerk: "Edit in Zeitwerk",
+  add_plan: "Add schedule",
+  new_plan_title: "New schedule",
+  back_to_overview: "Back to overview",
+  panel_admin_only: "The Zeitwerk panel is only available to administrators.",
+  room_unavailable: "Room “{room}” cannot be shown yet – the room editor is not available.",
+  menu: "Menu",
+  ed_view_profiles: "Profile values",
+  no_plans_panel: "No schedules yet. Add the first one.",
+  created_panel: "Plan “{name}” created.",
+  duplicated_panel:
+    "Copy “{name}” created (switched off). Adjust its profiles before switching it on.",
 };
 
 type Strings = typeof en;
@@ -442,6 +458,23 @@ const de: Strings = {
   copy_suffix: "Kopie",
   wizard_template: "Vorlage",
   wizard_template_empty: "Leerer Plan",
+  panel_title: "Zeitwerk",
+  general_plans: "Allgemeine Zeitpläne",
+  rooms: "Räume",
+  rooms_placeholder: "Räume folgen in Kürze.",
+  edit_in_zeitwerk: "In Zeitwerk bearbeiten",
+  add_plan: "Plan hinzufügen",
+  new_plan_title: "Neuer Plan",
+  back_to_overview: "Zurück zur Übersicht",
+  panel_admin_only: "Das Zeitwerk-Panel steht nur Administratoren zur Verfügung.",
+  room_unavailable:
+    "Raum „{room}“ kann noch nicht angezeigt werden – der Raumeditor ist noch nicht verfügbar.",
+  menu: "Menü",
+  ed_view_profiles: "Profilwerte",
+  no_plans_panel: "Noch keine Pläne. Lege den ersten an.",
+  created_panel: "Plan „{name}“ angelegt.",
+  duplicated_panel:
+    "Kopie „{name}“ angelegt (ausgeschaltet). Profile anpassen, bevor sie eingeschaltet wird.",
 };
 
 const LANGUAGES: Record<string, Strings> = { en, de };

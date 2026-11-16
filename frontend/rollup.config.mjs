@@ -29,20 +29,31 @@ const minifyCssPlugin = {
 };
 const dev = !!process.env.ROLLUP_WATCH;
 
-export default {
-  input: "src/zeitwerk-card.ts",
+const plugins = () => [
+  replace({ preventAssignment: true, values: { __VERSION__: JSON.stringify(pkg.version) } }),
+  nodeResolve(),
+  typescript({ tsconfig: "./tsconfig.json", include: ["src/**/*.ts"] }),
+  // After TypeScript: plugin-typescript compiles from disk, not from earlier transforms.
+  !dev && minifyCssPlugin,
+  !dev && terser({ format: { comments: false } }),
+];
+
+/**
+ * Two independent, self-contained bundles (no shared chunks: the entry URLs
+ * get `?v=<hash>` cache busting, chunks would not).
+ */
+const bundle = (input, file) => ({
+  input,
   output: {
-    file: "../custom_components/zeitwerk/frontend/zeitwerk-card.js",
+    file: `../custom_components/zeitwerk/frontend/${file}`,
     format: "es",
     sourcemap: false,
     inlineDynamicImports: true,
   },
-  plugins: [
-    replace({ preventAssignment: true, values: { __VERSION__: JSON.stringify(pkg.version) } }),
-    nodeResolve(),
-    typescript({ tsconfig: "./tsconfig.json", include: ["src/**/*.ts"] }),
-    // After TypeScript: plugin-typescript compiles from disk, not from earlier transforms.
-    !dev && minifyCssPlugin,
-    !dev && terser({ format: { comments: false } }),
-  ],
-};
+  plugins: plugins(),
+});
+
+export default [
+  bundle("src/zeitwerk-card.ts", "zeitwerk-card.js"),
+  bundle("src/zeitwerk-panel.ts", "zeitwerk-panel.js"),
+];

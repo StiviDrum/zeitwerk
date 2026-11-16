@@ -1,6 +1,8 @@
 // Mocked Home Assistant for dev/preview.html: one plan (SPEC §9 living room),
 // a fake websocket subscription and the services/commands the card uses.
 const params = new URLSearchParams(location.search);
+// panel.html sets this: load zeitwerk-panel (route from ?path=, e.g. /plan/wohnzimmer_heizung/day/mon)
+const panelMode = window.__zwPanel === true;
 const light = params.get("theme") === "light";
 if (light) document.documentElement.classList.add("light");
 
@@ -120,6 +122,22 @@ const status = () => {
   };
 };
 
+// Second plan (panel overview only): switched off, no status details.
+const bath = {
+  ...structuredClone(plan),
+  id: "bad_heizung",
+  name: "Heizung Bad",
+  enabled: false,
+  icon: "mdi:shower",
+  profiles: profiles("bad"),
+};
+const allPlans = () => [
+  { ...plan, status: status() },
+  ...(panelMode
+    ? [{ ...bath, status: { profile: null, source: "disabled", day_type: null, is_holiday: false, active: false, next_change: null, next_profile: null, forced_until: null, error: null } }]
+    : []),
+];
+
 const subscribers = new Set();
 const emit = () => {
   for (const cb of subscribers) cb({ event: "updated", plan_id: plan.id, plan: { ...plan, status: status() } });
@@ -184,7 +202,7 @@ const hass = {
       log("subscribe", msg);
       if (msg.plan_id && msg.plan_id !== plan.id) throw { code: "not_found", message: `Plan '${msg.plan_id}' not found` };
       subscribers.add(cb);
-      setTimeout(() => cb({ event: "init", plans: [{ ...plan, status: status() }] }), 50);
+      setTimeout(() => cb({ event: "init", plans: allPlans() }), 50);
       return () => subscribers.delete(cb);
     },
   },
@@ -229,6 +247,7 @@ const hass = {
       return { ...plan, id: msg.name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), name: msg.name, enabled: false };
     }
     if (msg.type === "zeitwerk/plans/update") {
+      if (msg.plan_id === bath.id) return { ...msg.plan, status: null };
       plan = structuredClone(msg.plan);
       setTimeout(emit, 30);
       return { ...plan, status: status() };
@@ -254,20 +273,35 @@ const hass = {
   },
 };
 
-await import("../../custom_components/zeitwerk/frontend/zeitwerk-card.js");
-const card = document.querySelector("zeitwerk-card");
-card.setConfig(
-  params.get("view") === "timeline"
-    ? { type: "custom:zeitwerk-card", view: "timeline", tags: params.get("tag") ? [params.get("tag")] : [] }
-    : { type: "custom:zeitwerk-card", plan: params.get("plan") || "wohnzimmer_heizung" },
-);
-card.hass = hass;
-window.hass = hass;
+if (panelMode) {
+  await import("../../custom_components/zeitwerk/frontend/zeitwerk-panel.js");
+  const panel = document.querySelector("zeitwerk-panel");
+  const routeOf = () => ({ prefix: "/zeitwerk", path: location.pathname.startsWith("/zeitwerk") ? location.pathname.slice(9) : params.get("path") || "" });
+  panel.narrow = params.get("narrow") === "1";
+  panel.route = { prefix: "/zeitwerk", path: params.get("path") || "" };
+  panel.hass = hass;
+  // Like HA's router: location-changed -> new `route` object.
+  window.addEventListener("location-changed", () => (panel.route = routeOf()));
+  window.addEventListener("popstate", () => (panel.route = routeOf()));
+  window.hass = hass;
+  window.panel = panel;
+} else {
+  await import("../../custom_components/zeitwerk/frontend/zeitwerk-card.js");
+  const card = document.querySelector("zeitwerk-card");
+  card.setConfig(
+    params.get("view") === "timeline"
+      ? { type: "custom:zeitwerk-card", view: "timeline", tags: params.get("tag") ? [params.get("tag")] : [] }
+      : { type: "custom:zeitwerk-card", plan: params.get("plan") || "wohnzimmer_heizung" },
+  );
+  card.hass = hass;
+  window.hass = hass;
 
-/** Simulate a state change, e.g. setState("input_boolean.urlaub", "on"). */
-window.setState = (entityId, state) => {
-  const next = { ...hass, states: { ...hass.states, [entityId]: { ...hass.states[entityId], state } } };
-  Object.assign(states, next.states);
-  card.hass = next;
-  emit();
-};
+  /** Simulate a state change, e.g. setState("input_boolean.urlaub", "on"). */
+  window.setState = (entityId, state) => {
+    const next = { ...hass, states: { ...hass.states, [entityId]: { ...hass.states[entityId], state } } };
+    Object.assign(states, next.states);
+    card.hass = next;
+    emit();
+  };
+
+}

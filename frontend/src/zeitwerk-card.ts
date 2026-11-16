@@ -1,18 +1,20 @@
-import { LitElement, css, html, nothing, type PropertyValues, type TemplateResult } from "lit";
+import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
-import { ZeitwerkDayEditor, type DaySaveDetail } from "./day-editor";
-import { applyDayPlan, weekToDays, weekToResume, type DayKey, type DayResume } from "./day-plan";
-import { ZeitwerkRules } from "./rules-page";
-import { ZeitwerkProfiles } from "./profiles-page";
-import { ZeitwerkPlanWizard } from "./plan-wizard";
 import { ZeitwerkCardEditor } from "./card-editor";
-import { ZeitwerkConditionsEditor } from "./conditions-editor";
-import { defineElements } from "./register";
-import type { PlanMutator } from "./rules-page";
-import { conditionsSummary, pauseReason, type Condition } from "./conditions";
-import { dayTypeFor, previousWeekday, rowSegments, type Segment } from "./blocks";
+import { NowClock } from "./clock";
 import { profileColor, textOn, tint } from "./colors";
+import { syncDark } from "./display-ui";
 import { localizer, type Localizer } from "./localize";
+import { navigateTo, openPath, routePath } from "./nav";
+import { ZeitwerkPlanHeader } from "./plan-header";
+import {
+  errorMessage,
+  languageOf,
+  stripStatus,
+  valueLabel,
+  watchedEntities,
+  type ViewCtx,
+} from "./plan-view";
 import {
   controlFor,
   formatValue,
@@ -23,28 +25,15 @@ import {
   type Control,
   type QuickValue,
 } from "./quickview";
-import { canvasMeasure, fitLabel, observeWidth, type TextMeasure } from "./labels";
+import { defineElements } from "./register";
 import { tokens } from "./styles";
-import {
-  MINUTES_PER_DAY,
-  formatTime,
-  minutesFromToday,
-  parseTime,
-  zonedWhen,
-  zonedNow,
-} from "./time";
-import {
-  WEEKDAYS,
-  type Block,
-  type DayType,
-  type HomeAssistant,
-  type Plan,
-  type PlanEvent,
-  type PlanStatus,
-  type Profile,
-  type ZeitwerkCardConfig,
-} from "./types";
+import { ZeitwerkTimelinePlan, type ScheduledSegment } from "./timeline-plan";
+import { formatTime, zonedNow } from "./time";
+import type { HomeAssistant, Plan, PlanEvent, Profile, ZeitwerkCardConfig } from "./types";
 import { CARD_VERSION } from "./version";
+import { ZeitwerkWeekGrid } from "./week-grid";
+import type { DayKey } from "./day-plan";
+import type { TemplateResult } from "lit";
 
 const VALUE_DEBOUNCE_MS = 400;
 const SLIDER_HOLD_MS = 350;
@@ -57,35 +46,15 @@ interface QuickRow {
   control: Control;
 }
 
-interface GridRow {
-  key: DayKey;
-  label: string;
-  dayType: DayType | undefined;
-  segments: Segment[];
-  active: boolean;
-  today: boolean;
-  /** 0 = today's row, 1 = tomorrow's row (manual override hatch). */
-  dayOffset: number | null;
-}
-
-/** Copy of a plan without its runtime status (what plans/update takes). */
-function stripStatus(plan: Plan): Plan {
-  const copy = structuredClone(plan);
-  delete copy.status;
-  return copy;
-}
-
-function errorMessage(err: unknown): string {
-  if (err && typeof err === "object" && "message" in err) return String(err.message);
-  return String(err);
-}
-
+/**
+ * Lovelace card: shows the current profile/value, the read-only week grid or
+ * the timeline and offers manual control. Editing lives in the Zeitwerk panel.
+ */
 export class ZeitwerkCard extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @state() private _config?: ZeitwerkCardConfig;
   @state() private _plan?: Plan | null;
   @state() private _error?: string;
-  /** Day open in the day editor and its blocks when it was opened. */
   /** Profile id of the slider that is being dragged after a hold. */
   @state() private _armed?: string;
   private _slider?: {
@@ -97,13 +66,9 @@ export class ZeitwerkCard extends LitElement {
     armed: boolean;
     timer?: number;
   };
-  @state() private _editDay?: { day: DayKey; blocks: Block[]; resume: DayResume };
-  @state() private _saveError: string | null = null;
-  @state() private _busy = false;
   @state() private _notice?: string;
   /** Slider values not yet confirmed by the backend, per profile id. */
   @state() private _pending: Record<string, number | string> = {};
-  @state() private _page: "week" | "rules" | "wizard" | "profiles" = "week";
   /** Timeline view: id of the plan opened in the full week view. */
   @state() private _detail?: string;
   /** Last change made in this card, offered for undo for a few seconds. */
@@ -114,19 +79,24 @@ export class ZeitwerkCard extends LitElement {
   private _sliderUndo?: { before: Plan; profileId: string; value: number | string };
   /** Timeline view: all (tag-filtered) plans and today's scheduled segments. */
   @state() private _plans?: Plan[];
-  @state() private _segments: Record<string, { start: string; end: string; profile: string }[]> =
-    {};
+  @state() private _segments: Record<string, ScheduledSegment[]> = {};
   private _previewTimer?: number;
-  /** Width of a week-grid track in px (staged block labels). */
-  @state() private _trackPx = 0;
-  private _trackObs?: { el: Element; stop: () => void };
   private _watched?: { source: unknown; ids: string[] };
-  private _measure?: TextMeasure;
 
   private _unsub?: Promise<() => Promise<void> | void>;
   private _subscribedPlan?: string;
-  private _clock?: number;
-  private _nowWeekday?: number;
+  private _clock = new NowClock(
+    this,
+    () => this.hass?.config?.time_zone,
+    ({ minutes, dayChanged }) => {
+      if (dayChanged) {
+        this.requestUpdate();
+        if (this._config?.view === "timeline") this._schedulePreview(0);
+      }
+      const clock = this.renderRoot?.querySelector<HTMLElement>(".tl-clock");
+      if (clock) clock.textContent = formatTime(minutes);
+    },
+  );
   private _valueTimers: Record<string, number> = {};
   private _noticeTimer?: number;
 
@@ -168,20 +138,16 @@ export class ZeitwerkCard extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
-    this._startClock();
+    this._clock.start();
     if (this.hass && this._config) this._resubscribe();
   }
 
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._unsubscribe();
-    window.clearTimeout(this._clock);
-    window.clearInterval(this._clock);
-    this._clock = undefined;
+    this._clock.stop();
     window.clearTimeout(this._previewTimer);
     this._sliderEnd();
-    this._trackObs?.stop();
-    this._trackObs = undefined;
     Object.values(this._valueTimers).forEach((t) => window.clearTimeout(t));
     this._valueTimers = {};
   }
@@ -193,7 +159,8 @@ export class ZeitwerkCard extends LitElement {
     if (
       old.language !== this.hass.language ||
       old.locale?.language !== this.hass.locale?.language ||
-      old.themes?.darkMode !== this.hass.themes?.darkMode
+      old.themes?.darkMode !== this.hass.themes?.darkMode ||
+      old.user?.is_admin !== this.hass.user?.is_admin
     ) {
       return true;
     }
@@ -202,7 +169,7 @@ export class ZeitwerkCard extends LitElement {
 
   protected willUpdate(changed: PropertyValues): void {
     if (changed.has("hass") && this.hass) {
-      this.toggleAttribute("dark", !!this.hass.themes?.darkMode);
+      syncDark(this, this.hass);
       if (!this._unsub && this._subscribedPlan === undefined && this._config && this.isConnected) {
         this._resubscribe();
       }
@@ -210,54 +177,19 @@ export class ZeitwerkCard extends LitElement {
   }
 
   protected updated(): void {
-    this._updateNow();
-    const track = this.renderRoot.querySelector(".rows .track");
-    if (track !== this._trackObs?.el) {
-      this._trackObs?.stop();
-      this._trackObs = track
-        ? {
-            el: track,
-            stop: observeWidth(track, (w) => {
-              if (Math.abs(w - this._trackPx) > 0.5) this._trackPx = w;
-            }),
-          }
-        : undefined;
-    }
+    this._clock.update();
   }
 
   /** Entities whose state changes are relevant for rendering (DESIGN.md §3). */
   private _watchedEntities(): string[] {
     // Checked on every hass update: compute once per plan (list) object.
-    const source = this._config?.view === "timeline" && !this._detail ? this._plans : this._plan;
+    const timeline = this._config?.view === "timeline" && !this._detail;
+    const source = timeline ? this._plans : this._plan;
     const cached = this._watched;
     if (cached && cached.source === source) return cached.ids;
-    const ids = [...new Set(this._computeWatched())];
+    const plans = timeline ? (this._plans ?? []) : this._plan ? [this._plan] : [];
+    const ids = [...new Set(plans.flatMap((p) => watchedEntities(p, !timeline)))];
     this._watched = { source, ids };
-    return ids;
-  }
-
-  private _computeWatched(): string[] {
-    if (this._config?.view === "timeline" && !this._detail) {
-      return (this._plans ?? []).flatMap((plan) =>
-        plan.profiles.map((p) => quickValue(p)?.entityId).filter((x): x is string => !!x),
-      );
-    }
-    if (!this._plan) return [];
-    const ids = [`switch.zeitwerk_${this._plan.id}`];
-    for (const p of this._plan.profiles) {
-      const qv = quickValue(p);
-      if (qv) ids.push(qv.entityId);
-    }
-    // Condition entities: summaries and the pause reason show their state.
-    const conditions = [
-      ...this._plan.activation.conditions,
-      ...this._plan.overrides.flatMap((o) => o.conditions),
-    ];
-    for (const c of conditions) {
-      const e = c.entity_id;
-      if (typeof e === "string") ids.push(e);
-      else if (Array.isArray(e)) ids.push(...e.filter((x): x is string => typeof x === "string"));
-    }
     return ids;
   }
 
@@ -281,8 +213,9 @@ export class ZeitwerkCard extends LitElement {
       return;
     }
     const planId = this._config?.plan;
-    if (!this.hass?.connection || !planId || this._config?.view !== "week" || !this.isConnected)
-      return;
+    const view = this._config?.view;
+    if (!this.hass?.connection || !planId || (view !== "week" && view !== "profiles")) return;
+    if (!this.isConnected) return;
     this._subscribedPlan = planId;
     const unsub = this.hass.connection.subscribeMessage<PlanEvent>((msg) => this._onEvent(msg), {
       type: "zeitwerk/plans/subscribe",
@@ -340,19 +273,17 @@ export class ZeitwerkCard extends LitElement {
   }
 
   /** Timeline: open one plan in the full week view (same card). */
-  private _openDetail(plan: Plan): void {
+  private _openDetail(planId: string): void {
+    const plan = this._plans?.find((p) => p.id === planId);
+    if (!plan) return;
     this._detail = plan.id;
     this._plan = plan;
-    this._page = "week";
-    this._editDay = undefined;
     this._pending = {};
   }
 
   private _closeDetail = (): void => {
     this._detail = undefined;
     this._plan = undefined;
-    this._page = "week";
-    this._editDay = undefined;
     this._pending = {};
   };
 
@@ -363,7 +294,7 @@ export class ZeitwerkCard extends LitElement {
       const ids = this._timelinePlans().map((p) => p.id);
       if (!this.hass || !ids.length) return;
       this.hass
-        .callWS<{ plans: Record<string, { start: string; end: string; profile: string }[]> }>({
+        .callWS<{ plans: Record<string, ScheduledSegment[]> }>({
           type: "zeitwerk/preview",
           plan_ids: ids,
         })
@@ -398,7 +329,7 @@ export class ZeitwerkCard extends LitElement {
     }
   }
 
-  private async _updatePlan(mutate: PlanMutator): Promise<void> {
+  private async _updatePlan(mutate: (plan: Plan) => void): Promise<void> {
     if (!this.hass || !this._plan) return;
     const before = stripStatus(this._plan);
     const plan = structuredClone(before);
@@ -450,7 +381,8 @@ export class ZeitwerkCard extends LitElement {
       this._sliderUndo = undefined;
       return;
     }
-    const qv = quickValue(this._profile(pending.profileId));
+    const profile = this._plan.profiles.find((p) => p.id === pending.profileId);
+    const qv = profile ? quickValue(profile) : null;
     if (qv?.kind === "value" && qv.value === pending.value) {
       this._sliderUndo = undefined;
       this._offerUndo(pending.before, this._plan);
@@ -466,60 +398,29 @@ export class ZeitwerkCard extends LitElement {
     </div>`;
   }
 
-  private _removePlan = async (): Promise<void> => {
-    if (!this.hass || !this._plan) return;
-    await this.hass.callWS({ type: "zeitwerk/plans/delete", plan_id: this._plan.id });
-    this._page = "week";
-  };
-
-  private _duplicate = async (name: string): Promise<void> => {
-    if (!this.hass || !this._plan) return;
-    const copy = await this.hass.callWS<Plan>({
-      type: "zeitwerk/plans/duplicate",
-      plan_id: this._plan.id,
-      name,
-    });
-    this._notify(this._l.t("duplicated", { name: copy.name, id: copy.id }), 12_000);
-  };
-
   private _notify(text: string, ms = NOTICE_MS): void {
     this._notice = text;
     window.clearTimeout(this._noticeTimer);
     this._noticeTimer = window.setTimeout(() => (this._notice = undefined), ms);
   }
 
-  // --- Now line -------------------------------------------------------------
-
-  private _startClock(): void {
-    if (this._clock !== undefined) return;
-    const msToMinute = 60_000 - (Date.now() % 60_000) + 50;
-    this._clock = window.setTimeout(() => {
-      this._updateNow();
-      this._clock = window.setInterval(() => this._updateNow(), 60_000);
-    }, msToMinute);
-  }
-
-  /** Update only the CSS variable and the clock – no full re-render. */
-  private _updateNow(): void {
-    const now = zonedNow(this.hass?.config?.time_zone);
-    this.style.setProperty("--zw-now", String(now.minutes / MINUTES_PER_DAY));
-    if (this._nowWeekday !== undefined && this._nowWeekday !== now.weekdayIndex) {
-      this.requestUpdate();
-      if (this._config?.view === "timeline") this._schedulePreview(0);
-    }
-    const clock = this.renderRoot.querySelector<HTMLElement>(".tl-clock");
-    if (clock) clock.textContent = formatTime(now.minutes);
-    this._nowWeekday = now.weekdayIndex;
-  }
+  private _onNotice = (ev: CustomEvent<string>): void => {
+    ev.stopPropagation();
+    this._notify(ev.detail);
+  };
 
   // --- Helpers --------------------------------------------------------------
 
   private get _l(): Localizer {
-    return localizer(this.hass?.locale?.language ?? this.hass?.language);
+    return localizer(languageOf(this.hass));
   }
 
-  private get _step(): number {
-    return this._config?.time_step ?? 15;
+  private get _ctx(): ViewCtx {
+    return { hass: this.hass, l: this._l };
+  }
+
+  private get _admin(): boolean {
+    return !!this.hass?.user?.is_admin;
   }
 
   private _quick(profile: Profile): QuickRow | null {
@@ -534,126 +435,12 @@ export class ZeitwerkCard extends LitElement {
     return { profile, qv: shown, control };
   }
 
-  private _valueLabel(profile: Profile | undefined): string {
-    if (!profile) return "";
-    const q = this._quick(profile);
-    if (!q) return "";
-    const l = this._l;
-    return formatValue(q.qv, q.control, l.lang, [l.t("on"), l.t("off")]);
-  }
-
-  /** "05:15" today, otherwise "Mo 05:15". */
-  private _when(iso: string): string {
-    return zonedWhen(iso, this.hass?.config?.time_zone, (i) => this._l.weekdayShort(i));
-  }
-
-  /** Current value of the manually changed target (e.g. "21.5 °C"). */
-  private _manualValue(status: PlanStatus): string {
-    const entity = status.manual_entity ? this.hass?.states[status.manual_entity] : undefined;
-    if (!entity) return "";
-    const attr = status.manual_attribute;
-    if (attr) {
-      const raw = entity.attributes?.[attr];
-      if (raw === undefined || raw === null) return "";
-      return (
-        this.hass?.formatEntityAttributeValue?.(entity, attr) ??
-        `${raw}${attr.includes("temp") && this.hass?.config?.unit_system?.temperature ? ` ${this.hass.config.unit_system.temperature}` : ""}`
-      );
-    }
-    return this.hass?.formatEntityState?.(entity) ?? entity.state;
-  }
-
-  private _profile(id: string | null | undefined): Profile | undefined {
-    return this._plan?.profiles.find((p) => p.id === id);
-  }
-
   // --- Actions --------------------------------------------------------------
 
-  private _dayName(day: DayKey): string {
-    return day === "holiday" ? this._l.t("holiday") : this._l.weekdayLong(WEEKDAYS.indexOf(day));
-  }
-
-  private _openDay(day: DayKey): void {
-    if (!this._plan) return;
-    if (!this.hass?.user?.is_admin) {
-      this._notify(this._l.t("admin_only"));
-      return;
-    }
-    this._saveError = null;
-    this._busy = false;
-    this._editDay = {
-      day,
-      blocks: weekToDays(this._plan)[day],
-      resume: weekToResume(this._plan)[day],
-    };
-  }
-
-  private _onSaveDay = async (ev: CustomEvent<DaySaveDetail>): Promise<void> => {
-    const { blocks, targets, resume } = ev.detail;
-    const l = this._l;
-    this._busy = true;
-    this._saveError = null;
-    try {
-      await this._updatePlan((plan) => applyDayPlan(plan, targets, blocks, l, resume));
-      this._editDay = undefined;
-    } catch (err) {
-      this._saveError = l.t("save_failed", { error: errorMessage(err) });
-    } finally {
-      this._busy = false;
-    }
+  private _openDay = (ev: CustomEvent<DayKey>): void => {
+    if (!this._plan || !this._admin) return;
+    navigateTo({ name: "day", planId: this._plan.id, day: ev.detail });
   };
-
-  /** Whether the plan deviates from its schedule in a way "resume" ends. */
-  private _canResume(plan: Plan): boolean {
-    const s = plan.status;
-    return !!(plan.enabled && s && (s.manual_since || s.forced_until));
-  }
-
-  private _resume(plan: Plan, ev?: Event): void {
-    ev?.stopPropagation();
-    if (!this.hass) return;
-    this.hass
-      .callService("zeitwerk", "resume", { plan: plan.id })
-      .then(() => this._notify(this._l.t("resumed")))
-      .catch((err) => this._notify(errorMessage(err)));
-  }
-
-  private _resumeButton(plan: Plan, compact = false) {
-    if (!this._canResume(plan)) return nothing;
-    const l = this._l;
-    return html`<button
-      class="resume-btn ${compact ? "compact" : ""}"
-      aria-label=${l.t("resume_plan", { name: plan.name })}
-      title=${l.t("resume")}
-      @click=${(ev: Event) => this._resume(plan, ev)}
-      @keydown=${(ev: KeyboardEvent) => ev.stopPropagation()}
-    >
-      <ha-icon .icon=${"mdi:play-circle-outline"}></ha-icon>${compact ? nothing : l.t("resume")}
-    </button>`;
-  }
-
-  /** Dotted markers for resume points (minutes of day) on a 24 h track. */
-  private _resumeMarks(points: string[] | undefined) {
-    if (!points?.length) return nothing;
-    return points.map(
-      (p) =>
-        html`<span
-          class="rp-mark"
-          style="left:${(parseTime(p) / MINUTES_PER_DAY) * 100}%"
-          title="${this._l.t("resume_point")} ${p}"
-        ></span>`,
-    );
-  }
-
-  private _togglePlan(): void {
-    if (!this.hass || !this._plan) return;
-    const on = !this._plan.enabled;
-    this.hass
-      .callService("switch", on ? "turn_on" : "turn_off", undefined, {
-        entity_id: `switch.zeitwerk_${this._plan.id}`,
-      })
-      .catch((err) => this._notify(errorMessage(err)));
-  }
 
   // Profile slider: on touch it only reacts after a short hold, so scrolling
   // the dashboard does not change values.
@@ -776,545 +563,6 @@ export class ZeitwerkCard extends LitElement {
       if (p) p.actions = toggledActions(p, on);
     }).catch((err) => this._notify(errorMessage(err)));
   }
-
-  // --- Drag block edges -------------------------------------------------------
-
-  // --- Rendering ------------------------------------------------------------
-
-  protected render() {
-    if (!this._config) return nothing;
-    const l = this._l;
-    if (this._page === "wizard" && this.hass) {
-      const missing =
-        this._config.view !== "timeline" && this._plan === null ? this._config.plan : undefined;
-      return html`<ha-card>
-        <zeitwerk-plan-wizard
-          ?dark=${!!this.hass.themes?.darkMode}
-          .hass=${this.hass}
-          .localize=${l}
-          .presetId=${missing}
-          @zw-cancel=${() => (this._page = "week")}
-          @zw-created=${this._onCreated}
-        ></zeitwerk-plan-wizard>
-      </ha-card>`;
-    }
-    if (this._config.view === "timeline") {
-      if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
-      if (!this.hass || this._plans === undefined) return this._message(l.t("loading"));
-      if (this._detail && this._plan) return this._renderWeek(this._plan);
-      return this._renderTimeline();
-    }
-    if (this._config.view && this._config.view !== "week") {
-      return this._message(l.t("view_unsupported", { view: this._config.view }));
-    }
-    if (!this._config.plan) return this._message(l.t("no_plan"), false, true);
-    if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
-    if (!this.hass || this._plan === undefined) return this._message(l.t("loading"));
-    if (this._plan === null)
-      return this._message(l.t("plan_missing", { plan: this._config.plan }), true, true);
-    return this._renderWeek(this._plan);
-  }
-
-  private _renderTimeline() {
-    const l = this._l;
-    const plans = this._timelinePlans();
-    const tz = this.hass?.config?.time_zone;
-    const now = zonedNow(tz);
-    let date: string;
-    try {
-      date = new Date().toLocaleDateString(l.lang, {
-        timeZone: tz,
-        weekday: "long",
-        day: "numeric",
-        month: "short",
-      });
-    } catch {
-      date = new Date().toLocaleDateString();
-    }
-    const tags = this._config?.tags ?? [];
-    const title = this._config?.title ?? (tags.length === 1 ? tags[0] : l.t("timeline_title"));
-    const running = plans.filter((p) => p.enabled && p.status?.active).length;
-    const body = plans.length
-      ? plans.map((p) => this._renderTimelinePlan(p))
-      : html`<div class="message">
-          ${tags.length ? l.t("no_plans_tag", { tag: tags.join(", ") }) : l.t("no_plans")}
-        </div>`;
-    return html`<ha-card class="timeline">
-      <div class="tl-head">
-        <div class="tl-titles">
-          <span class="tl-date">${l.t("today_date", { date })}</span>
-          <span class="tl-title">${title}</span>
-        </div>
-        <span class="tl-clock">${formatTime(now.minutes)}</span>
-      </div>
-      ${
-        plans.length
-          ? html`<div class="chips">
-                <span class="chip ok"
-                  ><span class="dot"></span>${
-                    running === 1 ? l.t("plans_running_one") : l.t("plans_running", { n: running })
-                  }</span
-                >
-              </div>
-              <div class="axis tl-axis">
-                <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
-              </div>`
-          : nothing
-      }
-      ${body} ${this._newPlanButton()}
-    </ha-card>`;
-  }
-
-  private _renderTimelinePlan(plan: Plan) {
-    const l = this._l;
-    const tz = this.hass?.config?.time_zone;
-    const status = plan.status;
-    const current = plan.profiles.find((p) => p.id === status?.profile);
-    const color = current ? profileColor(plan, current) : "var(--zw-text-2)";
-    const isDefault = !current || current.id === plan.default_profile;
-    const def = profileColor(plan, plan.default_profile);
-    let sub: string;
-    if (!plan.enabled) sub = l.t("plan_off");
-    else if (status && !status.active && !current) sub = l.t("plan_paused");
-    else if (status?.manual_since) {
-      const value = this._manualValue(status);
-      sub = value ? `${l.t("manual_cap")} · ${value}` : l.t("manual_cap");
-    } else {
-      const value = current ? this._valueLabel(current) : "";
-      sub = current ? (value ? `${current.name} · ${value}` : current.name) : "";
-    }
-    let whenText = "";
-    if (status?.manual_since && status.manual_until) {
-      whenText = l.t("until_time", { time: this._when(status.manual_until) });
-    } else if (status?.next_change) {
-      const mins = Math.round((new Date(status.next_change).getTime() - Date.now()) / 60_000);
-      whenText =
-        mins >= 0 && mins < 60
-          ? l.t("in_minutes", { n: Math.max(1, mins) })
-          : l.t("from_time", { time: this._when(status.next_change) });
-    }
-    let next = status?.next_change
-      ? plan.profiles.find((p) => p.id === status.next_profile)
-      : undefined;
-    if (status?.manual_since && status.manual_until && status.manual_until !== status.next_change) {
-      next = current; // a resume point / manual window ends before the next block
-    }
-    const nextValue = next ? this._valueLabel(next) || next.name : "";
-    const nextColor = next && next.id !== plan.default_profile ? profileColor(plan, next) : "";
-    const segs = (this._segments[plan.id] ?? [])
-      .map((seg) => ({
-        from: Math.max(0, minutesFromToday(seg.start, tz)),
-        to: Math.min(MINUTES_PER_DAY, minutesFromToday(seg.end, tz)),
-        profile: seg.profile,
-      }))
-      .filter((seg) => seg.to > seg.from && seg.profile !== plan.default_profile);
-    const manual = this._manualSegment(plan, 0);
-    const pct = (m: number) => (m / MINUTES_PER_DAY) * 100;
-    return html`<div
-      class="tl-plan"
-      role="button"
-      tabindex="0"
-      aria-label=${this._l.t("open_plan", { name: plan.name })}
-      style=${!isDefault && plan.enabled ? `border-color:${tint(color, 45)}` : ""}
-      @click=${() => this._openDetail(plan)}
-      @keydown=${(ev: KeyboardEvent) => {
-        if (ev.key === "Enter" || ev.key === " ") {
-          ev.preventDefault();
-          this._openDetail(plan);
-        }
-      }}
-    >
-      <div class="tl-row">
-        <span class="tl-icon" style="background:${tint(color, 18)};color:${color}">
-          <ha-icon .icon=${current?.icon || plan.icon || "mdi:calendar-clock"}></ha-icon>
-        </span>
-        <span class="tl-text">
-          <span class="tl-name">${plan.name}</span>
-          <span class="tl-sub" style=${isDefault || status?.manual_since ? "" : `color:${color}`}
-            >${sub}</span
-          >
-        </span>
-        ${
-          whenText
-            ? html`<span class="tl-next">
-                <span class="tl-when">${whenText}</span>
-                <span class="tl-value" style=${nextColor ? `color:${nextColor}` : ""}
-                  >${nextValue}</span
-                >
-              </span>`
-            : nothing
-        }
-        ${this._resumeButton(plan, true)}
-      </div>
-      <div class="band" style="background:${tint(def, 16)}">
-        ${segs.map(
-          (seg) =>
-            html`<span
-              class="band-seg"
-              style="left:${pct(seg.from)}%;width:${pct(seg.to - seg.from)}%;background:${profileColor(
-                plan,
-                seg.profile,
-              )}"
-            ></span>`,
-        )}
-        ${
-          manual
-            ? html`<span
-                class="band-seg hatch"
-                style="left:${manual.left}%;width:${manual.width}%"
-              ></span>`
-            : nothing
-        }
-        ${this._resumeMarks(
-          plan.week.day_types.find((d) => d.id === status?.day_type)?.resume_points,
-        )}
-        <span class="band-now" aria-hidden="true"></span>
-      </div>
-    </div>`;
-  }
-
-  private _onCreated = (ev: CustomEvent<{ id: string; name: string }>): void => {
-    this._page = "week";
-    const { id, name } = ev.detail;
-    if (this._config?.view !== "timeline") {
-      if (this._config?.plan === id) this._resubscribe();
-      else this._notify(this._l.t("created", { name, id }));
-    }
-  };
-
-  private _newPlanButton() {
-    if (!this.hass?.user?.is_admin) return nothing;
-    return html`<button class="textbtn" @click=${() => (this._page = "wizard")}>
-      ${this._l.t("new_plan")}
-    </button>`;
-  }
-
-  private _message(text: string, isError = false, offerWizard = false) {
-    return html`<ha-card>
-      <div class="message ${isError ? "error" : ""}" role=${isError ? "alert" : nothing}>
-        <span class="brand">Zeitwerk</span>
-        <span>${text}</span>
-        ${this._notice ? html`<span class="notice">${this._notice}</span>` : nothing}
-        ${offerWizard ? this._newPlanButton() : nothing}
-      </div>
-    </ha-card>`;
-  }
-
-  private _renderWeek(plan: Plan) {
-    const quick =
-      this._config!.show_profile_sliders && !this._config!.compact
-        ? plan.profiles.map((p) => this._quick(p)).filter((q): q is QuickRow => !!q)
-        : [];
-    const l = this._l;
-    if (this._editDay) {
-      const labels: Record<string, string> = {};
-      for (const p of plan.profiles) labels[p.id] = this._valueLabel(p);
-      return html`<ha-card>
-        <zeitwerk-day-editor
-          ?dark=${!!this.hass?.themes?.darkMode}
-          .plan=${plan}
-          .day=${this._editDay.day}
-          .initial=${this._editDay.blocks}
-          .initialResume=${this._editDay.resume}
-          .localize=${l}
-          .valueLabels=${labels}
-          .withHoliday=${plan.holidays.mode === "own_day_type" && !!plan.holidays.day_type}
-          .step=${this._step}
-          .error=${this._saveError}
-          .busy=${this._busy}
-          @zw-close=${() => (this._editDay = undefined)}
-          @zw-save-day=${this._onSaveDay}
-        ></zeitwerk-day-editor>
-      </ha-card>`;
-    }
-    if (this._page === "rules") {
-      return html`<ha-card>
-        <zeitwerk-rules
-          ?dark=${!!this.hass?.themes?.darkMode}
-          .hass=${this.hass}
-          .plan=${plan}
-          .localize=${l}
-          .save=${(m: PlanMutator) => this._updatePlan(m)}
-          .duplicate=${this._duplicate}
-          .deletePlan=${this._removePlan}
-          @zw-back=${() => (this._page = "week")}
-        ></zeitwerk-rules>
-        ${this._renderUndo()}
-        ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
-      </ha-card>`;
-    }
-    if (this._page === "profiles") {
-      return html`<ha-card>
-        <zeitwerk-profiles
-          ?dark=${!!this.hass?.themes?.darkMode}
-          .hass=${this.hass}
-          .plan=${plan}
-          .localize=${l}
-          .save=${(m: PlanMutator) => this._updatePlan(m)}
-          @zw-back=${() => (this._page = "week")}
-        ></zeitwerk-profiles>
-      </ha-card>`;
-    }
-    return html`<ha-card class=${this._config!.compact ? "compact" : ""}>
-      ${
-        this._detail
-          ? html`<button class="tl-back" @click=${this._closeDetail}>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
-              ${this._config!.title ?? l.t("timeline_title")}
-            </button>`
-          : nothing
-      }
-      ${this._renderHeader(plan)}
-      ${this._config!.compact ? nothing : this._separator(l.t("section_profiles"), this._openProfiles)}
-      ${
-        this._config!.compact
-          ? nothing
-          : quick.length
-            ? html`<div class="sliders">${quick.map((q) => this._renderSlider(plan, q))}</div>`
-            : html`<div class="pchips">
-                ${plan.profiles.map(
-                  (p) =>
-                    html`<span class="pchip"
-                      ><span class="swatch" style="background:${profileColor(plan, p)}"></span
-                      >${p.name}</span
-                    >`,
-                )}
-              </div>`
-      }
-      ${this._separator(l.t("section_week"))} ${this._renderGrid(plan)}
-      ${this._config!.compact ? nothing : this._renderRulesLinks(plan)} ${this._renderUndo()}
-      ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
-    </ha-card>`;
-  }
-
-  private _separator(title: string, gear?: () => void) {
-    return html`<div class="separator">
-      <span>${title}</span><span class="line"></span>${
-        gear
-          ? html`<button
-              class="gear"
-              aria-label=${this._l.t("edit_profiles")}
-              title=${this._l.t("edit_profiles")}
-              @click=${gear}
-            >
-              <ha-icon .icon=${"mdi:cog-outline"}></ha-icon>
-            </button>`
-          : nothing
-      }
-    </div>`;
-  }
-
-  private _openProfiles = (): void => {
-    if (!this.hass?.user?.is_admin) {
-      this._notify(this._l.t("admin_only"));
-      return;
-    }
-    this._page = "profiles";
-  };
-
-  private _renderHeader(plan: Plan) {
-    const l = this._l;
-    const status = plan.status;
-    const current = this._profile(status?.profile);
-    const color = current ? profileColor(plan, current) : "var(--zw-text-2)";
-    let subline: TemplateResult | string = "";
-    if (status?.error) {
-      subline = html`<span class="danger">${l.t("plan_error")}: ${status.error}</span>`;
-    } else if (!plan.enabled) {
-      subline = l.t("plan_off");
-    } else if (current) {
-      const manual = !!status?.manual_since;
-      const value = manual ? this._manualValue(status!) : this._valueLabel(current);
-      const name = manual ? l.t("manual_cap") : current.name;
-      const next = this._profile(status?.next_profile);
-      let nextText = "";
-      if (manual && status?.manual_until) {
-        // Resume point or end of the manual window may come before the next block.
-        const target = status.next_change === status.manual_until ? next : current;
-        nextText = ` · ${l.t("until_time", { time: this._when(status.manual_until) })}${target ? ` → ${this._valueLabel(target) || target.name}` : ""}`;
-      } else if (status?.next_change && next) {
-        nextText = ` · ${l.t("from_time", { time: this._when(status.next_change) })} → ${this._valueLabel(next) || next.name}`;
-      }
-      subline = html`<span class="current" style="color:${manual ? "var(--zw-text)" : color}"
-          >${name}${value ? ` ${value}` : ""}</span
-        >${nextText}`;
-    } else if (status?.source === "inactive") {
-      subline = this._pausedText(plan);
-    }
-    if (status?.source === "inactive" && current) {
-      subline = html`${subline} · ${this._pausedText(plan)}`;
-    }
-    return html`<div class="header">
-      <div class="icon" style="background:${tint(color, 18)};color:${color}">
-        <ha-icon .icon=${plan.icon || "mdi:calendar-clock"}></ha-icon>
-      </div>
-      <div class="titles">
-        <div class="name">${plan.name}</div>
-        <div class="sub">${subline}</div>
-        ${this._renderReason(plan)}
-      </div>
-      <button
-        class="switch"
-        role="switch"
-        aria-label=${l.t("toggle_plan")}
-        aria-checked=${plan.enabled ? "true" : "false"}
-        @click=${this._togglePlan}
-      >
-        <span></span>
-      </button>
-    </div>`;
-  }
-
-  /**
-   * Why the plan deviates from the week plan right now (override, forced
-   * profile, manual change, holiday) – one quiet line in the header, shown
-   * only when something applies.
-   */
-  private _renderReason(plan: Plan) {
-    const l = this._l;
-    const status = plan.status;
-    if (!status || !plan.enabled || status.error || !status.active) return nothing;
-    const items: { icon: string; text: string; color?: string }[] = [];
-    const source = status.source ?? "";
-    if (status.manual_since) {
-      items.push({
-        icon: "mdi:hand-back-right-outline",
-        text: l.t("manual"), // "until …" is in the header line above
-      });
-    } else if (status.forced_until) {
-      const forced = this._profile(status.profile);
-      items.push({
-        icon: "mdi:timer-outline",
-        text: l.t("forced_until", {
-          profile: forced?.name ?? "",
-          time: this._when(status.forced_until),
-        }),
-        color: forced ? profileColor(plan, forced) : undefined,
-      });
-    } else if (source.startsWith("override:")) {
-      const ov = plan.overrides.find((o) => o.id === source.slice(9));
-      const profile = this._profile(ov?.profile ?? status.profile);
-      items.push({
-        icon: "mdi:layers-outline",
-        text: l.t("override_reason", { name: ov?.name ?? source.slice(9) }),
-        color: profile ? profileColor(plan, profile) : undefined,
-      });
-    }
-    if (status.is_holiday) items.push({ icon: "mdi:flag-outline", text: l.t("holiday") });
-    if (!items.length) return nothing;
-    return html`<div class="reason">
-      ${items.map(
-        (item) =>
-          html`<span class="ritem" style=${item.color ? `color:${item.color}` : ""}
-            ><ha-icon .icon=${item.icon}></ha-icon>${item.text}</span
-          >`,
-      )}
-      ${this._resumeButton(plan)}
-    </div>`;
-  }
-
-  private _pausedText(plan: Plan): string {
-    const l = this._l;
-    const reason = pauseReason(
-      plan.activation.conditions as Condition[],
-      plan.status?.activation_results ?? [],
-      this.hass,
-      l,
-    );
-    return reason ? l.t("paused_reason", { reason }) : l.t("plan_paused");
-  }
-
-  private _renderRulesLinks(plan: Plan) {
-    const l = this._l;
-    const results = plan.status?.override_results ?? {};
-    const active = plan.overrides.filter((o) => results[o.id]);
-    const overrides = plan.overrides.length
-      ? `${plan.overrides.map((o) => o.name).join(", ")} · ${
-          active.length
-            ? active.map((o) => l.t("override_active", { name: o.name })).join(", ")
-            : l.t("none_active")
-        }`
-      : l.t("no_conditions");
-    const act = plan.activation;
-    const activation = act.conditions.length
-      ? `${conditionsSummary(act.conditions as Condition[], act.match, this.hass, l)} · ${
-          plan.status?.active ? l.t("fulfilled") : l.t("not_fulfilled")
-        }`
-      : l.t("always_runs");
-    const holidays = this._holidaySummary(plan);
-    const summary = [
-      `${l.t("rules_overrides")}: ${overrides}`,
-      `${l.t("rules_activation")}: ${activation}`,
-      `${l.t("rules_holidays")}: ${holidays}`,
-    ];
-    return html`<button class="link settings" @click=${() => (this._page = "rules")}>
-      <span class="licon"><ha-icon .icon=${"mdi:tune-variant"}></ha-icon></span>
-      <span class="ltext">
-        <span class="ltitle">${l.t("config_title")}</span>
-        ${summary.map((line) => html`<span class="lsub">${line}</span>`)}
-      </span>
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M9 6l6 6-6 6" />
-      </svg>
-    </button>`;
-  }
-
-  private _holidaySummary(plan: Plan): string {
-    const l = this._l;
-    const h = plan.holidays;
-    if (h.mode === "off" || !h.source) return l.t("holiday_mode_off");
-    const source = String(this.hass?.states[h.source]?.attributes.friendly_name ?? h.source);
-    if (h.mode === "like_day") {
-      return l.t("holiday_summary_like", {
-        source,
-        day: l.weekdayLong(WEEKDAYS.indexOf(h.like_day ?? "sun")),
-      });
-    }
-    return l.t("holiday_summary_own", { source });
-  }
-
-  /** Hatched range of a manual override within one row (today/tomorrow). */
-  private _manualSegment(plan: Plan, dayOffset: number): { left: number; width: number } | null {
-    const status = plan.status;
-    if (!status?.manual_since) return null;
-    const tz = this.hass?.config?.time_zone;
-    const dayStart = (iso: string | null | undefined, fallback: number) =>
-      iso ? minutesFromToday(iso, tz) : fallback;
-    const from = Math.max(dayStart(status.manual_since, 0), dayOffset * MINUTES_PER_DAY);
-    const to = Math.min(
-      dayStart(status.manual_until, (dayOffset + 1) * MINUTES_PER_DAY),
-      (dayOffset + 1) * MINUTES_PER_DAY,
-    );
-    if (to <= from) return null;
-    const base = dayOffset * MINUTES_PER_DAY;
-    return {
-      left: ((from - base) / MINUTES_PER_DAY) * 100,
-      width: ((to - from) / MINUTES_PER_DAY) * 100,
-    };
-  }
-
   private _renderSlider(plan: Plan, row: QuickRow) {
     const l = this._l;
     const { profile, qv, control } = row;
@@ -1383,122 +631,226 @@ export class ZeitwerkCard extends LitElement {
     </div>`;
   }
 
-  private _rows(plan: Plan): GridRow[] {
+  // --- Rendering ------------------------------------------------------------
+
+  protected render() {
+    if (!this._config) return nothing;
     const l = this._l;
-    const now = zonedNow(this.hass?.config?.time_zone);
-    const rows: GridRow[] = WEEKDAYS.map((wd, i) => {
-      const dayType = dayTypeFor(plan, wd);
-      const active = true;
-      return {
-        key: wd,
-        label: l.weekdayShort(i),
-        dayType,
-        segments: rowSegments(dayType, dayTypeFor(plan, previousWeekday(wd))),
-        active,
-        today: i === now.weekdayIndex && !plan.status?.is_holiday,
-        dayOffset: (i - now.weekdayIndex + 7) % 7 <= 1 ? (i - now.weekdayIndex + 7) % 7 : null,
-      };
-    });
-    if (plan.holidays.mode === "own_day_type") {
-      const holiday = plan.week.day_types.find((d) => d.id === plan.holidays.day_type);
-      if (holiday) {
-        rows.push({
-          key: "holiday",
-          label: l.t("holiday_short"),
-          dayType: holiday,
-          segments: rowSegments(holiday, undefined),
-          active: true,
-          today: !!plan.status?.is_holiday,
-          dayOffset: null,
-        });
-      }
+    const view = this._config.view;
+    if (view === "timeline") {
+      if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
+      if (!this.hass || this._plans === undefined) return this._message(l.t("loading"));
+      if (this._detail && this._plan) return this._renderWeek(this._plan);
+      return this._renderTimeline();
     }
-    return rows;
+    if (view && view !== "week" && view !== "profiles") {
+      return this._message(l.t("view_unsupported", { view }));
+    }
+    if (!this._config.plan) return this._message(l.t("no_plan"), false, true);
+    if (this._error) return this._message(l.t("not_loaded", { error: this._error }), true);
+    if (!this.hass || this._plan === undefined) return this._message(l.t("loading"));
+    if (this._plan === null)
+      return this._message(l.t("plan_missing", { plan: this._config.plan }), true, true);
+    return view === "profiles" ? this._renderProfiles(this._plan) : this._renderWeek(this._plan);
   }
 
-  private _renderGrid(plan: Plan) {
+  private _renderTimeline() {
     const l = this._l;
-    const def = profileColor(plan, plan.default_profile);
-    const rows = this._rows(plan);
-    const measure = (this._measure ??= canvasMeasure(
-      `700 11px ${getComputedStyle(this).fontFamily || "sans-serif"}`,
-    ));
-    const used = new Set(plan.week.day_types.flatMap((d) => d.blocks.map((b) => b.profile)));
-    const legend = plan.profiles.filter((p) => used.has(p.id) && p.id !== plan.default_profile);
-    const defaultProfile = this._profile(plan.default_profile);
-
-    return html`<div class="grid">
-      <div class="axis grid-axis">
-        ${[0, 6, 12, 18, 24].map((h) => html`<span style="left:${(h / 24) * 100}%">${h}</span>`)}
-      </div>
-      <div class="rows">
-        ${rows.map(
-          (row) =>
-            html`<button
-              class="row ${row.today ? "today" : ""}"
-              aria-label=${l.t("day_editor_title", { day: this._dayName(row.key) })}
-              @click=${() => this._openDay(row.key)}
-            >
-              <span class="day ${row.today ? "today" : ""}">${row.label}</span>
-              <span class="track" style="background:${tint(def, 16)}">
-                ${row.segments.map((seg) => {
-                  const color = profileColor(plan, seg.profile);
-                  const px = (seg.width / 100) * this._trackPx;
-                  return html`<span
-                    class="block ${seg.spill ? "spill" : ""}"
-                    title="${seg.label} · ${this._profile(seg.profile)?.name ?? seg.profile}"
-                    style="left:${seg.left}%;width:${seg.width}%;background:${color};color:${textOn(color)}"
-                    ><span class="blabel"
-                      >${fitLabel([seg.label, seg.short], px, measure)}</span
-                    ></span
-                  >`;
-                })}
-                ${this._renderManual(plan, row)} ${this._resumeMarks(row.dayType?.resume_points)}
-              </span>
-            </button>`,
-        )}
-        ${[0.25, 0.5, 0.75].map(
-          (f) => html`<div class="hour-line" style="--zw-at:${f}" aria-hidden="true"></div>`,
-        )}
-        <div class="now-line" aria-hidden="true"></div>
-        <div class="now-dot" aria-hidden="true"></div>
+    const plans = this._timelinePlans();
+    const tz = this.hass?.config?.time_zone;
+    const now = zonedNow(tz);
+    let date: string;
+    try {
+      date = new Date().toLocaleDateString(l.lang, {
+        timeZone: tz,
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+      });
+    } catch {
+      date = new Date().toLocaleDateString();
+    }
+    const tags = this._config?.tags ?? [];
+    const title = this._config?.title ?? (tags.length === 1 ? tags[0] : l.t("timeline_title"));
+    const running = plans.filter((p) => p.enabled && p.status?.active).length;
+    const body = plans.length
+      ? plans.map(
+          (p) =>
+            html`<zeitwerk-timeline-plan
+              .hass=${this.hass}
+              .plan=${p}
+              .localize=${l}
+              .segments=${this._segments[p.id] ?? []}
+              @zw-open=${(ev: CustomEvent<string>) => this._openDetail(ev.detail)}
+              @zw-notice=${this._onNotice}
+            ></zeitwerk-timeline-plan>`,
+        )
+      : html`<div class="message">
+          ${tags.length ? l.t("no_plans_tag", { tag: tags.join(", ") }) : l.t("no_plans")}
+        </div>`;
+    return html`<ha-card class="timeline">
+      <div class="tl-head">
+        <div class="tl-titles">
+          <span class="tl-date">${l.t("today_date", { date })}</span>
+          <span class="tl-title">${title}</span>
+        </div>
+        <span class="tl-clock">${formatTime(now.minutes)}</span>
       </div>
       ${
-        this._config!.compact
-          ? nothing
-          : html`<div class="legend">
-                ${legend.map(
-                  (p) =>
-                    html`<span
-                      ><span class="swatch" style="background:${profileColor(plan, p)}"></span
-                      >${p.name}</span
-                    >`,
-                )}
-                ${
-                  defaultProfile
-                    ? html`<span
-                        ><span class="swatch" style="background:${tint(def, 45)}"></span
-                        >${defaultProfile.name} (${l.t("default_suffix")})</span
-                      >`
-                    : nothing
-                }
+        plans.length
+          ? html`<div class="chips">
+                <span class="chip ok"
+                  ><span class="dot"></span>${
+                    running === 1 ? l.t("plans_running_one") : l.t("plans_running", { n: running })
+                  }</span
+                >
               </div>
-              <div class="hint">${l.t("tap_day_hint")}</div>`
+              <div class="axis tl-axis">
+                <span>0</span><span>6</span><span>12</span><span>18</span><span>24</span>
+              </div>`
+          : nothing
       }
+      ${body} ${this._newPlanButton()}
+      ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
+    </ha-card>`;
+  }
+
+  /** Admins get a link to the panel's plan wizard. */
+  private _newPlanButton(preset?: string) {
+    if (!this._admin) return nothing;
+    const path = routePath({ name: "new", preset });
+    return html`<button class="textbtn" @click=${(ev: MouseEvent) => openPath(path, ev)}>
+      ${this._l.t("new_plan")}
+    </button>`;
+  }
+
+  private _message(text: string, isError = false, offerWizard = false) {
+    return html`<ha-card>
+      <div class="message ${isError ? "error" : ""}" role=${isError ? "alert" : nothing}>
+        <span class="brand">Zeitwerk</span>
+        <span>${text}</span>
+        ${this._notice ? html`<span class="notice">${this._notice}</span>` : nothing}
+        ${offerWizard ? this._newPlanButton(this._config?.plan) : nothing}
+      </div>
+    </ha-card>`;
+  }
+
+  private _separator(title: string) {
+    return html`<div class="separator"><span>${title}</span><span class="line"></span></div>`;
+  }
+
+  /** Quick view: one slider per profile with a single entity/value. */
+  private _quickRows(plan: Plan): QuickRow[] {
+    return plan.profiles.map((p) => this._quick(p)).filter((q): q is QuickRow => !!q);
+  }
+
+  private _profileChips(plan: Plan) {
+    return html`<div class="pchips">
+      ${plan.profiles.map(
+        (p) =>
+          html`<span class="pchip"
+            ><span class="swatch" style="background:${profileColor(plan, p)}"></span>${p.name}${
+              valueLabel(this._ctx, p, this._pending)
+                ? ` · ${valueLabel(this._ctx, p, this._pending)}`
+                : ""
+            }</span
+          >`,
+      )}
     </div>`;
   }
 
-  private _renderManual(plan: Plan, row: GridRow) {
-    if (row.dayOffset === null) return nothing;
-    // On a holiday the hatch belongs to the holiday row, not the weekday row.
-    if (plan.status?.is_holiday && plan.holidays.mode === "own_day_type") return nothing;
-    const seg = this._manualSegment(plan, row.dayOffset);
-    if (!seg) return nothing;
-    return html`<div
-      class="hatch"
-      style="left:${seg.left}%;width:${seg.width}%"
-      title=${this._l.t("manual")}
-    ></div>`;
+  /** `view: profiles`: only the profile values (quick view). */
+  private _renderProfiles(plan: Plan) {
+    const quick = this._quickRows(plan);
+    return html`<ha-card>
+      ${this._separator(this._config?.title ?? plan.name)}
+      ${
+        quick.length
+          ? html`<div class="sliders">${quick.map((q) => this._renderSlider(plan, q))}</div>`
+          : this._profileChips(plan)
+      }
+      ${this._renderUndo()}
+      ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
+    </ha-card>`;
+  }
+
+  private _renderWeek(plan: Plan) {
+    const compact = !!this._config!.compact;
+    const quick = this._config!.show_profile_sliders && !compact ? this._quickRows(plan) : [];
+    const l = this._l;
+    return html`<ha-card class=${compact ? "compact" : ""}>
+      ${
+        this._detail
+          ? html`<button class="tl-back" @click=${this._closeDetail}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              ${this._config!.title ?? l.t("timeline_title")}
+            </button>`
+          : nothing
+      }
+      <zeitwerk-plan-header
+        .hass=${this.hass}
+        .plan=${plan}
+        .localize=${l}
+        .pending=${this._pending}
+        @zw-notice=${this._onNotice}
+      ></zeitwerk-plan-header>
+      ${compact ? nothing : this._separator(l.t("section_profiles"))}
+      ${
+        compact
+          ? nothing
+          : quick.length
+            ? html`<div class="sliders">${quick.map((q) => this._renderSlider(plan, q))}</div>`
+            : this._profileChips(plan)
+      }
+      ${this._separator(l.t("section_week"))}
+      <zeitwerk-week-grid
+        .hass=${this.hass}
+        .plan=${plan}
+        .localize=${l}
+        .compact=${compact}
+        .interactive=${this._admin}
+        @zw-day=${this._openDay}
+      ></zeitwerk-week-grid>
+      ${compact ? nothing : this._editLink(plan)} ${this._renderUndo()}
+      ${this._notice ? html`<div class="notice" role="status">${this._notice}</div>` : nothing}
+    </ha-card>`;
+  }
+
+  /** "Edit in Zeitwerk" (admins only; the panel is admin-only). */
+  private _editLink(plan: Plan) {
+    if (!this._admin) return nothing;
+    const path = routePath({ name: "plan", planId: plan.id });
+    return html`<button class="link settings" @click=${(ev: MouseEvent) => openPath(path, ev)}>
+      <span class="licon"><ha-icon .icon=${"mdi:pencil-outline"}></ha-icon></span>
+      <span class="ltext">
+        <span class="ltitle">${this._l.t("edit_in_zeitwerk")}</span>
+      </span>
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>`;
   }
 
   static styles = [
@@ -1511,10 +863,6 @@ export class ZeitwerkCard extends LitElement {
         padding: 12px;
         background: var(--zw-bg);
         border-radius: var(--zw-radius-card);
-        --zw-track: 30px;
-      }
-      ha-card.compact {
-        --zw-track: 22px;
       }
       .message {
         display: flex;
@@ -1539,115 +887,10 @@ export class ZeitwerkCard extends LitElement {
         padding: 0;
       }
       button:focus-visible,
-      input:focus-visible + *,
       select:focus-visible {
         outline: 2px solid var(--zw-accent);
         outline-offset: 2px;
       }
-
-      /* Header */
-      .header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        min-height: 64px;
-        padding: 9px 10px;
-        border-radius: 32px;
-        background: var(--zw-surface);
-        border: 1px solid var(--zw-border);
-        box-sizing: border-box;
-      }
-      .icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 22px;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .icon ha-icon {
-        --mdc-icon-size: 22px;
-      }
-      .titles {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        flex: 1;
-        min-width: 0;
-      }
-      .name {
-        font-size: 15px;
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .sub {
-        font-size: 13px;
-        color: var(--zw-text-2);
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-        overflow: hidden;
-      }
-      .reason {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 2px 12px;
-        margin-top: 2px;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--zw-text-2);
-      }
-      .ritem {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        min-width: 0;
-      }
-      .ritem ha-icon {
-        --mdc-icon-size: 14px;
-      }
-      .current {
-        font-weight: 600;
-      }
-      .danger {
-        color: var(--zw-danger);
-      }
-      .switch {
-        position: relative;
-        width: 52px;
-        height: 32px;
-        flex-shrink: 0;
-        border-radius: 16px;
-        background: var(--zw-surface-2);
-        padding: 3px;
-        display: flex;
-        justify-content: flex-start;
-      }
-      .switch::before {
-        content: "";
-        position: absolute;
-        inset: -6px;
-      }
-      .switch span {
-        width: 26px;
-        height: 26px;
-        border-radius: 13px;
-        background: var(--zw-text-2);
-        display: block;
-      }
-      .switch[aria-checked="true"] {
-        background: var(--zw-accent);
-        justify-content: flex-end;
-      }
-      .switch[aria-checked="true"] span {
-        background: var(--zw-on-accent);
-      }
-
-      /* Chips */
       .chips {
         display: flex;
         flex-wrap: wrap;
@@ -1664,12 +907,6 @@ export class ZeitwerkCard extends LitElement {
         font-size: 12px;
         font-weight: 500;
       }
-      .chip ha-icon {
-        --mdc-icon-size: 14px;
-      }
-      .chip.muted {
-        color: var(--zw-text-2);
-      }
       .chip.ok {
         background: color-mix(in srgb, var(--zw-ok) 14%, transparent);
         /* darker in light themes for contrast */
@@ -1681,7 +918,6 @@ export class ZeitwerkCard extends LitElement {
         border-radius: 4px;
         background: var(--zw-ok);
       }
-
       .separator {
         display: flex;
         align-items: center;
@@ -1696,7 +932,6 @@ export class ZeitwerkCard extends LitElement {
         height: 1px;
         background: var(--zw-border);
       }
-
       /* Profile sliders */
       .sliders {
         display: flex;
@@ -1781,160 +1016,16 @@ export class ZeitwerkCard extends LitElement {
         outline: 2px solid var(--zw-accent);
         outline-offset: 2px;
       }
-
-      /* Day type tabs */
-
-      /* Week grid */
-      .grid {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 2px 2px 0;
-      }
       .axis {
         display: flex;
         justify-content: space-between;
-        margin-left: 30px;
         font-size: 11px;
         color: var(--zw-text-2);
-      }
-      .grid-axis {
-        position: relative;
-        display: block;
-        height: 14px;
-      }
-      .grid-axis span {
-        position: absolute;
-        transform: translateX(-50%);
-      }
-      .grid-axis span:first-child {
-        transform: none;
-      }
-      .grid-axis span:last-child {
-        transform: translateX(-100%);
-      }
-      .rows {
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-      .row {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        width: 100%;
-        padding: 0;
-        border: 0;
-        background: none;
-        color: inherit;
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-        border-radius: 10px;
-        -webkit-tap-highlight-color: transparent;
-      }
-      .row:hover .track {
-        outline: 1px solid color-mix(in srgb, var(--zw-text) 25%, transparent);
-      }
-      .row.today .track {
-        outline: 1.5px solid color-mix(in srgb, var(--zw-text) 60%, transparent);
-        outline-offset: 1px;
-      }
-      .day {
-        width: 26px;
-        flex-shrink: 0;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--zw-text-2);
-      }
-      .day.today {
-        font-weight: 700;
-        color: var(--zw-text);
-      }
-      .track {
-        position: relative;
-        flex: 1;
-        height: var(--zw-track);
-        border-radius: 10px;
-        user-select: none;
-        -webkit-user-select: none;
-        -webkit-touch-callout: none;
-      }
-      .block {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        border-radius: 10px;
-        font-size: 11px;
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        white-space: nowrap;
-      }
-      .block.spill {
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
-      }
-      .block span {
-        pointer-events: none;
-      }
-      .blabel {
-        max-width: 100%;
-        overflow: hidden;
-        white-space: nowrap;
-      }
-      .hour-line {
-        position: absolute;
-        top: -4px;
-        bottom: -4px;
-        left: calc(30px + (100% - 30px) * var(--zw-at));
-        border-left: 1px dashed color-mix(in srgb, var(--zw-text) 35%, transparent);
-        pointer-events: none;
-      }
-      .now-line {
-        position: absolute;
-        top: -6px;
-        bottom: -6px;
-        left: calc(30px + (100% - 30px) * var(--zw-now, 0));
-        width: 2px;
-        border-radius: 1px;
-        background: var(--zw-text);
-        pointer-events: none;
-      }
-      .now-dot {
-        position: absolute;
-        top: -10px;
-        left: calc(30px + (100% - 30px) * var(--zw-now, 0) - 4px);
-        width: 10px;
-        height: 10px;
-        border-radius: 5px;
-        background: var(--zw-text);
-        pointer-events: none;
-      }
-      .legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px 14px;
-        font-size: 12px;
-        color: var(--zw-text-2);
-      }
-      .legend > span {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
       }
       .swatch {
         width: 12px;
         height: 12px;
         border-radius: 4px;
-      }
-      .hint {
-        font-size: 12px;
-        color: var(--zw-text-2);
-        padding: 0 4px;
       }
       .tl-head {
         display: flex;
@@ -1966,24 +1057,6 @@ export class ZeitwerkCard extends LitElement {
         margin: 4px 0 0;
         padding: 0 14px;
       }
-      .tl-plan {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        padding: 12px 14px 14px;
-        border-radius: 26px;
-        background: var(--zw-surface);
-        border: 1px solid var(--zw-border);
-        cursor: pointer;
-        transition: background 0.15s;
-      }
-      .tl-plan:hover {
-        background: var(--zw-surface-2);
-      }
-      .tl-plan:focus-visible {
-        outline: 2px solid var(--zw-accent);
-        outline-offset: 2px;
-      }
       .tl-back {
         align-self: flex-start;
         display: inline-flex;
@@ -2000,119 +1073,6 @@ export class ZeitwerkCard extends LitElement {
       .tl-back:hover {
         background: var(--zw-surface);
       }
-      .tl-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .tl-icon {
-        width: 36px;
-        height: 36px;
-        flex-shrink: 0;
-        border-radius: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        --mdc-icon-size: 18px;
-      }
-      .tl-text {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-      }
-      .tl-name {
-        font-size: 14px;
-        font-weight: 600;
-      }
-      .tl-sub {
-        font-size: 12px;
-        color: var(--zw-text-2);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .tl-next {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        flex-shrink: 0;
-      }
-      .tl-when {
-        font-size: 11px;
-        color: var(--zw-text-2);
-      }
-      .tl-value {
-        font-size: 13px;
-        font-weight: 600;
-      }
-      .band {
-        position: relative;
-        height: 16px;
-        border-radius: 8px;
-      }
-      .band-seg {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        border-radius: 8px;
-      }
-      .band-now {
-        position: absolute;
-        top: -4px;
-        bottom: -4px;
-        left: calc(100% * var(--zw-now, 0));
-        width: 2px;
-        border-radius: 1px;
-        background: var(--zw-text);
-      }
-      .block {
-        overflow: visible;
-      }
-      .rp-mark {
-        position: absolute;
-        top: -3px;
-        bottom: -3px;
-        width: 0;
-        margin-left: -1px;
-        border-left: 2px dotted var(--zw-text);
-        pointer-events: none;
-        opacity: 0.75;
-      }
-      .resume-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        min-height: 32px;
-        padding: 0 12px 0 8px;
-        border: 0;
-        border-radius: 16px;
-        background: var(--zw-surface-2);
-        color: var(--zw-text);
-        font: inherit;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-      }
-      .resume-btn ha-icon {
-        --mdc-icon-size: 16px;
-      }
-      .resume-btn.compact {
-        width: 44px;
-        height: 44px;
-        padding: 0;
-        flex-shrink: 0;
-        justify-content: center;
-        border-radius: 22px;
-      }
-      .resume-btn.compact ha-icon {
-        --mdc-icon-size: 22px;
-      }
-      .resume-btn:focus-visible {
-        outline: 2px solid var(--zw-accent);
-        outline-offset: 2px;
-      }
       .textbtn {
         align-self: flex-start;
         font-size: 13px;
@@ -2121,27 +1081,6 @@ export class ZeitwerkCard extends LitElement {
         color: var(--zw-text);
         text-decoration: underline;
         text-underline-offset: 3px;
-      }
-      .copy {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 12px;
-        border-radius: 18px;
-        background: var(--zw-surface);
-      }
-      .hatch {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        border-radius: 10px;
-        pointer-events: none;
-        background: repeating-linear-gradient(
-          135deg,
-          color-mix(in srgb, var(--zw-text) 55%, transparent) 0 2px,
-          transparent 2px 7px
-        );
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--zw-text) 40%, transparent);
       }
       .link {
         width: 100%;
@@ -2159,9 +1098,6 @@ export class ZeitwerkCard extends LitElement {
         background: var(--zw-surface);
         border: 1px solid var(--zw-border);
         padding-block: 12px;
-      }
-      .link + .link {
-        border-top: 1px solid var(--zw-border);
       }
       .link svg {
         color: var(--zw-text-2);
@@ -2187,13 +1123,6 @@ export class ZeitwerkCard extends LitElement {
       .ltitle {
         font-size: 14px;
         font-weight: 600;
-      }
-      .lsub {
-        font-size: 12px;
-        color: var(--zw-text-2);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
       .notice {
         font-size: 13px;
@@ -2228,19 +1157,6 @@ export class ZeitwerkCard extends LitElement {
         font-size: 13px;
         font-weight: 700;
       }
-      .gear {
-        width: 32px;
-        height: 32px;
-        margin-right: -6px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--zw-text-2);
-      }
-      .gear:hover {
-        background: var(--zw-surface);
-      }
     `,
   ];
 }
@@ -2261,11 +1177,9 @@ declare global {
 }
 
 defineElements([
-  ["zeitwerk-day-editor", ZeitwerkDayEditor],
-  ["zeitwerk-conditions-editor", ZeitwerkConditionsEditor],
-  ["zeitwerk-rules", ZeitwerkRules],
-  ["zeitwerk-profiles", ZeitwerkProfiles],
-  ["zeitwerk-plan-wizard", ZeitwerkPlanWizard],
+  ["zeitwerk-plan-header", ZeitwerkPlanHeader],
+  ["zeitwerk-week-grid", ZeitwerkWeekGrid],
+  ["zeitwerk-timeline-plan", ZeitwerkTimelinePlan],
   ["zeitwerk-card-editor", ZeitwerkCardEditor],
   ["zeitwerk-card", ZeitwerkCard],
 ]);

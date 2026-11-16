@@ -48,6 +48,7 @@ export class ZeitwerkCardEditor extends LitElement {
         options: [
           { value: "week", label: l.t("ed_view_week") },
           { value: "timeline", label: l.t("ed_view_timeline") },
+          { value: "profiles", label: l.t("ed_view_profiles") },
         ],
       },
     };
@@ -151,11 +152,14 @@ export class ZeitwerkCardEditor extends LitElement {
       <label
         >${l.t("ed_view")}
         <select
-          @change=${(ev: Event) => set({ view: (ev.target as HTMLSelectElement).value as "week" })}
+          @change=${(ev: Event) => set({ view: (ev.target as HTMLSelectElement).value as ZeitwerkCardConfig["view"] })}
         >
           <option value="week" ?selected=${data.view === "week"}>${l.t("ed_view_week")}</option>
           <option value="timeline" ?selected=${data.view === "timeline"}>
             ${l.t("ed_view_timeline")}
+          </option>
+          <option value="profiles" ?selected=${data.view === "profiles"}>
+            ${l.t("ed_view_profiles")}
           </option>
         </select>
       </label>

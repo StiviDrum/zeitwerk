@@ -246,12 +246,13 @@ Done with subagents (AGENTS.md §8); orchestrator commits.
 - [x] Backend: websocket `zeitwerk/rooms/*`, plan mutations with room fields; services unchanged
   - Implemented by `zw-backend`, two `zw-reviewer` passes. Decisions beyond the first SPEC draft: unavailable contacts keep their last value, window state persisted across restarts, room edits never flip the window, `room_missing`/`area_missing` flags. `tests/test_rooms.py`.
 - [x] Backend: register sidebar panel (admin only), serve panel module, remove on unload
-- [ ] Frontend: split build into card + panel modules
-- [ ] Frontend: panel shell with routing, header, narrow layout, error states
-- [ ] Frontend: move day editor, rules, profiles, wizard into the panel
+- [x] Frontend: split build into card + panel modules
+- [x] Frontend: panel shell with routing, header, narrow layout, error states
+- [x] Frontend: move day editor, rules, profiles, wizard into the panel
 - [ ] Frontend: overview (rooms by floor, general plans, hints)
 - [ ] Frontend: room editor (area, windows, sensors, plans + window reaction)
-- [ ] Frontend: card slimmed to display + control, „In Zeitwerk bearbeiten“ deep links (admins only)
+- [x] Frontend: card slimmed to display + control, „In Zeitwerk bearbeiten“ deep links (admins only)
+  - Measured: card 94 437 B (29 489 B gz), panel 179 456 B (47 295 B gz); old single bundle 187 860 B. Checked in the mock preview (playwright), not yet in the HA dev instance.
 - [ ] Tests: migration, window delays, priority vs. overrides/manual/forced, unload cleanup, DST unaffected; vitest for routing + overview grouping
 - [ ] Dev instance: test bed gets rooms + `input_boolean` window stand-ins; manual check
 - [ ] README, CHANGELOG, translations (en + de); bundle sizes measured
