@@ -31,7 +31,6 @@ export interface GridRow {
 export function stripStatus(plan: Plan): Plan {
   const copy = structuredClone(plan);
   delete copy.status;
-  delete copy.room_missing;
   return copy;
 }
 
@@ -258,7 +257,7 @@ export function timeStepOf(plan: Plan): number {
 
 /**
  * Whether a `hass` update matters to the panel: language/theme/admin, the
- * area and floor registries (floor grouping, icons) or one of `ids`.
+ * or one of `ids`.
  */
 export function hassChanged(old: HomeAssistant, now: HomeAssistant, ids: string[]): boolean {
   return (
@@ -266,8 +265,6 @@ export function hassChanged(old: HomeAssistant, now: HomeAssistant, ids: string[
     old.locale?.language !== now.locale?.language ||
     old.themes?.darkMode !== now.themes?.darkMode ||
     old.user?.is_admin !== now.user?.is_admin ||
-    old.areas !== now.areas ||
-    old.floors !== now.floors ||
     ids.some((id) => old.states[id] !== now.states[id])
   );
 }

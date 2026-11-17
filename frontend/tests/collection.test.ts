@@ -1,11 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { applyPlanEvent, applyRoomEvent, upsert } from "../src/collection";
+import { applyPlanEvent, upsert } from "../src/collection";
 import { backoffMs, isRetryable, RetrySubscription } from "../src/subscription";
-import { buildPlan } from "../src/wizard";
-import type { HomeAssistant, Plan, PlanEvent, Room } from "../src/types";
+import type { HomeAssistant, Plan, PlanEvent } from "../src/types";
 
 const p = (id: string, name = id) => ({ id, name }) as Plan;
-const r = (id: string) => ({ id, name: id }) as Room;
 
 describe("collections", () => {
   it("upserts without mutating", () => {
@@ -15,58 +13,12 @@ describe("collections", () => {
     expect(list).toHaveLength(2);
   });
 
-  it("applies plan and room events", () => {
+  it("applies plan events", () => {
     expect(applyPlanEvent([], { event: "init", plans: [p("a")] }).map((x) => x.id)).toEqual(["a"]);
     expect(applyPlanEvent([p("a")], { event: "removed", plan_id: "a" })).toEqual([]);
     expect(applyPlanEvent([p("a")], { event: "added", plan_id: "b", plan: p("b") })).toHaveLength(
       2,
     );
-    expect(applyRoomEvent([r("a")], { event: "updated", room_id: "a", room: r("a") })).toHaveLength(
-      1,
-    );
-    expect(applyRoomEvent([r("a")], { event: "removed", room_id: "a", room: null })).toEqual([]);
-    expect(applyRoomEvent([], { event: "init", rooms: [r("x")] })).toHaveLength(1);
-  });
-});
-
-describe("wizard room prefill", () => {
-  const profiles = [
-    { id: "comfort", name: "Comfort", color: null, icon: null, actions: [] },
-    { id: "frost", name: "Frost", color: null, icon: null, actions: [] },
-  ];
-  const draft = { name: "Heat", icon: "", tags: [], layout: "daily" as const };
-  const labels = { workday: "w", weekend: "e", daily: "d" };
-
-  it("sets room and window reaction", () => {
-    const plan = buildPlan(
-      { ...draft, room: "living", windowProfile: "frost" },
-      profiles,
-      "comfort",
-      labels,
-    );
-    expect(plan.room).toBe("living");
-    expect(plan.room_reactions).toEqual({ window: "frost" });
-  });
-
-  it("omits the reaction for none or unknown profiles and the room for general plans", () => {
-    const none = buildPlan(
-      { ...draft, room: "living", windowProfile: "" },
-      profiles,
-      "comfort",
-      labels,
-    );
-    expect(none.room).toBe("living");
-    expect(none.room_reactions).toBeUndefined();
-    const unknown = buildPlan(
-      { ...draft, room: "living", windowProfile: "gone" },
-      profiles,
-      "comfort",
-      labels,
-    );
-    expect(unknown.room_reactions).toBeUndefined();
-    const general = buildPlan(draft, profiles, "comfort", labels);
-    expect(general.room).toBeUndefined();
-    expect(general.room_reactions).toBeUndefined();
   });
 });
 

@@ -145,18 +145,14 @@ describe("timeStepOf", () => {
 
 describe("stripStatus", () => {
   it("drops all read-only keys the backend rejects", () => {
-    const stripped = stripStatus(plan({ room: "r", room_missing: true }));
+    const stripped = stripStatus(plan({ status: { active: true } as Plan["status"] }));
     expect(stripped.status).toBeUndefined();
-    expect("room_missing" in stripped).toBe(false);
-    expect(stripped.room).toBe("r");
   });
 });
 
 describe("hassChanged", () => {
   const base = {
     states: { "sensor.a": { state: "1" } },
-    areas: {},
-    floors: {},
   } as unknown as HomeAssistant;
   it("ignores unrelated state changes", () => {
     const next = {
@@ -165,11 +161,9 @@ describe("hassChanged", () => {
     } as unknown as HomeAssistant;
     expect(hassChanged(base, next, ["sensor.a"])).toBe(false);
   });
-  it("reacts to watched entities, areas and floors", () => {
+  it("reacts to watched entities and language", () => {
     const state = { ...base, states: { "sensor.a": { state: "2" } } } as unknown as HomeAssistant;
     expect(hassChanged(base, state, ["sensor.a"])).toBe(true);
-    expect(hassChanged(base, { ...base, areas: {} }, [])).toBe(true);
-    expect(hassChanged(base, { ...base, floors: {} }, [])).toBe(true);
     expect(hassChanged(base, { ...base, language: "de" }, [])).toBe(true);
   });
 });

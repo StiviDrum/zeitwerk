@@ -30,13 +30,11 @@ import {
 } from "./plan-view";
 import { ZeitwerkProfiles } from "./profiles-page";
 import { defineElements } from "./register";
-import { watchedRoomEntities } from "./rooms";
-import { ZeitwerkRoomEditor, type RoomSavedDetail } from "./panel-room";
 import { ZeitwerkRules, type PlanMutator } from "./rules-page";
 import { RetrySubscription } from "./subscription";
-import { applyPlanEvent, applyRoomEvent, upsert } from "./collection";
+import { applyPlanEvent, upsert } from "./collection";
 import { tokens } from "./styles";
-import type { Block, HomeAssistant, Plan, PlanEvent, Room, RoomEvent } from "./types";
+import type { Block, HomeAssistant, Plan, PlanEvent } from "./types";
 import { CARD_VERSION } from "./version";
 import { ZeitwerkWeekGrid } from "./week-grid";
 
@@ -55,9 +53,7 @@ export class ZeitwerkPanel extends LitElement {
   @property({ attribute: false }) public panel?: unknown;
 
   @state() private _plans?: Plan[];
-  @state() private _rooms?: Room[];
   @state() private _planError?: string;
-  @state() private _roomError?: string;
   @state() private _notice?: string;
   @state() private _undo?: { before: Plan; after: string };
   @state() private _saveError: string | null = null;
@@ -68,10 +64,9 @@ export class ZeitwerkPanel extends LitElement {
   private _parsed: Route = { name: "overview" };
   private _parsedFor?: PanelRoute;
   private _planSub?: RetrySubscription<PlanEvent>;
-  private _roomSub?: RetrySubscription<RoomEvent>;
   private _noticeTimer?: number;
   private _undoTimer?: number;
-  private _watched?: { plans: unknown; rooms: unknown; ids: string[] };
+  private _watched?: { plans: unknown; ids: string[] };
   private _clock = new NowClock(
     this,
     () => this.hass?.config?.time_zone,
@@ -126,18 +121,11 @@ export class ZeitwerkPanel extends LitElement {
     const old = changed.get("hass") as HomeAssistant | undefined;
     if (!old || !this.hass) return true;
     const plans = this._plans;
-    const rooms = this._rooms;
     let watched = this._watched;
-    if (!watched || watched.plans !== plans || watched.rooms !== rooms) {
+    if (!watched || watched.plans !== plans) {
       watched = {
         plans,
-        rooms,
-        ids: [
-          ...new Set([
-            ...(plans ?? []).flatMap((p) => watchedEntities(p)),
-            ...(rooms ?? []).flatMap((r) => watchedRoomEntities(r)),
-          ]),
-        ],
+        ids: [...new Set((plans ?? []).flatMap((p) => watchedEntities(p)))],
       };
       this._watched = watched;
     }
@@ -170,45 +158,22 @@ export class ZeitwerkPanel extends LitElement {
       onEvent: (msg) => (this._plans = applyPlanEvent(this._plans ?? [], msg)),
       onError: (err) => (this._planError = err ? errorMessage(err) : undefined),
     });
-    this._roomSub ??= new RetrySubscription<RoomEvent>({
-      hass: () => this.hass,
-      msg: { type: "zeitwerk/rooms/subscribe" },
-      onEvent: (msg) => (this._rooms = applyRoomEvent(this._rooms ?? [], msg)),
-      onError: (err) => {
-        // A backend without rooms: the panel still works, just without rooms.
-        if ((err as { code?: string } | undefined)?.code === "unknown_command") {
-          this._rooms ??= [];
-          this._roomError = undefined;
-          return;
-        }
-        this._roomError = err ? errorMessage(err) : undefined;
-      },
-    });
     this._planSub.start();
-    this._roomSub.start();
   }
 
   private _unsubscribe(): void {
     this._planSub?.stop();
-    this._roomSub?.stop();
     this._planSub = undefined;
-    this._roomSub = undefined;
     this._plans = undefined;
-    this._rooms = undefined;
   }
 
   private _retry = (): void => {
     this._planSub?.retryNow();
-    this._roomSub?.retryNow();
   };
 
   /** Show a plan returned by a create/duplicate call before the subscription delivers it. */
   private _adoptPlan(plan: Plan | undefined): void {
     if (plan?.id) this._plans = upsert(this._plans ?? [], plan);
-  }
-
-  private _adoptRoom(room: Room | undefined): void {
-    if (room?.id) this._rooms = upsert(this._rooms ?? [], room);
   }
 
   private get _l(): Localizer {
@@ -312,9 +277,7 @@ export class ZeitwerkPanel extends LitElement {
             ? "zeitwerk-rules"
             : route.name === "new"
               ? "zeitwerk-plan-wizard"
-              : route.name === "room" || route.name === "room_new"
-                ? "zeitwerk-room-editor"
-                : undefined;
+              : undefined;
     const editor = selector
       ? this.renderRoot.querySelector<
           HTMLElement & { requestClose?(): void; requestBack?(): void }
@@ -341,10 +304,6 @@ export class ZeitwerkPanel extends LitElement {
         return l.t("section_profiles");
       case "new":
         return l.t("new_plan_title");
-      case "room":
-        return this._rooms?.find((r) => r.id === route.roomId)?.name ?? l.t("rooms");
-      case "room_new":
-        return l.t("new_room_title");
     }
   }
 
@@ -420,64 +379,28 @@ export class ZeitwerkPanel extends LitElement {
     if (this.hass && this.hass.user && this.hass.user.is_admin === false) {
       return this._message(l.t("panel_admin_only"), true, false);
     }
-    const error = this._planError ?? this._roomError;
+    const error = this._planError;
     if (error) return this._message(l.t("not_loaded", { error }), true, false, true);
-    if (!this.hass || this._plans === undefined || this._rooms === undefined) {
+    if (!this.hass || this._plans === undefined) {
       return this._message(l.t("loading"), false, false);
     }
     const plans = this._plans;
-    const rooms = this._rooms;
     switch (route.name) {
       case "overview":
         return html`<zeitwerk-overview
           .hass=${this.hass}
           .plans=${plans}
-          .rooms=${rooms}
           .localize=${l}
         ></zeitwerk-overview>`;
-      case "room":
-      case "room_new": {
-        const room = route.name === "room" ? rooms.find((r) => r.id === route.roomId) : undefined;
-        if (route.name === "room" && !room) {
-          return this._message(l.t("room_not_found", { room: route.roomId }), true);
-        }
-        return html`<div class="card">
-          <zeitwerk-room-editor
-            .hass=${this.hass}
-            .localize=${l}
-            .room=${room}
-            .plans=${plans}
-            .updatePlan=${(plan: Plan) => this._savePlan(plan)}
-            hideHead
-            @zw-cancel=${() => navigateTo({ name: "overview" })}
-            @zw-room-saved=${(ev: CustomEvent<RoomSavedDetail>) => {
-              this._adoptRoom(ev.detail.room);
-              if (ev.detail.created) navigateTo({ name: "room", roomId: ev.detail.room.id }, true);
-              else this._notify(l.t("saved"));
-            }}
-            @zw-room-deleted=${(ev: CustomEvent<string>) => {
-              this._rooms = (this._rooms ?? []).filter((r) => r.id !== ev.detail);
-              navigateTo({ name: "overview" }, true);
-            }}
-          ></zeitwerk-room-editor>
-        </div>`;
-      }
       case "new": {
-        const room = route.room ? rooms.find((r) => r.id === route.room) : undefined;
-        if (route.room && !room) {
-          return this._message(l.t("room_not_found", { room: route.room }), true);
-        }
         return html`<div class="card">
           <zeitwerk-plan-wizard
             ?dark=${!!this.hass.themes?.darkMode}
             .hass=${this.hass}
             .localize=${l}
             .presetId=${route.preset}
-            .roomId=${room?.id}
-            .roomName=${room?.name}
             .hideHead=${true}
-            @zw-cancel=${() =>
-              navigateTo(route.room ? { name: "room", roomId: route.room } : { name: "overview" })}
+            @zw-cancel=${() => navigateTo({ name: "overview" })}
             @zw-created=${(ev: CustomEvent<{ id: string; name: string; plan?: Plan }>) => {
               this._adoptPlan(ev.detail.plan);
               navigateTo({ name: "plan", planId: ev.detail.id }, true);
@@ -496,7 +419,6 @@ export class ZeitwerkPanel extends LitElement {
           .hass=${this.hass}
           .plan=${plan}
           .localize=${l}
-          .roomName=${plan.room ? rooms.find((r) => r.id === plan.room)?.name : undefined}
         ></zeitwerk-plan-page>`;
       case "day":
         return this._renderDay(plan, route.day);
@@ -569,17 +491,6 @@ export class ZeitwerkPanel extends LitElement {
     } finally {
       this._busy = false;
     }
-  }
-
-  /** Store a whole plan (room assignment / window reaction from the room editor). */
-  private async _savePlan(plan: Plan): Promise<void> {
-    if (!this.hass) return;
-    const saved = await this.hass.callWS<Plan>({
-      type: "zeitwerk/plans/update",
-      plan_id: plan.id,
-      plan,
-    });
-    this._adoptPlan(saved);
   }
 
   private async _removePlan(plan: Plan): Promise<void> {
@@ -766,7 +677,6 @@ defineElements([
   ["zeitwerk-plan-header", ZeitwerkPlanHeader],
   ["zeitwerk-week-grid", ZeitwerkWeekGrid],
   ["zeitwerk-overview", ZeitwerkOverview],
-  ["zeitwerk-room-editor", ZeitwerkRoomEditor],
   ["zeitwerk-plan-page", ZeitwerkPlanPage],
   ["zeitwerk-day-editor", ZeitwerkDayEditor],
   ["zeitwerk-conditions-editor", ZeitwerkConditionsEditor],

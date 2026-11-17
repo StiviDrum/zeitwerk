@@ -1,5 +1,5 @@
 /** Plan page of the panel: header, profiles, read-only week grid (tap a day to edit), settings link. */
-import { LitElement, css, html, nothing } from "lit";
+import { LitElement, css, html } from "lit";
 import { property } from "lit/decorators.js";
 import { profileColor } from "./colors";
 import { conditionsSummary, type Condition } from "./conditions";
@@ -15,8 +15,6 @@ export class ZeitwerkPlanPage extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
   @property({ attribute: false }) public plan!: Plan;
   @property({ attribute: false }) public localize!: Localizer;
-  /** Name of the plan's room (shown as a quiet link), if it has one. */
-  @property({ attribute: false }) public roomName?: string;
 
   protected willUpdate(): void {
     syncDark(this, this.hass);
@@ -77,16 +75,7 @@ export class ZeitwerkPlanPage extends LitElement {
     const plan = this.plan;
     const l = this.localize;
     const ctx: ViewCtx = { hass: this.hass, l };
-    const roomPath = this.plan.room ? routePath({ name: "room", roomId: this.plan.room }) : "";
     return html`
-      ${
-        this.roomName
-          ? html`<a class="roomline" href=${roomPath} @click=${linkClick(roomPath)}
-              ><ha-icon .icon=${"mdi:door"}></ha-icon
-              >${l.t("room_label", { room: this.roomName })}</a
-            >`
-          : nothing
-      }
       <zeitwerk-plan-header .hass=${this.hass} .plan=${plan} .localize=${l}></zeitwerk-plan-header>
       <div class="separator"><span>${l.t("section_profiles")}</span><span class="line"></span></div>
       <div class="pchips">
@@ -156,19 +145,6 @@ export class ZeitwerkPlanPage extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-      }
-      .roomline {
-        align-self: flex-start;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 12px;
-        color: var(--zw-text-2);
-        text-decoration: none;
-        --mdc-icon-size: 14px;
-      }
-      .roomline:hover {
-        text-decoration: underline;
       }
       .link {
         text-decoration: none;

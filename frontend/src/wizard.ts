@@ -22,10 +22,6 @@ export interface WizardDraft {
   icon: string;
   tags: string[];
   layout: "week" | "daily";
-  /** Create the plan inside this room (SPEC §10). */
-  room?: string;
-  /** Profile id that applies while a window of the room is open ("" = ignore windows). */
-  windowProfile?: string;
 }
 
 const num = (v: unknown, fallback: number) => {
@@ -159,11 +155,6 @@ export function buildPlan(
     week: { day_types: dayTypes },
   };
   if (draft.id?.trim()) plan.id = draft.id.trim();
-  if (draft.room) {
-    plan.room = draft.room;
-    const window = profiles.some((p) => p.id === draft.windowProfile) ? draft.windowProfile : "";
-    if (window) plan.room_reactions = { window };
-  }
   return plan;
 }
 

@@ -14,8 +14,6 @@ describe("parseRoute", () => {
     expect(parseRoute("/plan/heat/rules")).toEqual({ name: "rules", planId: "heat" });
     expect(parseRoute("/plan/heat/profiles")).toEqual({ name: "profiles", planId: "heat" });
     expect(parseRoute("/new")).toEqual({ name: "new" });
-    expect(parseRoute("/room/living")).toEqual({ name: "room", roomId: "living" });
-    expect(parseRoute("/room/new")).toEqual({ name: "room_new" });
   });
 
   it("tolerates empty, missing and odd paths", () => {
@@ -25,7 +23,7 @@ describe("parseRoute", () => {
     expect(parseRoute("plan/heat/")).toEqual({ name: "plan", planId: "heat" });
     expect(parseRoute("/nonsense/foo")).toEqual({ name: "overview" });
     expect(parseRoute("/plan")).toEqual({ name: "overview" });
-    expect(parseRoute("/room")).toEqual({ name: "overview" });
+    expect(parseRoute("/room/living")).toEqual({ name: "overview" });
   });
 
   it("falls back to the plan page for an unknown day or sub page", () => {
@@ -43,11 +41,10 @@ describe("parseRoute", () => {
     expect(parseRoute("/plan/%E0%A4%A")).toEqual({ name: "plan", planId: "%E0%A4%A" });
   });
 
-  it("reads the reserved ?room= query (from path or search)", () => {
-    expect(parseRoute("/new?room=living")).toEqual({ name: "new", room: "living" });
-    expect(parseRoute("/new", "?room=bath")).toEqual({ name: "new", room: "bath" });
+  it("reads the ?preset= query and ignores other parameters", () => {
+    expect(parseRoute("/new?room=living")).toEqual({ name: "new" });
     expect(parseRoute("/new", "?preset=heat")).toEqual({ name: "new", preset: "heat" });
-    expect(parseRoute("/plan/heat", "?room=x")).toEqual({ name: "plan", planId: "heat" });
+    expect(parseRoute("/plan/heat", "?preset=x")).toEqual({ name: "plan", planId: "heat" });
   });
 });
 
@@ -58,10 +55,8 @@ describe("routePath / parentRoute", () => {
       "/plan/heat/day/sun",
       "/plan/heat/rules",
       "/plan/heat/profiles",
-      "/room/living",
-      "/room/new",
       "/new",
-      "/new?room=living",
+      "/new?preset=heat",
     ]) {
       expect(routePath(parseRoute(path))).toBe(`/zeitwerk${path}`);
     }
@@ -77,7 +72,6 @@ describe("routePath / parentRoute", () => {
     expect(parentRoute({ name: "rules", planId: "a" })).toEqual({ name: "plan", planId: "a" });
     expect(parentRoute({ name: "plan", planId: "a" })).toEqual({ name: "overview" });
     expect(parentRoute({ name: "new" })).toEqual({ name: "overview" });
-    expect(parentRoute({ name: "room_new" })).toEqual({ name: "overview" });
   });
 });
 

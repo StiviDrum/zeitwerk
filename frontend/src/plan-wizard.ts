@@ -10,7 +10,6 @@ import type { Localizer } from "./localize";
 import type { ZeitwerkProfiles } from "./profiles-page";
 import { pageStyles, tokens } from "./styles";
 import type { HomeAssistant, Plan } from "./types";
-import { defaultWindowProfile, withRoom } from "./rooms";
 import { buildPlan, draftErrors, seedProfiles, type WizardDraft } from "./wizard";
 
 export class ZeitwerkPlanWizard extends LitElement {
@@ -18,13 +17,8 @@ export class ZeitwerkPlanWizard extends LitElement {
   @property({ attribute: false }) public localize!: Localizer;
   /** Plan id to use (e.g. the card's configured but missing plan). */
   @property({ attribute: false }) public presetId?: string;
-  /** Room the new plan belongs to (route `?room=`); asks for the window profile. */
-  @property({ attribute: false }) public roomId?: string;
-  @property({ attribute: false }) public roomName?: string;
   /** Embedded in the panel: the panel toolbar replaces the back header. */
   @property({ type: Boolean }) public hideHead = false;
-  /** Chosen window profile; undefined = not touched (suggestion applies). */
-  @state() private _windowProfile?: string;
   @state() private _confirmBack = false;
 
   @state() private _draft?: WizardDraft;
@@ -53,20 +47,11 @@ export class ZeitwerkPlanWizard extends LitElement {
     }
     this._busy = true;
     try {
-      let created = await this.hass!.callWS<Plan>({
+      const created = await this.hass!.callWS<Plan>({
         type: "zeitwerk/plans/duplicate",
         plan_id: this._template,
         name,
       });
-      if (this.roomId) {
-        // A copy for a room belongs to that room (with the suggested window reaction).
-        const assigned = withRoom(created, this.roomId, defaultWindowProfile(created.profiles));
-        created = await this.hass!.callWS<Plan>({
-          type: "zeitwerk/plans/update",
-          plan_id: created.id,
-          plan: assigned,
-        });
-      }
       this.dispatchEvent(
         new CustomEvent("zw-created", {
           detail: { id: created.id, name: created.name, plan: created },
@@ -81,31 +66,6 @@ export class ZeitwerkPlanWizard extends LitElement {
     } finally {
       this._busy = false;
     }
-  }
-
-  /** Room plans: which profile applies while a window is open (suggestion: off/frost/aus). */
-  private _windowField() {
-    if (!this.roomId) return nothing;
-    const t = this.localize.t.bind(this.localize);
-    const editor = this.renderRoot.querySelector<ZeitwerkProfiles>("zeitwerk-profiles");
-    const profiles = editor?.draftProfiles() ?? [];
-    const suggestion = defaultWindowProfile(profiles);
-    const current = this._windowProfile ?? suggestion;
-    const selected = profiles.some((p) => p.id === current) ? current : "";
-    return html`<div class="panel">
-      <span class="muted">${t("wizard_room", { room: this.roomName ?? this.roomId })}</span>
-      <label class="field">
-        <span class="label">${t("wizard_window_profile")}</span>
-        <select
-          @change=${(ev: Event) => (this._windowProfile = (ev.target as HTMLSelectElement).value)}
-        >
-          <option value="" ?selected=${selected === ""}>${t("room_ignore")}</option>
-          ${profiles.map(
-            (p) => html`<option value=${p.id} ?selected=${p.id === selected}>${p.name}</option>`,
-          )}
-        </select>
-      </label>
-    </div>`;
   }
 
   private get _dirty(): boolean {
@@ -206,16 +166,11 @@ export class ZeitwerkPlanWizard extends LitElement {
       this._error = errors.join(" ");
       return;
     }
-    const plan = buildPlan(
-      {
-        ...d,
-        room: this.roomId,
-        windowProfile: this._windowProfile ?? defaultWindowProfile(result.profiles),
-      },
-      result.profiles,
-      result.defaultId,
-      { workday: t("workday"), weekend: t("weekend"), daily: t("daily") },
-    );
+    const plan = buildPlan(d, result.profiles, result.defaultId, {
+      workday: t("workday"),
+      weekend: t("weekend"),
+      daily: t("daily"),
+    });
     this._busy = true;
     try {
       const created = await this.hass!.callWS<Plan>({
@@ -380,7 +335,6 @@ export class ZeitwerkPlanWizard extends LitElement {
           </div>
         </div>
       </div>
-      ${this._windowField()}
       ${
         this._confirmBack
           ? html`<div class="confirm-box" role="alert">

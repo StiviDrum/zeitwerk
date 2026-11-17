@@ -123,14 +123,7 @@ export class ZeitwerkPlanHeader extends LitElement {
     const items: { icon: string; text: string; color?: string }[] = [];
     const source = status.source ?? "";
     const profileOf = (id: string | null | undefined) => plan.profiles.find((p) => p.id === id);
-    if (source === "room:window") {
-      const profile = profileOf(status.profile);
-      items.push({
-        icon: "mdi:window-open-variant",
-        text: l.t("window_open_reason"),
-        color: profile ? profileColor(plan, profile) : undefined,
-      });
-    } else if (status.manual_since) {
+    if (status.manual_since) {
       items.push({ icon: "mdi:hand-back-right-outline", text: l.t("manual") });
     } else if (status.forced_until) {
       const forced = profileOf(status.profile);

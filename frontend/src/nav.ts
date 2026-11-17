@@ -15,10 +15,7 @@ export type Route =
   | { name: "day"; planId: string; day: DayKey }
   | { name: "rules"; planId: string }
   | { name: "profiles"; planId: string }
-  | { name: "new"; room?: string; preset?: string }
-  | { name: "room"; roomId: string }
-  /** `/room/new`: the room editor for a new room (so the id "new" cannot address a room). */
-  | { name: "room_new" };
+  | { name: "new"; preset?: string };
 
 function decode(part: string): string {
   try {
@@ -59,14 +56,9 @@ export function parseRoute(path: string | undefined | null, search = ""): Route 
       if (sub === "profiles") return { name: "profiles", planId: id };
       if (sub === "day" && extra && isDayKey(extra)) return { name: "day", planId: id, day: extra };
       return { name: "plan", planId: id };
-    case "room":
-      if (!id) return { name: "overview" };
-      return id === "new" ? { name: "room_new" } : { name: "room", roomId: id };
     case "new": {
       const route: Route = { name: "new" };
-      const room = params.get("room");
       const preset = params.get("preset");
-      if (room) route.room = room;
       if (preset) route.preset = preset;
       return route;
     }
@@ -90,13 +82,8 @@ export function routePath(route: Route): string {
       return `${PANEL_PREFIX}/plan/${enc(route.planId)}/rules`;
     case "profiles":
       return `${PANEL_PREFIX}/plan/${enc(route.planId)}/profiles`;
-    case "room":
-      return `${PANEL_PREFIX}/room/${enc(route.roomId)}`;
-    case "room_new":
-      return `${PANEL_PREFIX}/room/new`;
     case "new": {
       const params = new URLSearchParams();
-      if (route.room) params.set("room", route.room);
       if (route.preset) params.set("preset", route.preset);
       const query = params.toString();
       return `${PANEL_PREFIX}/new${query ? `?${query}` : ""}`;
