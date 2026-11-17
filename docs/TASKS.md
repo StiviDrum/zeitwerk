@@ -235,7 +235,9 @@ Tick boxes as you go (`- [x]`). Add short notes/findings under a task when usefu
 - [x] Removed backward compatibility: `compat.py` (probatio/voluptuous) → `import probatio as vol`; `getattr(…, "async_unload")` fallbacks for scripts and condition checkers; test helper switch between both test packages; CI job and requirements for HA 2026.10.
 - [x] Tests on the final `pytest-homeassistant==2026.11.1` (no more `--no-deps` beta install).
 
-## 1.0 – Sidebar panel and rooms (SPEC §10, decided 2026-11-16)
+## 1.0 – Sidebar panel (SPEC §10, decided 2026-11-16)
+
+> 2026-11-17: rooms/windows removed again (Steven: Zeitwerk is only about schedules). Store schema 3 drops stored rooms; room devices/entities are cleaned up on start. Room tasks below are kept for history.
 
 Done with subagents (AGENTS.md §8); orchestrator commits.
 
@@ -258,3 +260,7 @@ Done with subagents (AGENTS.md §8); orchestrator commits.
 - [x] Dev instance: test bed gets rooms + `input_boolean` window stand-ins; manual check
   - 2026-11-16 smoke test (zw-frontend, headless Chromium, local test users removed afterwards, .storage restored): panel admin-only incl. deep links; HA selectors render natively in the room editor; window open 30 s delay → `room:window`, value 18 → 16, closed → back; „Fenster offen“ in panel + card; day editor save + reload; time grid 30; card link without reload; restart with open window keeps the window profile (no other value in history); 390 px; non-admin without panel/edit link. No Zeitwerk console or log errors. Fixed afterwards: window picker also offers `input_boolean`, optional selectors no longer show „*“.
 - [ ] README, CHANGELOG, translations (en + de); bundle sizes measured
+
+- [x] Remove rooms: backend (model, engine, entities, websocket, store migration → 3, registry cleanup) and frontend (room UI, routes, i18n)
+- [ ] README, CHANGELOG, SPEC without rooms; release 1.0.0-rc.11
+  - Docs done. Measured: card 95 059 B, panel 184 488 B. 129 backend + 118 frontend tests, CI green. Browser mock check not run (test browser launch not permitted in that session). Release waits for Steven's go.

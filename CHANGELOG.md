@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.0-rc.11] - 2026-11-17
+
+### Changed
+- Storage schema 3. Stored rooms, room fields on plans and room runtime data
+  are dropped automatically. Room devices and `binary_sensor.zeitwerk_*_window`
+  entities from rc.10 are removed on start.
+- The sidebar overview lists all schedules (plain list, no rooms or floors).
+
+### Removed
+- Rooms and the window reaction (introduced in rc.10): window contacts, the
+  `room` / `room_reactions` fields of plans, `area_missing` / `room_missing`,
+  the `zeitwerk/rooms/*` websocket commands and the room routes
+  `/zeitwerk/room/*`. Zeitwerk is about schedules only.
+
 ## [1.0.0-rc.10] - 2026-11-16
 
 ### Added
