@@ -25,7 +25,6 @@ from .model import (
     MATCH_ALL,
     MATCH_ANY,
     MINUTES_PER_DAY,
-    ROOM_REACTION_WINDOW,
     WEEKDAYS,
     WHEN_INACTIVE_NONE,
     WHEN_INACTIVE_PROFILE_PREFIX,
@@ -200,72 +199,8 @@ PLAN_SCHEMA = vol.Schema(
         ),
         vol.Optional("overrides", default=list): [OVERRIDE_SCHEMA],
         vol.Optional("options", default=dict): OPTIONS_SCHEMA,
-        vol.Optional("room"): vol.Any(None, _id),
-        vol.Optional("room_reactions"): vol.Schema(
-            {vol.Optional(ROOM_REACTION_WINDOW): vol.Any(None, _id)}
-        ),
     }
 )
-
-MAX_DELAY = 3600
-
-
-def _delay(value: Any) -> int:
-    """Validate a delay in seconds (0..3600)."""
-    if isinstance(value, bool):
-        raise vol.Invalid("delay must be a number of seconds")
-    try:
-        seconds = int(value)
-    except (TypeError, ValueError) as err:
-        raise vol.Invalid(f"'{value}' is not a number of seconds") from err
-    if not 0 <= seconds <= MAX_DELAY:
-        raise vol.Invalid(f"delay must be between 0 and {MAX_DELAY} seconds")
-    return seconds
-
-
-def _entity_list(value: Any) -> list[str]:
-    """Validate a list of entity ids (duplicates dropped, order kept)."""
-    ids = vol.All(cv.ensure_list, [cv.entity_id])(value)
-    return list(dict.fromkeys(ids))
-
-
-# "new" is the panel route for creating a room (/zeitwerk/room/new).
-RESERVED_ROOM_IDS: frozenset[str] = frozenset({"new"})
-
-
-def _room_id(value: Any) -> str:
-    value = _id(value)
-    if value in RESERVED_ROOM_IDS:
-        raise vol.Invalid(f"'{value}' is reserved and cannot be used as a room id")
-    return value
-
-
-ROOM_SCHEMA = vol.Schema(
-    {
-        vol.Required("id"): _room_id,
-        vol.Required("name"): vol.All(cv.string, vol.Length(min=1)),
-        vol.Optional("area_id", default=None): vol.Any(None, cv.string),
-        vol.Optional("icon", default=None): vol.Any(None, cv.icon),
-        vol.Optional("windows", default=dict): vol.Schema(
-            {
-                vol.Optional("entities", default=list): _entity_list,
-                vol.Optional("open_delay", default=60): _delay,
-                vol.Optional("close_delay", default=0): _delay,
-            }
-        ),
-        vol.Optional("sensors", default=dict): vol.Schema(
-            {
-                vol.Optional("temperature", default=None): vol.Any(None, cv.entity_id),
-                vol.Optional("humidity", default=None): vol.Any(None, cv.entity_id),
-            }
-        ),
-    }
-)
-
-
-def validate_room(data: dict[str, Any]) -> dict[str, Any]:
-    """Structural validation of a room dict; returns the normalised dict."""
-    return ROOM_SCHEMA(data)
 
 
 def _unique(ids: list[str], what: str) -> None:
@@ -359,44 +294,23 @@ def validate_plan_semantics(plan: dict[str, Any]) -> dict[str, Any]:
             "holidays: day_type must reference an existing day type for mode "
             "'own_day_type'"
         )
-
-    reactions = {k: v for k, v in (plan.get("room_reactions") or {}).items() if v}
-    if not plan.get("room"):
-        if reactions:
-            raise vol.Invalid("room_reactions need a room: set 'room' first")
-        plan.pop("room", None)
-    for event, profile_id in reactions.items():
-        ref(profile_id, f"room_reactions.{event}")
-    if reactions:
-        plan["room_reactions"] = reactions
-    else:
-        plan.pop("room_reactions", None)
     return plan
 
 
-def validate_plan(
-    data: dict[str, Any], rooms: set[str] | None = None
-) -> dict[str, Any]:
-    """Structural + semantic validation (sync). Returns normalised plan dict.
-
-    ``rooms`` (known room ids) enables the check that ``room`` exists.
-    """
-    plan = validate_plan_semantics(PLAN_SCHEMA(data))
-    if rooms is not None and plan.get("room") and plan["room"] not in rooms:
-        known = ", ".join(sorted(rooms)) or "none yet"
-        raise vol.Invalid(f"room: unknown room '{plan['room']}' (known rooms: {known})")
-    return plan
+def validate_plan(data: dict[str, Any]) -> dict[str, Any]:
+    """Structural + semantic validation (sync). Returns normalised plan dict."""
+    return validate_plan_semantics(PLAN_SCHEMA(data))
 
 
 async def async_validate_plan(
-    hass: HomeAssistant, data: dict[str, Any], rooms: set[str] | None = None
+    hass: HomeAssistant, data: dict[str, Any]
 ) -> dict[str, Any]:
     """Full validation incl. HA actions and conditions.
 
     The returned dict keeps actions/conditions as given (JSON serialisable); they
     are compiled again when the plan is loaded by the engine.
     """
-    plan = validate_plan(data, rooms)
+    plan = validate_plan(data)
     for profile in plan["profiles"]:
         try:
             await script_helper.async_validate_actions_config(
@@ -441,19 +355,12 @@ def replace_missing_profiles(plan: dict[str, Any]) -> dict[str, Any]:
         and when.removeprefix(WHEN_INACTIVE_PROFILE_PREFIX) not in profiles
     ):
         activation["when_inactive"] = f"{WHEN_INACTIVE_PROFILE_PREFIX}{default}"
-    # A window reaction onto a removed profile is dropped (plan ignores windows).
-    if reactions := plan.get("room_reactions"):
-        kept = {k: v for k, v in reactions.items() if v in profiles}
-        if kept:
-            plan["room_reactions"] = kept
-        else:
-            plan.pop("room_reactions")
     return plan
 
 
-def make_plan_id(name: str, existing: set[str], fallback: str = "plan") -> str:
-    """Derive a unique slug id from a plan (or room) name."""
-    base = slugify(name) or fallback
+def make_plan_id(name: str, existing: set[str]) -> str:
+    """Derive a unique slug id from a plan name."""
+    base = slugify(name) or "plan"
     candidate, counter = base, 2
     while candidate in existing:
         candidate = f"{base}_{counter}"

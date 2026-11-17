@@ -13,6 +13,7 @@ from .const import STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
+_ROOM_PLAN_KEYS = ("room", "room_reactions")
 SAVE_DELAY = 2  # seconds, debounced
 
 
@@ -20,7 +21,6 @@ class StoredData(TypedDict):
     """Top level storage layout."""
 
     plans: list[dict[str, Any]]
-    rooms: list[dict[str, Any]]
     # per plan: last_applied profile, forced profile/until (ISO)
     runtime: dict[str, dict[str, Any]]
 
@@ -34,14 +34,26 @@ class _VersionedStore(Store[StoredData]):
         old_minor_version: int,
         old_data: dict[str, Any],
     ) -> StoredData:
-        """Migrate older storage versions (1 -> 2 adds ``rooms``)."""
+        """Migrate older storage versions.
+
+        1 -> 3 and 2 -> 3: the short-lived rooms feature (schema 2) is gone; drop
+        ``rooms``, the plans' ``room``/``room_reactions`` and ``room:*`` runtime.
+        """
         _LOGGER.debug(
             "Migrating storage from %s.%s", old_major_version, old_minor_version
         )
+        plans = []
+        for raw in old_data.get("plans", []):
+            if isinstance(raw, dict):
+                raw = {k: v for k, v in raw.items() if k not in _ROOM_PLAN_KEYS}  # noqa: PLW2901
+            plans.append(raw)
         return {
-            "plans": list(old_data.get("plans", [])),
-            "rooms": list(old_data.get("rooms", [])),
-            "runtime": dict(old_data.get("runtime", {})),
+            "plans": plans,
+            "runtime": {
+                k: v
+                for k, v in dict(old_data.get("runtime", {})).items()
+                if not str(k).startswith("room:")
+            },
         }
 
 
@@ -58,9 +70,8 @@ class ZeitwerkStore:
         """Load stored data (empty layout when nothing is stored)."""
         data = await self._store.async_load()
         if not data:
-            return {"plans": [], "rooms": [], "runtime": {}}
+            return {"plans": [], "runtime": {}}
         data.setdefault("plans", [])
-        data.setdefault("rooms", [])
         data.setdefault("runtime", {})
         return data
 

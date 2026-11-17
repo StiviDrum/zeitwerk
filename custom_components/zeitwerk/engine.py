@@ -1,10 +1,10 @@
 """Runtime of one plan: evaluation, timer, condition listeners, apply-on-change.
 
-Priority (docs/SPEC.md §3, §10): disabled -> activation -> room window ->
-forced -> overrides -> schedule block -> default profile. A profile is applied
-only when the effective profile changes (or when explicitly re-applied). Resume
-points of the day type end a manual change (and, if configured, a forced
-profile); they never touch overrides.
+Priority (docs/SPEC.md §3): disabled -> activation -> forced -> overrides ->
+schedule block -> default profile. A profile is applied only when the effective
+profile changes (or when explicitly re-applied). Resume points of the day type
+end a manual change (and, if configured, a forced profile); they never touch
+overrides.
 """
 
 from __future__ import annotations
@@ -38,7 +38,6 @@ from .model import (
     MATCH_ANY,
     Plan,
 )
-from .rooms import RoomWindowTracker
 from .schedule import (
     HolidayFn,
     iter_resume_points,
@@ -57,7 +56,6 @@ SOURCE_INACTIVE = "inactive"
 SOURCE_DISABLED = "disabled"
 SOURCE_FORCED = "forced"
 SOURCE_OVERRIDE_PREFIX = "override:"
-SOURCE_ROOM_WINDOW = "room:window"
 
 
 @dataclass(slots=True)
@@ -65,8 +63,6 @@ class PlanStatus:
     """Evaluated state of a plan (read by entities and the card)."""
 
     profile: str | None = None
-    # Profile that would apply without the room window (skip_next stores this).
-    underlying_profile: str | None = None
     source: str = SOURCE_DISABLED
     day_type: str | None = None
     is_holiday: bool = False
@@ -103,7 +99,6 @@ class PlanRunner:
         holidays: HolidayRegistry,
         on_update: Callable[[PlanRunner], None],
         on_runtime_changed: Callable[[], None],
-        room_window: RoomWindowTracker | None = None,
     ) -> None:
         """Initialise the runner; ``runtime`` is persisted by the manager."""
         self.hass = hass
@@ -115,8 +110,6 @@ class PlanRunner:
         self._holiday_source: HolidaySource | None = None
         self._on_update = on_update
         self._on_runtime_changed = on_runtime_changed
-        self._room_window = room_window
-        self._was_window = False
         self._activation = _Conditions()
         self._overrides: list[_Conditions] = []
         self._activation_entities: set[str] = set()
@@ -163,13 +156,6 @@ class PlanRunner:
             )
             self._unsubs.append(
                 self._holiday_source.async_add_listener(self._async_holidays_changed)
-            )
-
-        if self._room_window is not None and self.plan.window_profile:
-            # The room tracks the raw window entities (delays); the plan only
-            # reacts to the room's debounced state, no extra timer or listener.
-            self._unsubs.append(
-                self._room_window.async_add_listener(self._async_room_changed)
             )
 
         self._activation_entities = (
@@ -234,20 +220,6 @@ class PlanRunner:
     def _async_condition_entity_changed(self, event: Event[Any]) -> None:
         refresh = event.data["entity_id"] in self._activation_entities
         self._request(refresh_activation=refresh)
-
-    @callback
-    def _async_room_changed(self) -> None:
-        """Handle a change of the room's debounced window state."""
-        self._request(refresh_activation=False)
-
-    @property
-    def window_open(self) -> bool:
-        """Whether the room's window reaction is in effect (debounced state)."""
-        return bool(
-            self._room_window is not None
-            and self.plan.window_profile
-            and self._room_window.is_open
-        )
 
     @callback
     def _async_target_changed(self, event: Event[Any]) -> None:
@@ -462,15 +434,6 @@ class PlanRunner:
             for override, group in zip(plan.overrides, self._overrides, strict=True)
         }
         forced = self._forced(now)
-        window_cleared_manual = False
-        window_open = self.window_open and status.active and plan.enabled
-        if window_open != self._was_window:
-            # Opening ends a manual change; closing applies what holds now. If a
-            # manual change ended, re-apply even if the profile did not change.
-            self._was_window = window_open
-            if self.runtime.get("manual"):
-                self._clear_manual()
-                window_cleared_manual = True
         status.forced_until = None
         status.next_change = status.next_profile = None
 
@@ -499,14 +462,6 @@ class PlanRunner:
             if (change := next_change(plan, now, tz, self.is_holiday)) is not None:
                 status.next_change, status.next_profile = change
 
-        status.underlying_profile = status.profile
-        if window_open:
-            # Beats forced, overrides (incl. vacation) and manual changes. The
-            # forced profile stays stored (forced_until) and applies after close.
-            status.profile = plan.window_profile
-            status.source = SOURCE_ROOM_WINDOW
-            status.next_change = status.next_profile = None
-
         manual, expired = self._manual(now)
         status.manual_since = status.manual_until = status.manual_entity = None
         status.manual_attribute = None
@@ -518,10 +473,7 @@ class PlanRunner:
             attribute = self._watch.watched.get(status.manual_entity or "")
             status.manual_attribute = None if attribute in (None, STATE) else attribute
         else:
-            self._apply(
-                status.profile,
-                force=force_apply or expired or window_cleared_manual,
-            )
+            self._apply(status.profile, force=force_apply or expired)
         earlier = [forced[1]] if forced else []
         if manual is not None and status.manual_until and self._manual_minutes():
             earlier.append(status.manual_until)
@@ -594,12 +546,8 @@ class PlanRunner:
             "until": until.isoformat(),
         }
         self._on_runtime_changed()
-        # An open window overshadows the forced profile: no actions now, it applies
-        # when the window closes (if still running).
         await self.async_evaluate(
-            refresh_activation=False,
-            force_apply=not self.window_open,
-            clear_manual=True,
+            refresh_activation=False, force_apply=True, clear_manual=True
         )
 
     async def async_skip_next(self) -> None:
@@ -607,13 +555,12 @@ class PlanRunner:
         tz = dt_util.get_default_time_zone()
         now = dt_util.utcnow()
         first = next_change(self.plan, now, tz, self.is_holiday)
-        profile = self.status.underlying_profile
-        if first is None or profile is None:
+        if first is None or self.status.profile is None:
             raise HomeAssistantError(f"Plan '{self.plan.id}' has no upcoming change")
         second = next_change(self.plan, first[0], tz, self.is_holiday)
         until = second[0] if second else first[0] + timedelta(days=1)
         self.runtime["forced"] = {
-            "profile": profile,
+            "profile": self.status.profile,
             "since": now.isoformat(),
             "until": until.isoformat(),
         }

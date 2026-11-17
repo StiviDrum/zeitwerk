@@ -82,13 +82,6 @@ input_boolean:
     name: Person 2 zu Hause
     icon: mdi:account-outline
     initial: true
-  # Stand-ins for window contacts (on = open) of the test rooms
-  fenster_wohnzimmer:
-    name: Fenster Wohnzimmer
-    icon: mdi:window-open-variant
-  fenster_bad:
-    name: Fenster Bad
-    icon: mdi:window-open-variant
 
 # Holiday source for Hesse: add via UI once
 #   Settings → Devices & services → Add integration → "Holiday" (Germany, Hesse)

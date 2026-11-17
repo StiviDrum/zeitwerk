@@ -11,8 +11,12 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
@@ -51,6 +55,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ZeitwerkConfigEntry) -> bool:
     """Set up Zeitwerk from a config entry."""
+    _async_remove_room_leftovers(hass, entry)
     manager = ZeitwerkManager(hass, entry.entry_id)
     await manager.async_setup()
     entry.runtime_data = manager
@@ -65,6 +70,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: ZeitwerkConfigEntry) ->
     if unloaded:
         await entry.runtime_data.async_unload()
     return unloaded
+
+
+@callback
+def _async_remove_room_leftovers(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove devices/entities of the dropped rooms feature (storage schema 2)."""
+    prefix = "room:"
+    dev_reg = dr.async_get(hass)
+    for device in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+        if any(
+            domain == DOMAIN and str(ident).startswith(prefix)
+            for domain, ident in device.identifiers
+        ):
+            dev_reg.async_remove_device(device.id)  # also removes its entities
+    ent_reg = er.async_get(hass)
+    for entity in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        if entity.unique_id.startswith(prefix):
+            ent_reg.async_remove(entity.entity_id)
 
 
 async def _async_register_card(hass: HomeAssistant) -> None:

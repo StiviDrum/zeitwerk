@@ -17,13 +17,8 @@ import probatio as vol
 from .const import DOMAIN
 from .engine import PlanRunner
 from .holidays import HolidaySource
-from .manager import (
-    EVENT_REMOVED,
-    PlanNotFoundError,
-    RoomNotFoundError,
-    ZeitwerkManager,
-)
-from .model import Plan, Room
+from .manager import EVENT_REMOVED, PlanNotFoundError, ZeitwerkManager
+from .model import Plan
 from .schedule import preview
 
 MAX_PREVIEW = timedelta(days=8)
@@ -59,31 +54,7 @@ def status_dict(runner: PlanRunner | None) -> dict[str, Any] | None:
 
 
 def _plan_payload(manager: ZeitwerkManager, plan: Plan) -> dict[str, Any]:
-    return {
-        **plan.to_dict(),
-        "room_missing": bool(plan.room and plan.room not in manager.rooms),
-        "status": status_dict(manager.runners.get(plan.id)),
-    }
-
-
-def _room_payload(manager: ZeitwerkManager, room: Room) -> dict[str, Any]:
-    tracker = manager.trackers.get(room.id)
-    window = None
-    if tracker is not None:
-        window = {
-            "open": tracker.is_open,
-            "open_since": tracker.open_since.isoformat()
-            if tracker.open_since
-            else None,
-            "entities": tracker.entity_states,
-            "unavailable": tracker.unavailable,
-        }
-    return {
-        **room.to_dict(),
-        "window": window,
-        "area_missing": manager.area_missing(room),
-        "plans": manager.plans_of_room(room.id),
-    }
+    return {**plan.to_dict(), "status": status_dict(manager.runners.get(plan.id))}
 
 
 def _with_manager(func: _Handler) -> Callable[..., Coroutine[Any, Any, None]]:
@@ -99,7 +70,7 @@ def _with_manager(func: _Handler) -> Callable[..., Coroutine[Any, Any, None]]:
             return
         try:
             await func(hass, connection, msg, entries[0].runtime_data)
-        except (PlanNotFoundError, RoomNotFoundError) as err:
+        except PlanNotFoundError as err:
             connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, str(err))
         except vol.Invalid as err:
             connection.send_error(msg["id"], websocket_api.ERR_INVALID_FORMAT, str(err))
@@ -148,9 +119,8 @@ async def ws_get(
     connection.send_result(msg["id"], _plan_payload(manager, plan))
 
 
-# Keys the API adds to payloads; clients may send them back unchanged.
-_PLAN_READ_ONLY = ("status", "room_missing")
-_ROOM_READ_ONLY = ("window", "plans", "area_missing")
+# Keys the API adds to plan payloads; clients may send them back unchanged.
+_PLAN_READ_ONLY = ("status",)
 
 
 def _writable(data: dict[str, Any], read_only: tuple[str, ...]) -> dict[str, Any]:
@@ -371,144 +341,6 @@ async def ws_holidays_upcoming(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): "zeitwerk/rooms/list"})
-@websocket_api.async_response
-@_with_manager
-async def ws_rooms_list(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    manager: ZeitwerkManager,
-) -> None:
-    """List rooms with window state and assigned plan ids."""
-    connection.send_result(
-        msg["id"],
-        {"rooms": [_room_payload(manager, r) for r in manager.rooms.values()]},
-    )
-
-
-@websocket_api.websocket_command(
-    {vol.Required("type"): "zeitwerk/rooms/get", vol.Required("room_id"): cv.string}
-)
-@websocket_api.async_response
-@_with_manager
-async def ws_rooms_get(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    manager: ZeitwerkManager,
-) -> None:
-    """Return one room."""
-    room = manager.get_room(msg["room_id"])
-    connection.send_result(msg["id"], _room_payload(manager, room))
-
-
-@websocket_api.websocket_command(
-    {vol.Required("type"): "zeitwerk/rooms/create", vol.Required("room"): dict}
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-@_with_manager
-async def ws_rooms_create(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    manager: ZeitwerkManager,
-) -> None:
-    """Create a room (admin)."""
-    room = await manager.async_create_room(_writable(msg["room"], _ROOM_READ_ONLY))
-    connection.send_result(msg["id"], _room_payload(manager, room))
-
-
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "zeitwerk/rooms/update",
-        vol.Required("room_id"): cv.string,
-        vol.Required("room"): dict,
-    }
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-@_with_manager
-async def ws_rooms_update(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    manager: ZeitwerkManager,
-) -> None:
-    """Replace a room (admin)."""
-    room = await manager.async_update_room(
-        msg["room_id"], _writable(msg["room"], _ROOM_READ_ONLY)
-    )
-    connection.send_result(msg["id"], _room_payload(manager, room))
-
-
-@websocket_api.websocket_command(
-    {vol.Required("type"): "zeitwerk/rooms/delete", vol.Required("room_id"): cv.string}
-)
-@websocket_api.require_admin
-@websocket_api.async_response
-@_with_manager
-async def ws_rooms_delete(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    manager: ZeitwerkManager,
-) -> None:
-    """Delete a room; its plans become general plans (admin)."""
-    await manager.async_delete_room(msg["room_id"])
-    connection.send_result(msg["id"])
-
-
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "zeitwerk/rooms/subscribe",
-        vol.Optional("room_id"): cv.string,
-    }
-)
-@websocket_api.async_response
-@_with_manager
-async def ws_rooms_subscribe(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    manager: ZeitwerkManager,
-) -> None:
-    """Send all (or one) rooms now and on every change."""
-    only = msg.get("room_id")
-    if only is not None:
-        manager.get_room(only)
-
-    @callback
-    def forward(event: str, room_id: str) -> None:
-        if only is not None and room_id != only:
-            return
-        room = manager.rooms.get(room_id)
-        connection.send_message(
-            websocket_api.event_message(
-                msg["id"],
-                {
-                    "event": event,
-                    "room_id": room_id,
-                    "room": None
-                    if event == EVENT_REMOVED or room is None
-                    else _room_payload(manager, room),
-                },
-            )
-        )
-
-    connection.subscriptions[msg["id"]] = manager.async_add_room_listener(forward)
-    connection.send_result(msg["id"])
-    rooms = [
-        _room_payload(manager, r)
-        for r in manager.rooms.values()
-        if only is None or r.id == only
-    ]
-    connection.send_message(
-        websocket_api.event_message(msg["id"], {"event": "init", "rooms": rooms})
-    )
-
-
 @callback
 def async_register_websocket(hass: HomeAssistant) -> None:
     """Register all websocket commands."""
@@ -522,11 +354,5 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_subscribe,
         ws_preview,
         ws_holidays_upcoming,
-        ws_rooms_list,
-        ws_rooms_get,
-        ws_rooms_create,
-        ws_rooms_update,
-        ws_rooms_delete,
-        ws_rooms_subscribe,
     ):
         websocket_api.async_register_command(hass, command)

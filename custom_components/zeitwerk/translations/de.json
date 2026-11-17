@@ -14,9 +14,6 @@
     "binary_sensor": {
       "active": {
         "name": "Aktiv"
-      },
-      "window": {
-        "name": "Fenster"
       }
     },
     "sensor": {

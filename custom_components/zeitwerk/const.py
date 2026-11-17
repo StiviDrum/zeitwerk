@@ -8,7 +8,7 @@ DOMAIN: Final = "zeitwerk"
 NAME: Final = "Zeitwerk"
 
 STORAGE_KEY: Final = "zeitwerk"
-STORAGE_VERSION: Final = 2
+STORAGE_VERSION: Final = 3
 
 CARD_FILENAME: Final = "zeitwerk-card.js"
 CARD_URL_BASE: Final = "/zeitwerk_static"
@@ -19,7 +19,6 @@ PANEL_ELEMENT: Final = "zeitwerk-panel"
 DATA_PANEL_MODULE_URL: Final = "zeitwerk_panel_module_url"
 
 SIGNAL_PLAN_STATUS: Final = "zeitwerk_plan_status_{}"
-SIGNAL_ROOM_STATUS: Final = "zeitwerk_room_status_{}"
 
 # A plan has 1 to MAX_PROFILES profiles.
 MAX_PROFILES: Final = 5
