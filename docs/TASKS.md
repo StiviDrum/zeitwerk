@@ -262,5 +262,5 @@ Done with subagents (AGENTS.md §8); orchestrator commits.
 - [ ] README, CHANGELOG, translations (en + de); bundle sizes measured
 
 - [x] Remove rooms: backend (model, engine, entities, websocket, store migration → 3, registry cleanup) and frontend (room UI, routes, i18n)
-- [ ] README, CHANGELOG, SPEC without rooms; release 1.0.0-rc.11
-  - Docs done. Measured: card 95 059 B, panel 184 488 B. 129 backend + 118 frontend tests, CI green. Browser mock check not run (test browser launch not permitted in that session). Release waits for Steven's go.
+- [x] README, CHANGELOG, SPEC without rooms; release 1.0.0-rc.11
+  - Docs done. Measured: card 95 059 B, panel 184 488 B. 129 backend + 118 frontend tests, CI green. Browser mock check not run (test browser launch not permitted in that session). Released as pre-release v1.0.0-rc.11 (approved by Steven 2026-11-17).
